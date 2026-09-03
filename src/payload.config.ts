@@ -56,11 +56,13 @@ export default buildConfig({
     push: false,
   }),
   plugins: [
-    // El plugin ERP inyecta Customers, Invoices y CustomerPayments antes de que multiTenantPlugin los aisle por inquilino
+    // El plugin ERP inyecta todas las colecciones del Módulo 1 (Finanzas) y Módulo 2 (BOM & Producción)
     erpPlugin({
       features: {
         crm: true,
         accountsReceivable: true,
+        inventory: true,
+        manufacturingBOM: true,
         dualCurrency: true,
         whatsappEngagement: true,
       },
@@ -70,6 +72,12 @@ export default buildConfig({
         customers: {},
         invoices: {},
         'customer-payments': {},
+        categories: {},
+        warehouses: {},
+        products: {},
+        'stock-movements': {},
+        'bill-of-materials': {},
+        'production-orders': {},
         media: {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),

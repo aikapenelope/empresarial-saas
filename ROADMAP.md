@@ -25,7 +25,7 @@ Transformar las capacidades probadas de **Cendaro ERP** en una suite de plugins 
 ### Fase 1: Módulo 1 — Finance & Customer CRM Core (🎯 Sprint Actual)
 > **Objetivo:** Implementar la infraestructura de Cuentas por Cobrar (CxC), Facturación Multi-moneda Bimonetaria (USD/Bs) y CRM Ligero de Clientes con cálculo inmutable de saldo y cobranza por WhatsApp.
 
-- [ ] **Colección `Customers` (Enriquecida con CRM y Crédito):**
+- [x] **Colección `Customers` (Enriquecida con CRM y Crédito):**
   - Identificación fiscal (`rifCi`), Razón social / Nombre, Teléfono formateado internacional para WhatsApp, Email, Dirección.
   - Clasificación CRM de ciclo de vida (`lifecycleStage`: `'lead' | 'first_time' | 'recurring' | 'vip' | 'inactive'`).
   - Términos de Crédito: `creditAllowed: boolean`, `creditLimitUSD: number`, `creditDays: number`.
@@ -39,7 +39,7 @@ Transformar las capacidades probadas de **Cendaro ERP** en una suite de plugins 
     - `aging60Plus`: Cartera en mora crítica (+60 días).
   - Notas de seguimiento comercial y URL de chat directo de WhatsApp (`https://wa.me/...`).
 
-- [ ] **Colección `Invoices` (Facturas y Notas de Entrega Bimonetarias):**
+- [x] **Colección `Invoices` (Facturas y Notas de Entrega Bimonetarias):**
   - Número correlativo de factura / control.
   - Relación a `Customers` y relación opcional a `Orders`.
   - Tipo de condición: `'cash' | 'credit'`.
@@ -49,7 +49,7 @@ Transformar las capacidades probadas de **Cendaro ERP** en una suite de plugins 
   - Estado: `'draft' | 'pending' | 'partially_paid' | 'paid' | 'cancelled'`.
   - Array de items facturados con SKU, descripción, cantidad, precio unitario y subtotal.
 
-- [ ] **Colección `CustomerPayments` (Abonos y Cobranzas):**
+- [x] **Colección `CustomerPayments` (Abonos y Cobranzas):**
   - Relación a `Customers`.
   - Monto pagado: `amountUSD`, `amountVES`, tasa de cambio aplicada.
   - Método de pago: `'cash_usd' | 'cash_ves' | 'zelle' | 'pago_movil' | 'transfer_ves' | 'binance'`.
@@ -58,30 +58,30 @@ Transformar las capacidades probadas de **Cendaro ERP** en una suite de plugins 
     - Relación a `Invoices`.
     - `allocatedAmountUSD`: Monto aplicado específicamente a cada factura.
 
-- [ ] **Hooks de Ledger Transaccional & Integridad de Balances:**
+- [x] **Hooks de Ledger Transaccional & Integridad de Balances:**
   - Hook `afterChange` en `Invoices` y `CustomerPayments` que recalcula de forma atómica y consistente el balance del cliente en `Customers`.
   - Prevención de recursión con `req.context.skipBalanceRecalculation`.
   - Propagación de transacciones pasando `{ req }` a cada llamada interna de la Local API.
   - Reversión atómica en hooks `beforeDelete` para mantener la simetría del ledger ante anulaciones.
 
-- [ ] **Acción y Generación de Cobranza por WhatsApp:**
+- [x] **Acción y Generación de Cobranza por WhatsApp:**
   - Endpoint o Server Action `/api/customers/:id/statement`: Genera el estado de cuenta consolidado con desglose de facturas pendientes.
   - Generador de mensaje preformateado para WhatsApp con saldo total, facturas vencidas y datos de cuentas bancarias/pago móvil del tenant.
 
 ---
 
 ### Fase 2: Módulo 2 — BOM (Bill of Materials) & Producción
-- [ ] **Colección `BillOfMaterials` (Fórmulas de Fabricación):**
+- [x] **Colección `BillOfMaterials` (Fórmulas de Fabricación):**
   - Relación a producto terminado (`Products` con `productType = 'manufactured'`).
   - Rendimiento base (`yieldQuantity`) y unidad de medida.
   - Lista de componentes e insumos (`rawMaterial`, cantidad requerida, unidad, porcentaje de merma).
   - Costo de mano de obra y costos indirectos de fabricación (CIF).
-- [ ] **Colección `ProductionOrders` (Órdenes de Fabricación):**
+- [x] **Colección `ProductionOrders` (Órdenes de Fabricación):**
   - Folio correlativo (`OP-0001`).
   - Relación a `BillOfMaterials`.
   - Cantidad a fabricar y fechas programadas.
   - Estados: `'draft' | 'planned' | 'in_progress' | 'completed' | 'cancelled'`.
-- [ ] **Hooks Transaccionales de Consumo y Costeo:**
+- [x] **Hooks Transaccionales de Consumo y Costeo:**
   - Al completar orden: descuento automático de stock de materias primas vía `StockMovements`.
   - Entrada de producto terminado al inventario.
   - Cálculo del Costo Unitario Real basado en ingredientes consumidos y actualización del costo ponderado.

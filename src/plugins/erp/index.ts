@@ -3,18 +3,32 @@ import type { ERPPluginOptions } from './types';
 import { Customers } from './collections/Customers';
 import { Invoices } from './collections/Invoices';
 import { CustomerPayments } from './collections/CustomerPayments';
+import { Categories } from './collections/Categories';
+import { Warehouses } from './collections/Warehouses';
+import { Products } from './collections/Products';
+import { StockMovements } from './collections/StockMovements';
+import { BillOfMaterials } from './collections/BillOfMaterials';
+import { ProductionOrders } from './collections/ProductionOrders';
 
 export * from './types';
 export * from './hooks/ledger';
+export * from './hooks/production';
 export { Customers } from './collections/Customers';
 export { Invoices } from './collections/Invoices';
 export { CustomerPayments } from './collections/CustomerPayments';
+export { Categories } from './collections/Categories';
+export { Warehouses } from './collections/Warehouses';
+export { Products } from './collections/Products';
+export { StockMovements } from './collections/StockMovements';
+export { BillOfMaterials } from './collections/BillOfMaterials';
+export { ProductionOrders } from './collections/ProductionOrders';
 
 const defaultFeatures = {
   crm: true,
   accountsReceivable: true,
+  inventory: true,
+  manufacturingBOM: true,
   accountsPayable: false,
-  manufacturingBOM: false,
   cashClosure: false,
   dualCurrency: true,
   whatsappEngagement: true,
@@ -23,7 +37,7 @@ const defaultFeatures = {
 /**
  * Plugin oficial Cendaro ERP para Payload CMS 3.x.
  * 
- * Implementa la arquitectura de doble función (currying) estándar de Payload:
+ * Implementa la arquitectura canónica de doble función (currying):
  * (options) => (config) => Config
  */
 export const erpPlugin =
@@ -40,33 +54,35 @@ export const erpPlugin =
 
     const newCollections = [...(incomingConfig.collections || [])];
 
+    // Helper para inyectar colecciones sin duplicados
+    const injectCollection = (collection: any, override: any) => {
+      const merged = { ...collection, ...(override || {}) };
+      const index = newCollections.findIndex((c) => c.slug === merged.slug);
+      if (index >= 0) {
+        newCollections[index] = merged;
+      } else {
+        newCollections.push(merged);
+      }
+    };
+
     // Módulo 1: Finance & Customer CRM Core
     if (features.crm || features.accountsReceivable) {
-      const customersCollection = {
-        ...Customers,
-        ...(options.overrides?.customers || {}),
-      };
+      injectCollection(Customers, options.overrides?.customers);
+      injectCollection(Invoices, options.overrides?.invoices);
+      injectCollection(CustomerPayments, options.overrides?.customerPayments);
+    }
 
-      const invoicesCollection = {
-        ...Invoices,
-        ...(options.overrides?.invoices || {}),
-      };
+    // Módulo 2: Catálogo, Inventario y BOM / Producción
+    if (features.inventory || features.manufacturingBOM) {
+      injectCollection(Categories, options.overrides?.categories);
+      injectCollection(Warehouses, options.overrides?.warehouses);
+      injectCollection(Products, options.overrides?.products);
+      injectCollection(StockMovements, options.overrides?.stockMovements);
+    }
 
-      const paymentsCollection = {
-        ...CustomerPayments,
-        ...(options.overrides?.customerPayments || {}),
-      };
-
-      // Inyectar o reemplazar si no existen
-      if (!newCollections.some((c) => c.slug === customersCollection.slug)) {
-        newCollections.push(customersCollection);
-      }
-      if (!newCollections.some((c) => c.slug === invoicesCollection.slug)) {
-        newCollections.push(invoicesCollection);
-      }
-      if (!newCollections.some((c) => c.slug === paymentsCollection.slug)) {
-        newCollections.push(paymentsCollection);
-      }
+    if (features.manufacturingBOM) {
+      injectCollection(BillOfMaterials, options.overrides?.billOfMaterials);
+      injectCollection(ProductionOrders, options.overrides?.productionOrders);
     }
 
     return {
