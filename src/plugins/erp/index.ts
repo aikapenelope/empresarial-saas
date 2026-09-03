@@ -14,11 +14,14 @@ import { PurchaseInvoices } from './collections/PurchaseInvoices';
 import { SupplierPayments } from './collections/SupplierPayments';
 import { CashRegisters } from './collections/CashRegisters';
 import { CashClosures } from './collections/CashClosures';
+import { IndustryTemplates } from './collections/IndustryTemplates';
 
 export * from './types';
 export * from './hooks/ledger';
 export * from './hooks/production';
 export * from './hooks/supplier-ledger';
+export * from './templates/definitions';
+export * from './templates/seeder';
 export { Customers } from './collections/Customers';
 export { Invoices } from './collections/Invoices';
 export { CustomerPayments } from './collections/CustomerPayments';
@@ -33,6 +36,7 @@ export { PurchaseInvoices } from './collections/PurchaseInvoices';
 export { SupplierPayments } from './collections/SupplierPayments';
 export { CashRegisters } from './collections/CashRegisters';
 export { CashClosures } from './collections/CashClosures';
+export { IndustryTemplates } from './collections/IndustryTemplates';
 
 const defaultFeatures = {
   crm: true,
@@ -41,6 +45,7 @@ const defaultFeatures = {
   manufacturingBOM: true,
   accountsPayable: true,
   cashClosure: true,
+  industryTemplates: true,
   dualCurrency: true,
   whatsappEngagement: true,
 };
@@ -107,6 +112,11 @@ export const erpPlugin =
     if (features.cashClosure) {
       injectCollection(CashRegisters, options.overrides?.cashRegisters);
       injectCollection(CashClosures, options.overrides?.cashClosures);
+    }
+
+    // Módulo 5: Motor de Plantillas Industriales (Template Engine)
+    if (features.industryTemplates) {
+      injectCollection(IndustryTemplates, options.overrides?.industryTemplates);
     }
 
     return {

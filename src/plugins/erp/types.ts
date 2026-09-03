@@ -13,6 +13,8 @@ export interface ERPPluginFeatures {
   accountsPayable?: boolean;
   /** Activar módulo de Cierre de Caja (Cash Closure) y turnos */
   cashClosure?: boolean;
+  /** Activar motor de plantillas industriales prefabricadas (Template Engine) */
+  industryTemplates?: boolean;
   /** Activar soporte bimonetario USD / Moneda Local (BCV / Paralelo) */
   dualCurrency?: boolean;
   /** Activar generación de estados de cuenta y recordatorios por WhatsApp */
@@ -34,6 +36,7 @@ export interface ERPPluginCollectionOverrides {
   supplierPayments?: Partial<CollectionConfig>;
   cashRegisters?: Partial<CollectionConfig>;
   cashClosures?: Partial<CollectionConfig>;
+  industryTemplates?: Partial<CollectionConfig>;
 }
 
 export interface ERPPluginOptions {

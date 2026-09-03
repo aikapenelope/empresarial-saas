@@ -84,6 +84,7 @@ export interface Config {
     'supplier-payments': SupplierPayment;
     'cash-registers': CashRegister;
     'cash-closures': CashClosure;
+    'industry-templates': IndustryTemplate;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -108,6 +109,7 @@ export interface Config {
     'supplier-payments': SupplierPaymentsSelect<false> | SupplierPaymentsSelect<true>;
     'cash-registers': CashRegistersSelect<false> | CashRegistersSelect<true>;
     'cash-closures': CashClosuresSelect<false> | CashClosuresSelect<true>;
+    'industry-templates': IndustryTemplatesSelect<false> | IndustryTemplatesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -622,6 +624,21 @@ export interface CashClosure {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "industry-templates".
+ */
+export interface IndustryTemplate {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  industryType: 'food_production' | 'retail_health' | 'wholesale' | 'services';
+  icon?: string | null;
+  isPublished?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -711,6 +728,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'cash-closures';
         value: number | CashClosure;
+      } | null)
+    | ({
+        relationTo: 'industry-templates';
+        value: number | IndustryTemplate;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1203,6 +1224,20 @@ export interface CashClosuresSelect<T extends boolean = true> {
         hasDiscrepancy?: T;
       };
   notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "industry-templates_select".
+ */
+export interface IndustryTemplatesSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  description?: T;
+  industryType?: T;
+  icon?: T;
+  isPublished?: T;
   updatedAt?: T;
   createdAt?: T;
 }
