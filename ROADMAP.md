@@ -89,10 +89,10 @@ Transformar las capacidades probadas de **Cendaro ERP** en una suite de plugins 
 ---
 
 ### Fase 3: Módulo 3 — Cuentas por Pagar (CxP) & Proveedores
-- [ ] **Colección `Suppliers`:** Registro de proveedores, RIF/taxId, crédito comercial y deuda acumulada.
-- [ ] **Colección `PurchaseInvoices`:** Facturas de compras a proveedores con vencimiento y saldo pendiente.
-- [ ] **Colección `SupplierPayments`:** Comprobantes de egreso y abonos a facturas de proveedores.
-- [ ] Hooks de conciliación automática de saldo deudor con proveedores.
+- [x] **Colección `Suppliers`:** Registro de proveedores, RIF/taxId, crédito comercial y deuda acumulada.
+- [x] **Colección `PurchaseInvoices`:** Facturas de compras a proveedores con vencimiento y saldo pendiente.
+- [x] **Colección `SupplierPayments`:** Comprobantes de egreso y abonos a facturas de proveedores.
+- [x] Hooks de conciliación automática de saldo deudor con proveedores.
 
 ---
 

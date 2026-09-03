@@ -79,6 +79,9 @@ export interface Config {
     'stock-movements': StockMovement;
     'bill-of-materials': BillOfMaterial;
     'production-orders': ProductionOrder;
+    suppliers: Supplier;
+    'purchase-invoices': PurchaseInvoice;
+    'supplier-payments': SupplierPayment;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -98,6 +101,9 @@ export interface Config {
     'stock-movements': StockMovementsSelect<false> | StockMovementsSelect<true>;
     'bill-of-materials': BillOfMaterialsSelect<false> | BillOfMaterialsSelect<true>;
     'production-orders': ProductionOrdersSelect<false> | ProductionOrdersSelect<true>;
+    suppliers: SuppliersSelect<false> | SuppliersSelect<true>;
+    'purchase-invoices': PurchaseInvoicesSelect<false> | PurchaseInvoicesSelect<true>;
+    'supplier-payments': SupplierPaymentsSelect<false> | SupplierPaymentsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -455,6 +461,101 @@ export interface ProductionOrder {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "suppliers".
+ */
+export interface Supplier {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  legalName?: string | null;
+  rifTaxId: string;
+  phone: string;
+  email?: string | null;
+  contactPerson?: string | null;
+  creditConfig?: {
+    creditAllowed?: boolean | null;
+    creditDays?: number | null;
+    creditLimitUSD?: number | null;
+  };
+  currentDebtUSD?: number | null;
+  currentDebtVES?: number | null;
+  overdueDebtUSD?: number | null;
+  lastPaymentDate?: string | null;
+  /**
+   * Cuentas bancarias, beneficiario, RIF, correo para confirmaciones de pago.
+   */
+  paymentInstructions?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "purchase-invoices".
+ */
+export interface PurchaseInvoice {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  invoiceReference: string;
+  supplier: number | Supplier;
+  /**
+   * Almacén donde ingresa físicamente la mercancía o materia prima comprada.
+   */
+  warehouse?: (number | null) | Warehouse;
+  paymentType?: ('credit' | 'cash') | null;
+  status?: ('pending' | 'partially_paid' | 'paid' | 'cancelled') | null;
+  issueDate: string;
+  dueDate?: string | null;
+  exchangeRateSnapshot: number;
+  totalUSD: number;
+  totalVES?: number | null;
+  balanceUSD?: number | null;
+  balanceVES?: number | null;
+  items?:
+    | {
+        product?: (number | null) | Product;
+        sku?: string | null;
+        description: string;
+        quantity: number;
+        unitCostUSD: number;
+        subtotalUSD?: number | null;
+        id?: string | null;
+      }[]
+    | null;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "supplier-payments".
+ */
+export interface SupplierPayment {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  paymentNumber: string;
+  supplier: number | Supplier;
+  paymentDate: string;
+  paymentMethod: 'transfer_ves' | 'pago_movil' | 'cash_usd' | 'cash_ves' | 'zelle' | 'binance';
+  amountUSD: number;
+  exchangeRateApplied: number;
+  amountVES?: number | null;
+  bankOrigin?: string | null;
+  reference?: string | null;
+  allocations?:
+    | {
+        purchaseInvoice: number | PurchaseInvoice;
+        allocatedAmountUSD: number;
+        id?: string | null;
+      }[]
+    | null;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -524,6 +625,18 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'production-orders';
         value: number | ProductionOrder;
+      } | null)
+    | ({
+        relationTo: 'suppliers';
+        value: number | Supplier;
+      } | null)
+    | ({
+        relationTo: 'purchase-invoices';
+        value: number | PurchaseInvoice;
+      } | null)
+    | ({
+        relationTo: 'supplier-payments';
+        value: number | SupplierPayment;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -858,6 +971,94 @@ export interface ProductionOrdersSelect<T extends boolean = true> {
     | {
         actualTotalCostUSD?: T;
         actualUnitCostUSD?: T;
+      };
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "suppliers_select".
+ */
+export interface SuppliersSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  legalName?: T;
+  rifTaxId?: T;
+  phone?: T;
+  email?: T;
+  contactPerson?: T;
+  creditConfig?:
+    | T
+    | {
+        creditAllowed?: T;
+        creditDays?: T;
+        creditLimitUSD?: T;
+      };
+  currentDebtUSD?: T;
+  currentDebtVES?: T;
+  overdueDebtUSD?: T;
+  lastPaymentDate?: T;
+  paymentInstructions?: T;
+  address?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "purchase-invoices_select".
+ */
+export interface PurchaseInvoicesSelect<T extends boolean = true> {
+  tenant?: T;
+  invoiceReference?: T;
+  supplier?: T;
+  warehouse?: T;
+  paymentType?: T;
+  status?: T;
+  issueDate?: T;
+  dueDate?: T;
+  exchangeRateSnapshot?: T;
+  totalUSD?: T;
+  totalVES?: T;
+  balanceUSD?: T;
+  balanceVES?: T;
+  items?:
+    | T
+    | {
+        product?: T;
+        sku?: T;
+        description?: T;
+        quantity?: T;
+        unitCostUSD?: T;
+        subtotalUSD?: T;
+        id?: T;
+      };
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "supplier-payments_select".
+ */
+export interface SupplierPaymentsSelect<T extends boolean = true> {
+  tenant?: T;
+  paymentNumber?: T;
+  supplier?: T;
+  paymentDate?: T;
+  paymentMethod?: T;
+  amountUSD?: T;
+  exchangeRateApplied?: T;
+  amountVES?: T;
+  bankOrigin?: T;
+  reference?: T;
+  allocations?:
+    | T
+    | {
+        purchaseInvoice?: T;
+        allocatedAmountUSD?: T;
+        id?: T;
       };
   notes?: T;
   updatedAt?: T;

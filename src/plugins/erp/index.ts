@@ -9,10 +9,14 @@ import { Products } from './collections/Products';
 import { StockMovements } from './collections/StockMovements';
 import { BillOfMaterials } from './collections/BillOfMaterials';
 import { ProductionOrders } from './collections/ProductionOrders';
+import { Suppliers } from './collections/Suppliers';
+import { PurchaseInvoices } from './collections/PurchaseInvoices';
+import { SupplierPayments } from './collections/SupplierPayments';
 
 export * from './types';
 export * from './hooks/ledger';
 export * from './hooks/production';
+export * from './hooks/supplier-ledger';
 export { Customers } from './collections/Customers';
 export { Invoices } from './collections/Invoices';
 export { CustomerPayments } from './collections/CustomerPayments';
@@ -22,13 +26,16 @@ export { Products } from './collections/Products';
 export { StockMovements } from './collections/StockMovements';
 export { BillOfMaterials } from './collections/BillOfMaterials';
 export { ProductionOrders } from './collections/ProductionOrders';
+export { Suppliers } from './collections/Suppliers';
+export { PurchaseInvoices } from './collections/PurchaseInvoices';
+export { SupplierPayments } from './collections/SupplierPayments';
 
 const defaultFeatures = {
   crm: true,
   accountsReceivable: true,
   inventory: true,
   manufacturingBOM: true,
-  accountsPayable: false,
+  accountsPayable: true,
   cashClosure: false,
   dualCurrency: true,
   whatsappEngagement: true,
@@ -65,7 +72,7 @@ export const erpPlugin =
       }
     };
 
-    // Módulo 1: Finance & Customer CRM Core
+    // Módulo 1: Finance & Customer CRM Core (CxC)
     if (features.crm || features.accountsReceivable) {
       injectCollection(Customers, options.overrides?.customers);
       injectCollection(Invoices, options.overrides?.invoices);
@@ -83,6 +90,13 @@ export const erpPlugin =
     if (features.manufacturingBOM) {
       injectCollection(BillOfMaterials, options.overrides?.billOfMaterials);
       injectCollection(ProductionOrders, options.overrides?.productionOrders);
+    }
+
+    // Módulo 3: Proveedores y Cuentas por Pagar (CxP)
+    if (features.accountsPayable) {
+      injectCollection(Suppliers, options.overrides?.suppliers);
+      injectCollection(PurchaseInvoices, options.overrides?.purchaseInvoices);
+      injectCollection(SupplierPayments, options.overrides?.supplierPayments);
     }
 
     return {

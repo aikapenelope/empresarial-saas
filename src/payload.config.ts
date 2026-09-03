@@ -56,13 +56,14 @@ export default buildConfig({
     push: false,
   }),
   plugins: [
-    // El plugin ERP inyecta todas las colecciones del Módulo 1 (Finanzas) y Módulo 2 (BOM & Producción)
+    // El plugin ERP inyecta todas las colecciones de los Módulos 1, 2 y 3
     erpPlugin({
       features: {
         crm: true,
         accountsReceivable: true,
         inventory: true,
         manufacturingBOM: true,
+        accountsPayable: true,
         dualCurrency: true,
         whatsappEngagement: true,
       },
@@ -78,6 +79,9 @@ export default buildConfig({
         'stock-movements': {},
         'bill-of-materials': {},
         'production-orders': {},
+        suppliers: {},
+        'purchase-invoices': {},
+        'supplier-payments': {},
         media: {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),
