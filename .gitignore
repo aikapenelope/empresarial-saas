@@ -32,3 +32,4 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+*.tsbuildinfo
