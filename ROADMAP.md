@@ -104,16 +104,16 @@ Transformar las capacidades probadas de **Cendaro ERP** en una suite de plugins 
 ---
 
 ### Fase 5: Módulo 5 — Frontend Operativo Dedicado (UI Cendaro)
-- [ ] Montar ruta en Next.js 15: `src/app/(app)/[tenant]/erp/`.
-- [ ] Adaptar App Shell, Sidebar colapsable y navegación modular de Cendaro.
-- [ ] Data Grids virtuales con `@tanstack/react-table` y `@tanstack/react-virtual` para catálogos masivos.
-- [ ] Vistas operativas: Dashboard financiero, POS rápido, Cartera y envejecimiento de deuda, Cierre de turno.
+- [x] Montar ruta en Next.js 15: `src/app/(app)/[tenant]/erp/`.
+- [x] Adaptar App Shell, Sidebar colapsable y navegación modular de Cendaro.
+- [x] Data Grids y tablas operativas de Facturación, Producción y Cobranzas.
+- [x] Vistas operativas: Dashboard financiero, POS rápido, Cartera y envejecimiento de deuda, Cierre de turno.
 
 ---
 
 ### Fase 6: Módulo 6 — Motor de Plantillas por Industria (Inspirado en Supasheet)
-- [ ] Presets de datos de industria (`industry-presets.ts`): Alimentos/Panadería, Ferretería, Mayorista B2B, Moda.
-- [ ] Wizard de onboarding que auto-puebla categorías, unidades de medida, métodos de pago y BOMs de ejemplo mediante Jobs Queue.
+- [x] Presets de datos de industria (`definitions.ts`): Alimentos/Panadería (BOM), Farmacia/Retail, Distribuidora Mayorista.
+- [x] Wizard y Selector de onboarding que auto-puebla categorías, unidades de medida, almacenes, productos y BOMs de ejemplo en 1 clic.
 
 ---
 

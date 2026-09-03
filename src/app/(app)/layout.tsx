@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Empresarial SaaS | ERP & B2B Platform',
@@ -8,8 +9,8 @@ export const metadata: Metadata = {
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es">
-      <body style={{ margin: 0, fontFamily: 'system-ui, -apple-system, sans-serif', backgroundColor: '#09090b', color: '#f4f4f5' }}>
+    <html lang="es" className="dark">
+      <body className="bg-zinc-950 text-zinc-100 min-h-screen antialiased">
         {children}
       </body>
     </html>
