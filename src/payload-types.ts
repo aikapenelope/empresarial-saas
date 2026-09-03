@@ -82,6 +82,8 @@ export interface Config {
     suppliers: Supplier;
     'purchase-invoices': PurchaseInvoice;
     'supplier-payments': SupplierPayment;
+    'cash-registers': CashRegister;
+    'cash-closures': CashClosure;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -104,6 +106,8 @@ export interface Config {
     suppliers: SuppliersSelect<false> | SuppliersSelect<true>;
     'purchase-invoices': PurchaseInvoicesSelect<false> | PurchaseInvoicesSelect<true>;
     'supplier-payments': SupplierPaymentsSelect<false> | SupplierPaymentsSelect<true>;
+    'cash-registers': CashRegistersSelect<false> | CashRegistersSelect<true>;
+    'cash-closures': CashClosuresSelect<false> | CashClosuresSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -556,6 +560,68 @@ export interface SupplierPayment {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-registers".
+ */
+export interface CashRegister {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  code: string;
+  warehouse: number | Warehouse;
+  currentStatus?: ('open' | 'closed') | null;
+  active?: boolean | null;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-closures".
+ */
+export interface CashClosure {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  closureNumber: string;
+  cashRegister: number | CashRegister;
+  openedBy: number | User;
+  closedBy?: (number | null) | User;
+  status?: ('open' | 'closed' | 'audited') | null;
+  openedAt: string;
+  closedAt?: string | null;
+  openingFloat?: {
+    cashUSD?: number | null;
+    cashVES?: number | null;
+  };
+  systemTotals?: {
+    cashUSD?: number | null;
+    cashVES?: number | null;
+    pagoMovilVES?: number | null;
+    transferVES?: number | null;
+    zelleUSD?: number | null;
+    binanceUSD?: number | null;
+    totalSalesUSD?: number | null;
+  };
+  declaredTotals?: {
+    cashUSD?: number | null;
+    cashVES?: number | null;
+    pagoMovilVES?: number | null;
+    transferVES?: number | null;
+    zelleUSD?: number | null;
+    binanceUSD?: number | null;
+  };
+  differences?: {
+    diffCashUSD?: number | null;
+    diffCashVES?: number | null;
+    diffPagoMovilVES?: number | null;
+    diffZelleUSD?: number | null;
+    hasDiscrepancy?: boolean | null;
+  };
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -637,6 +703,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'supplier-payments';
         value: number | SupplierPayment;
+      } | null)
+    | ({
+        relationTo: 'cash-registers';
+        value: number | CashRegister;
+      } | null)
+    | ({
+        relationTo: 'cash-closures';
+        value: number | CashClosure;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1059,6 +1133,74 @@ export interface SupplierPaymentsSelect<T extends boolean = true> {
         purchaseInvoice?: T;
         allocatedAmountUSD?: T;
         id?: T;
+      };
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-registers_select".
+ */
+export interface CashRegistersSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  code?: T;
+  warehouse?: T;
+  currentStatus?: T;
+  active?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-closures_select".
+ */
+export interface CashClosuresSelect<T extends boolean = true> {
+  tenant?: T;
+  closureNumber?: T;
+  cashRegister?: T;
+  openedBy?: T;
+  closedBy?: T;
+  status?: T;
+  openedAt?: T;
+  closedAt?: T;
+  openingFloat?:
+    | T
+    | {
+        cashUSD?: T;
+        cashVES?: T;
+      };
+  systemTotals?:
+    | T
+    | {
+        cashUSD?: T;
+        cashVES?: T;
+        pagoMovilVES?: T;
+        transferVES?: T;
+        zelleUSD?: T;
+        binanceUSD?: T;
+        totalSalesUSD?: T;
+      };
+  declaredTotals?:
+    | T
+    | {
+        cashUSD?: T;
+        cashVES?: T;
+        pagoMovilVES?: T;
+        transferVES?: T;
+        zelleUSD?: T;
+        binanceUSD?: T;
+      };
+  differences?:
+    | T
+    | {
+        diffCashUSD?: T;
+        diffCashVES?: T;
+        diffPagoMovilVES?: T;
+        diffZelleUSD?: T;
+        hasDiscrepancy?: T;
       };
   notes?: T;
   updatedAt?: T;

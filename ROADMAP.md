@@ -97,9 +97,9 @@ Transformar las capacidades probadas de **Cendaro ERP** en una suite de plugins 
 ---
 
 ### Fase 4: Módulo 4 — Cierre de Caja & POS
-- [ ] **Colección `CashRegisters`:** Cajas registradoras / puntos de venta físicos por sucursal.
-- [ ] **Colección `CashClosures`:** Sesiones de turno con registro de apertura, conteo ciego de cierre, desglose multimétodo y cálculo de sobrante/faltante.
-- [ ] Servicio de consulta de tasas automáticas (BCV / Binance P2P) con cache serverless (120s) e invalidación bajo demanda.
+- [x] **Colección `CashRegisters`:** Cajas registradoras / puntos de venta físicos por sucursal.
+- [x] **Colección `CashClosures`:** Sesiones de turno con registro de apertura, conteo ciego de cierre, desglose multimétodo y cálculo de sobrante/faltante.
+- [x] Servicio de consulta de tasas automáticas (BCV / Binance P2P) con cache serverless (120s) e invalidación bajo demanda.
 
 ---
 

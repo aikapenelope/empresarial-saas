@@ -56,7 +56,7 @@ export default buildConfig({
     push: false,
   }),
   plugins: [
-    // El plugin ERP inyecta todas las colecciones de los Módulos 1, 2 y 3
+    // El plugin ERP inyecta todas las colecciones de los Módulos 1, 2, 3 y 4
     erpPlugin({
       features: {
         crm: true,
@@ -64,6 +64,7 @@ export default buildConfig({
         inventory: true,
         manufacturingBOM: true,
         accountsPayable: true,
+        cashClosure: true,
         dualCurrency: true,
         whatsappEngagement: true,
       },
@@ -82,6 +83,8 @@ export default buildConfig({
         suppliers: {},
         'purchase-invoices': {},
         'supplier-payments': {},
+        'cash-registers': {},
+        'cash-closures': {},
         media: {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),

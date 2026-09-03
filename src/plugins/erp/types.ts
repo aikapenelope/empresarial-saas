@@ -32,6 +32,7 @@ export interface ERPPluginCollectionOverrides {
   suppliers?: Partial<CollectionConfig>;
   purchaseInvoices?: Partial<CollectionConfig>;
   supplierPayments?: Partial<CollectionConfig>;
+  cashRegisters?: Partial<CollectionConfig>;
   cashClosures?: Partial<CollectionConfig>;
 }
 
@@ -48,6 +49,7 @@ export type LifecycleStage = 'lead' | 'first_time' | 'recurring' | 'vip' | 'inac
 export type InvoiceStatus = 'draft' | 'pending' | 'partially_paid' | 'paid' | 'cancelled';
 export type ProductType = 'standard' | 'raw_material' | 'manufactured' | 'combo';
 export type ProductionOrderStatus = 'draft' | 'planned' | 'in_progress' | 'completed' | 'cancelled';
+export type CashClosureStatus = 'open' | 'closed' | 'audited';
 export type MovementType =
   | 'purchase'
   | 'sale'

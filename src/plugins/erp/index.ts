@@ -12,6 +12,8 @@ import { ProductionOrders } from './collections/ProductionOrders';
 import { Suppliers } from './collections/Suppliers';
 import { PurchaseInvoices } from './collections/PurchaseInvoices';
 import { SupplierPayments } from './collections/SupplierPayments';
+import { CashRegisters } from './collections/CashRegisters';
+import { CashClosures } from './collections/CashClosures';
 
 export * from './types';
 export * from './hooks/ledger';
@@ -29,6 +31,8 @@ export { ProductionOrders } from './collections/ProductionOrders';
 export { Suppliers } from './collections/Suppliers';
 export { PurchaseInvoices } from './collections/PurchaseInvoices';
 export { SupplierPayments } from './collections/SupplierPayments';
+export { CashRegisters } from './collections/CashRegisters';
+export { CashClosures } from './collections/CashClosures';
 
 const defaultFeatures = {
   crm: true,
@@ -36,7 +40,7 @@ const defaultFeatures = {
   inventory: true,
   manufacturingBOM: true,
   accountsPayable: true,
-  cashClosure: false,
+  cashClosure: true,
   dualCurrency: true,
   whatsappEngagement: true,
 };
@@ -97,6 +101,12 @@ export const erpPlugin =
       injectCollection(Suppliers, options.overrides?.suppliers);
       injectCollection(PurchaseInvoices, options.overrides?.purchaseInvoices);
       injectCollection(SupplierPayments, options.overrides?.supplierPayments);
+    }
+
+    // Módulo 4: Cajas Registradoras y Cierre de Caja (Cash Closure)
+    if (features.cashClosure) {
+      injectCollection(CashRegisters, options.overrides?.cashRegisters);
+      injectCollection(CashClosures, options.overrides?.cashClosures);
     }
 
     return {
