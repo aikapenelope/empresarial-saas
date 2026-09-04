@@ -23,6 +23,9 @@ import { Products } from './collections/Products';
 import { StockMovements } from './collections/StockMovements';
 import { BillOfMaterials } from './collections/BillOfMaterials';
 import { ProductionOrders } from './collections/ProductionOrders';
+import { Suppliers } from './collections/Suppliers';
+import { PurchaseInvoices } from './collections/PurchaseInvoices';
+import { SupplierPayments } from './collections/SupplierPayments';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 
@@ -77,6 +80,9 @@ export default buildConfig({
     StockMovements,
     BillOfMaterials,
     ProductionOrders,
+    Suppliers,
+    PurchaseInvoices,
+    SupplierPayments,
   ],
   editor: lexicalEditor(),
   secret: payloadSecret,
@@ -126,6 +132,9 @@ export default buildConfig({
         'stock-movements': {},
         'bill-of-materials': {},
         'production-orders': {},
+        suppliers: {},
+        'purchase-invoices': {},
+        'supplier-payments': {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),
       tenantsArrayField: {
