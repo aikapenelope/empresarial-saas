@@ -211,48 +211,39 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
 
 export async function down({ db }: MigrateDownArgs): Promise<void> {
   await db.execute(sql`
-   ALTER TABLE "categories" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "warehouses" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "products" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "stock_movements" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "bill_of_materials_items" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "bill_of_materials" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "production_orders" DISABLE ROW LEVEL SECURITY;
-  DROP TABLE "categories" CASCADE;
-  DROP TABLE "warehouses" CASCADE;
-  DROP TABLE "products" CASCADE;
-  DROP TABLE "stock_movements" CASCADE;
-  DROP TABLE "bill_of_materials_items" CASCADE;
-  DROP TABLE "bill_of_materials" CASCADE;
-  DROP TABLE "production_orders" CASCADE;
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_categories_fk";
+   ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_categories_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_warehouses_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_products_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_stock_movements_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_bill_of_materials_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_production_orders_fk";
   
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_warehouses_fk";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_categories_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_warehouses_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_products_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_stock_movements_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_bill_of_materials_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_production_orders_id_idx";
   
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_products_fk";
-  
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_stock_movements_fk";
-  
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_bill_of_materials_fk";
-  
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_production_orders_fk";
-  
-  DROP INDEX "payload_locked_documents_rels_categories_id_idx";
-  DROP INDEX "payload_locked_documents_rels_warehouses_id_idx";
-  DROP INDEX "payload_locked_documents_rels_products_id_idx";
-  DROP INDEX "payload_locked_documents_rels_stock_movements_id_idx";
-  DROP INDEX "payload_locked_documents_rels_bill_of_materials_id_idx";
-  DROP INDEX "payload_locked_documents_rels_production_orders_id_idx";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "categories_id";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "warehouses_id";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "products_id";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "stock_movements_id";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "bill_of_materials_id";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "production_orders_id";
-  DROP TYPE "public"."enum_warehouses_type";
-  DROP TYPE "public"."enum_products_product_type";
-  DROP TYPE "public"."enum_products_unit_of_measure";
-  DROP TYPE "public"."enum_products_tax_rate";
-  DROP TYPE "public"."enum_stock_movements_movement_type";
-  DROP TYPE "public"."enum_production_orders_status";`)
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "categories_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "warehouses_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "products_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "stock_movements_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "bill_of_materials_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "production_orders_id";
+
+  DROP TABLE IF EXISTS "categories" CASCADE;
+  DROP TABLE IF EXISTS "warehouses" CASCADE;
+  DROP TABLE IF EXISTS "products" CASCADE;
+  DROP TABLE IF EXISTS "stock_movements" CASCADE;
+  DROP TABLE IF EXISTS "bill_of_materials_items" CASCADE;
+  DROP TABLE IF EXISTS "bill_of_materials" CASCADE;
+  DROP TABLE IF EXISTS "production_orders" CASCADE;
+
+  DROP TYPE IF EXISTS "public"."enum_warehouses_type";
+  DROP TYPE IF EXISTS "public"."enum_products_product_type";
+  DROP TYPE IF EXISTS "public"."enum_products_unit_of_measure";
+  DROP TYPE IF EXISTS "public"."enum_products_tax_rate";
+  DROP TYPE IF EXISTS "public"."enum_stock_movements_movement_type";
+  DROP TYPE IF EXISTS "public"."enum_production_orders_status";`)
 }

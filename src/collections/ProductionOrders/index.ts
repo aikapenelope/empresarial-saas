@@ -3,12 +3,13 @@ import type {
   CollectionBeforeValidateHook,
   CollectionConfig,
 } from 'payload';
-import { executeProductionOrder } from '../../utilities/inventoryLedger';
+import { executeProductionOrder, extractId } from '../../utilities/inventoryLedger';
 
-const beforeValidateProductionOrder: CollectionBeforeValidateHook = ({
+const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
   data,
   operation,
   originalDoc,
+  req,
 }) => {
   if (!data) return data;
 
@@ -22,12 +23,36 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = ({
   }
 
   // Prevent modifying an already completed production order
-  if (originalDoc?.status === 'completed') {
+  if (originalDoc?.status === 'completed' && operation === 'update') {
     const requestedStatus = data.status || originalDoc.status;
     if (requestedStatus !== 'completed') {
       throw new Error(
         'Una orden de producción completada no puede cambiar de estado porque sus movimientos de inventario ya fueron asentados en el Kardex.',
       );
+    }
+
+    const immutableFields = [
+      'product',
+      'bom',
+      'quantityPlanned',
+      'quantityProduced',
+      'sourceWarehouse',
+      'targetWarehouse',
+      'completionDate',
+      'totalCostUSD',
+      'unitCostUSD',
+    ] as const;
+
+    for (const field of immutableFields) {
+      if (data[field] !== undefined) {
+        const origVal = extractId(originalDoc[field]) ?? originalDoc[field];
+        const newVal = extractId(data[field]) ?? data[field];
+        if (String(origVal) !== String(newVal)) {
+          throw new Error(
+            `El campo "${field}" no puede modificarse en una orden de producción completada.`,
+          );
+        }
+      }
     }
   }
 
@@ -36,15 +61,34 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = ({
     throw new Error('La cantidad planificada a fabricar debe ser mayor a cero.');
   }
 
-  // If transitioning to completed, validate quantity produced
+  // Validate that the assigned BOM produces the ordered finished product
+  const targetProductId = extractId(data.product ?? originalDoc?.product);
+  const targetBomId = extractId(data.bom ?? originalDoc?.bom);
+  if (targetProductId && targetBomId) {
+    const bomDoc = await req.payload.findByID({
+      collection: 'bill-of-materials',
+      id: targetBomId,
+      depth: 0,
+      req,
+      context: {
+        ...req.context,
+        skipInventoryRecalculation: true,
+      },
+    });
+    if (bomDoc && String(extractId(bomDoc.product)) !== String(targetProductId)) {
+      throw new Error('La fórmula / receta (BOM) seleccionada no corresponde al producto a fabricar.');
+    }
+  }
+
+  // If transitioning to completed, validate and retain actual quantity produced
   if (data.status === 'completed') {
-    const produced = Number(data.quantityProduced) || planned;
+    const produced = Number(data.quantityProduced ?? originalDoc?.quantityProduced ?? planned);
     if (produced <= 0) {
       throw new Error('La cantidad efectivamente producida debe ser mayor a cero para completar la orden.');
     }
     data.quantityProduced = produced;
     if (!data.completionDate) {
-      data.completionDate = new Date().toISOString();
+      data.completionDate = (originalDoc?.completionDate as string) || new Date().toISOString();
     }
   }
 
@@ -146,6 +190,15 @@ export const ProductionOrders: CollectionConfig = {
       relationTo: 'bill-of-materials',
       required: true,
       index: true,
+      filterOptions: ({ siblingData }) => {
+        const prodId = extractId((siblingData as Record<string, unknown>)?.product);
+        if (!prodId) return true;
+        return {
+          product: {
+            equals: prodId,
+          },
+        };
+      },
     },
     {
       name: 'quantityPlanned',

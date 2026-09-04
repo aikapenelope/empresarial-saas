@@ -202,6 +202,13 @@ export async function executeProductionOrder(
   }
 
   const bom = bomDoc as BillOfMaterial;
+  const bomProductId = extractId(bom.product);
+  if (bomProductId && String(bomProductId) !== String(finishedProductId)) {
+    throw new Error(
+      `Inconsistencia: La receta (BOM) asignada produce un producto distinto (ID ${bomProductId}) al producto de la orden de producción (ID ${finishedProductId}).`,
+    );
+  }
+
   const bomOutputQty = Number(bom.outputQuantity) || 1;
   const batchMultiplier = quantityProduced / bomOutputQty;
 
@@ -309,9 +316,9 @@ export async function executeProductionOrder(
     await recalculateProductTotalStock(plan.rawMaterialId, req);
   }
 
-  // Compute total batch cost (materials + labor + indirect costs)
-  const laborCostUSD = Number(bom.laborCostUSD) || 0;
-  const indirectCostsUSD = Number(bom.indirectCostsUSD) || 0;
+  // Compute total batch cost (materials + labor + indirect costs) scaled by batchMultiplier
+  const laborCostUSD = Number(((Number(bom.laborCostUSD) || 0) * batchMultiplier).toFixed(2));
+  const indirectCostsUSD = Number(((Number(bom.indirectCostsUSD) || 0) * batchMultiplier).toFixed(2));
   const totalBatchCostUSD = Number((accumulatedMaterialsCostUSD + laborCostUSD + indirectCostsUSD).toFixed(2));
   const batchUnitCostUSD = Number((totalBatchCostUSD / quantityProduced).toFixed(4));
 
