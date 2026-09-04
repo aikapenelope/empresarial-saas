@@ -154,6 +154,22 @@ export interface CompleteProductionOrderOptions {
 }
 
 /**
+ * Resolves the tenant ID from input data, original doc, or active request.
+ */
+export function resolveTenantId(
+  data: Record<string, unknown> | undefined,
+  originalDoc: Record<string, unknown> | undefined,
+  req: PayloadRequest,
+): number | string | null {
+  return (
+    extractId(data?.tenant) ??
+    extractId(originalDoc?.tenant) ??
+    extractId((req as unknown as { tenant?: unknown }).tenant) ??
+    null
+  );
+}
+
+/**
  * Concurrency-safe execution of a completed production order.
  * 
  * 1. Locks all raw material product rows and finished product row sorted by ID (deadlock prevention).
@@ -170,6 +186,28 @@ export async function executeProductionOrder(
 
   if (quantityProduced <= 0) {
     throw new Error('La cantidad fabricada debe ser mayor a 0 para completar la orden.');
+  }
+
+  const db = getActiveDb(req);
+
+  // Concurrency protection: Lock the production order row to serialize completions
+  const lockedOrderRes = await db.execute(
+    sql`SELECT id, status, total_cost_u_s_d, unit_cost_u_s_d FROM production_orders WHERE id = ${orderId} FOR UPDATE`,
+  );
+  const lockedOrder = lockedOrderRes.rows?.[0];
+  if (!lockedOrder) {
+    throw new Error(`La orden de producción ID ${orderId} no existe.`);
+  }
+
+  // Idempotency check: verify if stock movements have already been posted for this production order
+  const existingMovements = await db.execute(
+    sql`SELECT id FROM stock_movements WHERE production_order_id = ${orderId} LIMIT 1`,
+  );
+  if (existingMovements.rows && existingMovements.rows.length > 0) {
+    return {
+      totalBatchCostUSD: Number(lockedOrder.total_cost_u_s_d) || 0,
+      unitCostUSD: Number(lockedOrder.unit_cost_u_s_d) || 0,
+    };
   }
 
   const order = await req.payload.findByID({
@@ -229,8 +267,6 @@ export async function executeProductionOrder(
   const sortedProductIds = Array.from(allProductIds).sort((a, b) =>
     String(a).localeCompare(String(b), undefined, { numeric: true }),
   );
-
-  const db = getActiveDb(req);
 
   // Acquire row locks on all involved products
   for (const pid of sortedProductIds) {
@@ -384,4 +420,56 @@ export async function executeProductionOrder(
     totalBatchCostUSD,
     unitCostUSD: batchUnitCostUSD,
   };
+}
+
+/**
+ * Updates a product's weighted average cost (CPP) upon an inbound purchase.
+ * Locks the product row in the active transaction, calculates the new weighted value
+ * from pre-entry stock and purchase details, and updates costUSD.
+ */
+export async function updateProductWeightedCostOnPurchase(
+  productIdRaw: unknown,
+  purchaseQty: number,
+  purchaseUnitCostUSD: number,
+  req: PayloadRequest,
+): Promise<number> {
+  const productId = extractId(productIdRaw);
+  if (!productId || purchaseQty <= 0 || purchaseUnitCostUSD <= 0) return 0;
+
+  const db = getActiveDb(req);
+
+  // Lock product row to serialize cost recalculations
+  const lockResult = await db.execute(
+    sql`SELECT id, current_stock, cost_u_s_d FROM products WHERE id = ${productId} FOR UPDATE`,
+  );
+
+  const productRow = lockResult.rows?.[0];
+  if (!productRow) return 0;
+
+  const currentStockAfter = Number(productRow.current_stock) || 0;
+  const priorCostUSD = Number(productRow.cost_u_s_d) || 0;
+  const preEntryStock = Math.max(0, Number((currentStockAfter - purchaseQty).toFixed(4)));
+
+  let newWeightedCostUSD = purchaseUnitCostUSD;
+  if (preEntryStock > 0 && priorCostUSD > 0) {
+    const totalUnits = preEntryStock + purchaseQty;
+    newWeightedCostUSD = Number(
+      ((preEntryStock * priorCostUSD + purchaseQty * purchaseUnitCostUSD) / totalUnits).toFixed(4),
+    );
+  }
+
+  await req.payload.update({
+    collection: 'products',
+    id: productId,
+    data: {
+      costUSD: newWeightedCostUSD,
+    },
+    req,
+    context: {
+      ...req.context,
+      skipInventoryRecalculation: true,
+    },
+  });
+
+  return newWeightedCostUSD;
 }

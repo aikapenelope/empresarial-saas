@@ -1,8 +1,31 @@
 import type { CollectionBeforeValidateHook, CollectionConfig } from 'payload';
-import { extractId } from '../../utilities/inventoryLedger';
+import { extractId, resolveTenantId } from '../../utilities/inventoryLedger';
 
-const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, req }) => {
+const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, originalDoc, req }) => {
   if (!data) return data;
+
+  const currentTenant = resolveTenantId(data, originalDoc, req);
+
+  // Validate finished product belongs to same tenant
+  const finishedProductId = extractId(data.product ?? originalDoc?.product);
+  if (currentTenant && finishedProductId) {
+    const finishedProduct = await req.payload.findByID({
+      collection: 'products',
+      id: finishedProductId,
+      depth: 0,
+      req,
+      context: {
+        ...req.context,
+        skipInventoryRecalculation: true,
+      },
+    });
+    const prodTenant = extractId(finishedProduct?.tenant);
+    if (prodTenant && String(currentTenant) !== String(prodTenant)) {
+      throw new Error(
+        'Violación de multi-inquilino: El producto terminado resultante pertenece a otro inquilino.',
+      );
+    }
+  }
 
   const outputQty = Number(data.outputQuantity) || 1;
   if (outputQty <= 0) {
@@ -31,6 +54,15 @@ const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, req }) =>
           skipInventoryRecalculation: true,
         },
       });
+
+      if (currentTenant) {
+        const rawTenant = extractId(rawDoc?.tenant);
+        if (rawTenant && String(currentTenant) !== String(rawTenant)) {
+          throw new Error(
+            `Violación de multi-inquilino: La materia prima "${rawDoc?.name || rawId}" pertenece a otro inquilino.`,
+          );
+        }
+      }
 
       const costSnapshot = Number(rawDoc?.costUSD) || 0;
       item.unitCostSnapshotUSD = costSnapshot;
@@ -65,8 +97,18 @@ export const BillOfMaterials: CollectionConfig = {
   },
   access: {
     read: ({ req: { user } }) => Boolean(user),
-    create: ({ req: { user } }) => Boolean(user),
-    update: ({ req: { user } }) => Boolean(user),
+    create: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
+    update: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
     delete: ({ req: { user } }) =>
       Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
   },

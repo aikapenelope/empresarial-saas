@@ -13,8 +13,18 @@ export const Warehouses: CollectionConfig = {
   },
   access: {
     read: ({ req: { user } }) => Boolean(user),
-    create: ({ req: { user } }) => Boolean(user),
-    update: ({ req: { user } }) => Boolean(user),
+    create: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
+    update: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
     delete: ({ req: { user } }) =>
       Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
   },

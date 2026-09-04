@@ -1,6 +1,34 @@
-import type { CollectionConfig } from 'payload';
-import { extractId, getActiveDb } from '../../utilities/inventoryLedger';
+import type { CollectionBeforeValidateHook, CollectionConfig } from 'payload';
+import { extractId, getActiveDb, resolveTenantId } from '../../utilities/inventoryLedger';
 import { sql } from '@payloadcms/db-postgres';
+
+const beforeValidateProduct: CollectionBeforeValidateHook = async ({
+  data,
+  originalDoc,
+  req,
+}) => {
+  if (!data) return data;
+
+  const currentTenant = resolveTenantId(data, originalDoc, req);
+  const categoryId = extractId(data.category ?? originalDoc?.category);
+
+  if (currentTenant && categoryId) {
+    const category = await req.payload.findByID({
+      collection: 'categories',
+      id: categoryId,
+      depth: 0,
+      req,
+    });
+    const categoryTenant = extractId(category?.tenant);
+    if (categoryTenant && String(currentTenant) !== String(categoryTenant)) {
+      throw new Error(
+        'Violación de multi-inquilino: La categoría seleccionada pertenece a otro inquilino.',
+      );
+    }
+  }
+
+  return data;
+};
 
 export const Products: CollectionConfig = {
   slug: 'products',
@@ -24,10 +52,23 @@ export const Products: CollectionConfig = {
   },
   access: {
     read: ({ req: { user } }) => Boolean(user),
-    create: ({ req: { user } }) => Boolean(user),
-    update: ({ req: { user } }) => Boolean(user),
+    create: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
+    update: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
     delete: ({ req: { user } }) =>
       Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+  },
+  hooks: {
+    beforeValidate: [beforeValidateProduct],
   },
   endpoints: [
     {

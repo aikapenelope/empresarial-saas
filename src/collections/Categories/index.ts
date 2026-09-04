@@ -1,4 +1,33 @@
-import type { CollectionConfig } from 'payload';
+import type { CollectionBeforeValidateHook, CollectionConfig } from 'payload';
+import { extractId, resolveTenantId } from '../../utilities/inventoryLedger';
+
+const beforeValidateCategory: CollectionBeforeValidateHook = async ({
+  data,
+  originalDoc,
+  req,
+}) => {
+  if (!data) return data;
+
+  const currentTenant = resolveTenantId(data, originalDoc, req);
+  const parentId = extractId(data.parentCategory ?? originalDoc?.parentCategory);
+
+  if (currentTenant && parentId) {
+    const parent = await req.payload.findByID({
+      collection: 'categories',
+      id: parentId,
+      depth: 0,
+      req,
+    });
+    const parentTenant = extractId(parent?.tenant);
+    if (parentTenant && String(currentTenant) !== String(parentTenant)) {
+      throw new Error(
+        'Violación de multi-inquilino: La categoría padre pertenece a otro inquilino.',
+      );
+    }
+  }
+
+  return data;
+};
 
 export const Categories: CollectionConfig = {
   slug: 'categories',
@@ -13,10 +42,23 @@ export const Categories: CollectionConfig = {
   },
   access: {
     read: ({ req: { user } }) => Boolean(user),
-    create: ({ req: { user } }) => Boolean(user),
-    update: ({ req: { user } }) => Boolean(user),
+    create: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
+    update: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
     delete: ({ req: { user } }) =>
       Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+  },
+  hooks: {
+    beforeValidate: [beforeValidateCategory],
   },
   fields: [
     {

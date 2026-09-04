@@ -7,6 +7,8 @@ import {
   extractId,
   getProductWarehouseStock,
   recalculateProductTotalStock,
+  resolveTenantId,
+  updateProductWeightedCostOnPurchase,
 } from '../../utilities/inventoryLedger';
 
 const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
@@ -28,7 +30,7 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
   const sourceId = extractId(data.sourceWarehouse);
   const targetId = extractId(data.targetWarehouse);
 
-  // Validate warehouse topology according to movement type
+  // Validate and enforce strict warehouse topology according to movement type
   if (type === 'transfer') {
     if (!sourceId || !targetId) {
       throw new Error('Una transferencia de inventario requiere tanto almacén origen como destino.');
@@ -45,6 +47,11 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
     if (!sourceId) {
       throw new Error(`El tipo de movimiento "${type}" requiere especificar un almacén de origen.`);
     }
+    if (targetId) {
+      throw new Error(
+        `El tipo de movimiento "${type}" es una salida y no permite especificar un almacén de destino.`,
+      );
+    }
   } else if (
     type === 'purchase_in' ||
     type === 'production_output' ||
@@ -52,6 +59,11 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
   ) {
     if (!targetId) {
       throw new Error(`El tipo de movimiento "${type}" requiere especificar un almacén de destino.`);
+    }
+    if (sourceId) {
+      throw new Error(
+        `El tipo de movimiento "${type}" es una entrada y no permite especificar un almacén de origen.`,
+      );
     }
   }
 
@@ -77,8 +89,8 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
       throw new Error(`El producto ID ${productId} no existe.`);
     }
 
-    // Verify tenant match
-    const movementTenant = extractId(data.tenant);
+    // Verify tenant match across product, warehouses, production order, and invoice
+    const movementTenant = resolveTenantId(data, undefined, req);
     const productTenant = extractId(product.tenant);
     if (movementTenant && productTenant && String(movementTenant) !== String(productTenant)) {
       throw new Error(
@@ -86,12 +98,77 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
       );
     }
 
-    // For outbound movements (except internal adjustments), check source warehouse availability
-    if (sourceId && (type === 'transfer' || type === 'sale_out' || type === 'scrap')) {
+    if (sourceId) {
+      const sourceWarehouse = await req.payload.findByID({
+        collection: 'warehouses',
+        id: sourceId,
+        depth: 0,
+        req,
+        context: { ...req.context, skipInventoryRecalculation: true },
+      });
+      const swTenant = extractId(sourceWarehouse?.tenant);
+      if (movementTenant && swTenant && String(movementTenant) !== String(swTenant)) {
+        throw new Error('Violación de multi-inquilino: El almacén de origen pertenece a otro inquilino.');
+      }
+    }
+
+    if (targetId) {
+      const targetWarehouse = await req.payload.findByID({
+        collection: 'warehouses',
+        id: targetId,
+        depth: 0,
+        req,
+        context: { ...req.context, skipInventoryRecalculation: true },
+      });
+      const twTenant = extractId(targetWarehouse?.tenant);
+      if (movementTenant && twTenant && String(movementTenant) !== String(twTenant)) {
+        throw new Error('Violación de multi-inquilino: El almacén de destino pertenece a otro inquilino.');
+      }
+    }
+
+    const prodOrderId = extractId(data.productionOrder);
+    if (movementTenant && prodOrderId) {
+      const prodOrder = await req.payload.findByID({
+        collection: 'production-orders',
+        id: prodOrderId,
+        depth: 0,
+        req,
+        context: { ...req.context, skipInventoryRecalculation: true },
+      });
+      const poTenant = extractId(prodOrder?.tenant);
+      if (poTenant && String(movementTenant) !== String(poTenant)) {
+        throw new Error('Violación de multi-inquilino: La orden de producción pertenece a otro inquilino.');
+      }
+    }
+
+    const invoiceId = extractId(data.invoice);
+    if (movementTenant && invoiceId) {
+      const invoice = await req.payload.findByID({
+        collection: 'invoices',
+        id: invoiceId,
+        depth: 0,
+        req,
+        context: { ...req.context, skipInventoryRecalculation: true },
+      });
+      const invTenant = extractId(invoice?.tenant);
+      if (invTenant && String(movementTenant) !== String(invTenant)) {
+        throw new Error('Violación de multi-inquilino: La factura asociada pertenece a otro inquilino.');
+      }
+    }
+
+    // Check source warehouse availability for every stock-decreasing movement
+    if (
+      sourceId &&
+      (type === 'transfer' ||
+        type === 'sale_out' ||
+        type === 'production_consume' ||
+        type === 'adjustment_negative' ||
+        type === 'scrap')
+    ) {
       const availableStock = await getProductWarehouseStock(productId, sourceId, req);
       if (availableStock < qty - 0.0001) {
         throw new Error(
-          `Stock insuficiente para el producto "${product.name}": Disponible ${availableStock}, requerido ${qty}.`,
+          `Stock insuficiente para el producto "${product.name}" en el almacén origen: Disponible ${availableStock}, requerido ${qty}.`,
         );
       }
     }
@@ -105,7 +182,18 @@ const afterChangeStockMovement: CollectionAfterChangeHook = async ({ doc, req })
 
   const productId = extractId(doc.product);
   if (productId) {
+    // Recalculate total on-hand stock
     await recalculateProductTotalStock(productId, req);
+
+    // If purchase entry, update weighted-average cost (CPP)
+    if (doc.movementType === 'purchase_in' && Number(doc.unitCostUSD) > 0) {
+      await updateProductWeightedCostOnPurchase(
+        productId,
+        Number(doc.quantity) || 0,
+        Number(doc.unitCostUSD) || 0,
+        req,
+      );
+    }
   }
 
   return doc;
@@ -133,7 +221,12 @@ export const StockMovements: CollectionConfig = {
   },
   access: {
     read: ({ req: { user } }) => Boolean(user),
-    create: ({ req: { user } }) => Boolean(user),
+    create: ({ req: { user } }) =>
+      Boolean(
+        user?.role === 'super-admin' ||
+          user?.role === 'tenant-admin' ||
+          user?.role === 'supervisor',
+      ),
     // Immutable ledger: movements cannot be modified or deleted once recorded
     update: () => false,
     delete: () => false,
