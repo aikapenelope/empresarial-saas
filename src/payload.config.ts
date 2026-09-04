@@ -8,6 +8,9 @@ import { es } from '@payloadcms/translations/languages/es';
 import { en } from '@payloadcms/translations/languages/en';
 import sharp from 'sharp';
 
+import { s3Storage } from '@payloadcms/storage-s3';
+import { nodemailerAdapter } from '@payloadcms/email-nodemailer';
+
 import { Users } from './collections/Users';
 import { Tenants } from './collections/Tenants';
 import { Media } from './collections/Media';
@@ -74,6 +77,20 @@ export default buildConfig({
     migrationDir: path.resolve(dirname, 'migrations'),
     prodMigrations: migrations,
   }),
+  email: nodemailerAdapter({
+    defaultFromAddress: process.env.SMTP_FROM_ADDRESS || 'soporte@empresarial-saas.com',
+    defaultFromName: process.env.SMTP_FROM_NAME || 'Empresarial SaaS',
+    transportOptions: process.env.SMTP_HOST
+      ? {
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT) || 587,
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        }
+      : undefined,
+  }),
   plugins: [
     multiTenantPlugin({
       collections: {
@@ -92,6 +109,22 @@ export default buildConfig({
           update: ({ req: { user } }) => user?.role === 'super-admin',
         },
       },
+    }),
+    s3Storage({
+      collections: {
+        media: true,
+      },
+      bucket: process.env.S3_BUCKET || '',
+      config: {
+        credentials: {
+          accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+          secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+        },
+        region: process.env.S3_REGION || 'us-east-1',
+        ...(process.env.S3_ENDPOINT ? { endpoint: process.env.S3_ENDPOINT } : {}),
+        forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
+      },
+      enabled: Boolean(process.env.S3_BUCKET),
     }),
   ],
 });
