@@ -113,6 +113,51 @@ const beforeValidateSupplierPayment: CollectionBeforeValidateHook = async ({
     }
   }
 
+  // Cash Register and Shift Session validations
+  const tenantId = extractId(data.tenant);
+  const registerId = extractId(data.cashRegister);
+  let closureId = extractId(data.cashClosure);
+
+  if (registerId && !closureId) {
+    const openShift = await req.payload.find({
+      collection: 'cash-closures',
+      where: {
+        and: [
+          { cashRegister: { equals: registerId } },
+          { status: { equals: 'open' } },
+        ],
+      },
+      limit: 1,
+      depth: 0,
+      req,
+    });
+    if (openShift.totalDocs > 0) {
+      closureId = openShift.docs[0].id;
+      data.cashClosure = closureId;
+    }
+  }
+
+  if (closureId) {
+    const closure = await req.payload.findByID({
+      collection: 'cash-closures',
+      id: closureId,
+      depth: 0,
+      req,
+    });
+    if (!closure) {
+      throw new Error(`El turno de caja con ID ${closureId} no existe.`);
+    }
+    if (closure.status !== 'open') {
+      throw new Error(
+        `El turno de caja ${closure.closureNumber || closureId} ya está cerrado o auditado. No se pueden registrar egresos en un turno cerrado.`,
+      );
+    }
+    const closureTenantId = extractId(closure.tenant);
+    if (tenantId && closureTenantId && String(tenantId) !== String(closureTenantId)) {
+      throw new Error('El turno de caja seleccionado pertenece a otra empresa.');
+    }
+  }
+
   return data;
 };
 
@@ -293,6 +338,7 @@ export const SupplierPayments: CollectionConfig = {
           options: [
             { label: 'Efectivo Dólares (USD)', value: 'cash_usd' },
             { label: 'Efectivo Bolívares (VES)', value: 'cash_ves' },
+            { label: 'Punto de Venta / Tarjeta (VES)', value: 'pos_ves' },
             { label: 'Zelle (USD)', value: 'zelle' },
             { label: 'Pago Móvil (VES)', value: 'pago_movil' },
             { label: 'Transferencia Bancaria (VES)', value: 'transfer_ves' },
@@ -376,6 +422,26 @@ export const SupplierPayments: CollectionConfig = {
           min: 0.01,
         },
       ],
+    },
+    {
+      name: 'cashRegister',
+      label: 'Caja Registradora (Punto de Egreso)',
+      type: 'relationship',
+      relationTo: 'cash-registers',
+      index: true,
+      admin: {
+        position: 'sidebar',
+      },
+    },
+    {
+      name: 'cashClosure',
+      label: 'Turno de Caja / Cierre',
+      type: 'relationship',
+      relationTo: 'cash-closures',
+      index: true,
+      admin: {
+        position: 'sidebar',
+      },
     },
     {
       name: 'notes',

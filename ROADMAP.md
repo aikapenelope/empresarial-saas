@@ -125,12 +125,12 @@ Cada sprint concluye con:
 ### 💵 Sprint 4: Módulo Cajas Registradoras, Cierre de Turno y Tasas Cambiarias
 > **Objetivo:** Gestión de puntos de venta físicos, arqueo ciego multimétodo y servicio en vivo de tasas de cambio (BCV / Paralelo).
 
-- [ ] **Colección `CashRegisters`:** Cajas registradoras asignadas a sucursales y usuarios.
-- [ ] **Colección `CashClosures`:** Sesiones de turno con balance de apertura, recaudación por método (Efectivo USD/Bs, Punto, Pago Móvil, Zelle), conteo ciego de cierre y cálculo de sobrante/faltante.
-- [ ] **Servicio de Tasas Cambiarias:**
-  - Consulta automatizada de tasa oficial BCV y Binance P2P con cache serverless (revalidate: 120s).
-- [ ] **Migración DDL & Validación:** Migración `add_cash_registers` aplicada y verificada.
-- **Entregable:** PR `feat/sprint-4-cash-registers` mergeado a `main`.
+- [x] **Colección `CashRegisters`:** Cajas registradoras asignadas a sucursales y usuarios con aislamiento multi-tenant y estado operativo automático.
+- [x] **Colección `CashClosures`:** Sesiones de turno con balance de apertura, recaudación por método (Efectivo USD/Bs, Punto, Pago Móvil, Zelle, Binance), arqueo ciego multimétodo y cálculo automático de sobrante/faltante en hook transaccional.
+- [x] **Servicio de Tasas Cambiarias:**
+  - Endpoint (`/api/exchange-rates`) y utilidad serverless (`src/utilities/exchangeRate.ts`) con cache optimizada (TTL: 120s) para consultar la tasa oficial BCV, Binance P2P y Dólar Paralelo con resolución jerárquica por tenant.
+- [x] **Migración DDL & Validación:** Migración `add_cash_registers` (`20260904_224151_add_cash_registers.ts`) aplicada y verificada en Supabase PostgreSQL.
+- **Estado:** ✅ **Sprint 4 Concluido al 100%** (Listo para PR y merge a `main`).
 
 ---
 
