@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildConfig } from 'payload';
@@ -13,6 +12,7 @@ import { Users } from './collections/Users';
 import { Tenants } from './collections/Tenants';
 import { Media } from './collections/Media';
 import { migrations } from './migrations';
+import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -34,14 +34,9 @@ const dbConnectionString = isMigration
   : process.env.DATABASE_URI || process.env.POSTGRES_URL || '';
 
 // Load Supabase Root CA cert to strictly enforce rejectUnauthorized: true without MITM vulnerabilities
-const defaultCertPath = path.resolve(dirname, '../certs/supabase-root-ca.crt');
-const rootCert = fs.existsSync(defaultCertPath)
-  ? fs.readFileSync(defaultCertPath, 'utf8')
-  : undefined;
-
 const caCert = process.env.SUPABASE_CA_CERT
   ? process.env.SUPABASE_CA_CERT.replace(/\\n/g, '\n')
-  : rootCert;
+  : SUPABASE_ROOT_CA;
 
 export default buildConfig({
   admin: {
