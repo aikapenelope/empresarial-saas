@@ -4,9 +4,18 @@ import type {
   CollectionBeforeValidateHook,
   CollectionConfig,
 } from 'payload';
-import { extractId, recalculateCustomerBalance } from '../../utilities/financeLedger';
+import {
+  extractId,
+  getInvoicePaidAmount,
+  recalculateCustomerBalance,
+} from '../../utilities/financeLedger';
 
-const beforeValidateInvoice: CollectionBeforeValidateHook = ({ data, operation, originalDoc }) => {
+const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
+  data,
+  operation,
+  originalDoc,
+  req,
+}) => {
   if (!data) return data;
 
   const rate = Number(data.exchangeRateSnapshot) || Number(originalDoc?.exchangeRateSnapshot) || 1;
@@ -34,10 +43,7 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = ({ data, operation, 
 
   // 2. Handle Creation
   if (operation === 'create') {
-    if (data.status === 'paid') {
-      data.balanceUSD = 0;
-      data.balanceVES = 0;
-    } else if (data.status === 'voided') {
+    if (data.status === 'paid' || data.status === 'voided') {
       data.balanceUSD = 0;
       data.balanceVES = 0;
     } else {
@@ -54,11 +60,7 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = ({ data, operation, 
   // 3. Handle Update: reconcile outstanding balances and explicit status transitions
   if (operation === 'update' && originalDoc) {
     const origTotalUSD = Number(originalDoc.totalUSD) || 0;
-    const origBalanceUSD = Number(originalDoc.balanceUSD) || 0;
     const currentTotalUSD = data.totalUSD !== undefined ? Number(data.totalUSD) : origTotalUSD;
-
-    // Calculate historical amount already paid toward this invoice
-    const priorPaidUSD = Math.max(0, Number((origTotalUSD - origBalanceUSD).toFixed(2)));
 
     // Detect explicit status transitions
     const originalStatus = originalDoc.status as string;
@@ -71,27 +73,48 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = ({ data, operation, 
       return data;
     }
 
-    // Un-voiding a previously voided invoice
-    if (originalStatus === 'voided' && requestedStatus !== 'voided') {
-      const restoredBalUSD = Math.max(0, Number((currentTotalUSD - priorPaidUSD).toFixed(2)));
-      data.balanceUSD = restoredBalUSD;
-      data.balanceVES = Number((restoredBalUSD * rate).toFixed(2));
-      data.status =
-        restoredBalUSD <= 0.005 ? 'paid' : priorPaidUSD > 0 ? 'partially_paid' : requestedStatus;
+    if (requestedStatus === 'paid') {
+      data.status = 'paid';
+      data.balanceUSD = 0;
+      data.balanceVES = 0;
       return data;
     }
 
-    // Reopening a previously paid invoice
+    // Un-voiding a previously voided invoice: reconstruct actual historical payments
+    if (originalStatus === 'voided' && requestedStatus !== 'voided') {
+      const actualPaidUSD = await getInvoicePaidAmount(originalDoc.id, req);
+      const restoredBalUSD = Math.max(0, Number((currentTotalUSD - actualPaidUSD).toFixed(2)));
+      data.balanceUSD = restoredBalUSD;
+      data.balanceVES = Number((restoredBalUSD * rate).toFixed(2));
+      data.status =
+        restoredBalUSD <= 0.005
+          ? 'paid'
+          : actualPaidUSD > 0
+            ? 'partially_paid'
+            : requestedStatus === 'draft'
+              ? 'draft'
+              : 'issued';
+      return data;
+    }
+
+    // Reopening a previously paid invoice to issued or draft
     if (originalStatus === 'paid' && (requestedStatus === 'issued' || requestedStatus === 'draft')) {
-      const newBalUSD =
+      const actualPaidUSD = await getInvoicePaidAmount(originalDoc.id, req);
+      const restoredBalUSD = Math.max(0, Number((currentTotalUSD - actualPaidUSD).toFixed(2)));
+      data.balanceUSD =
         data.balanceUSD !== undefined && Number(data.balanceUSD) > 0
-          ? Math.min(currentTotalUSD, Number(Number(data.balanceUSD).toFixed(2)))
-          : currentTotalUSD;
-      data.balanceUSD = newBalUSD;
-      data.balanceVES = Number((newBalUSD * rate).toFixed(2));
+          ? Math.min(restoredBalUSD, Number(Number(data.balanceUSD).toFixed(2)))
+          : restoredBalUSD;
+      data.balanceVES = Number((data.balanceUSD * rate).toFixed(2));
       data.status = requestedStatus;
       return data;
     }
+
+    // Calculate historical amount already paid toward this invoice
+    const priorPaidUSD = Math.max(
+      0,
+      Number((origTotalUSD - (Number(originalDoc.balanceUSD) || 0)).toFixed(2)),
+    );
 
     // If invoice items or exchange rate changed, dynamically reconcile remaining balance
     const itemsChanged = Array.isArray(data.items);
@@ -332,6 +355,9 @@ export const Invoices: CollectionConfig = {
       type: 'number',
       required: true,
       min: 0,
+      admin: {
+        readOnly: true,
+      },
     },
     {
       name: 'balanceVES',

@@ -79,6 +79,18 @@ const beforeValidatePayment: CollectionBeforeValidateHook = async ({ data, req }
             `La factura ${invoice.invoiceNumber || invoiceId} está anulada y no puede recibir abonos.`,
           );
         }
+
+        const paymentTenantId = extractId(data.tenant);
+        const invoiceTenantId = extractId(invoice.tenant);
+        if (
+          paymentTenantId &&
+          invoiceTenantId &&
+          String(paymentTenantId) !== String(invoiceTenantId)
+        ) {
+          throw new Error(
+            `La factura ${invoice.invoiceNumber || invoiceId} pertenece a otro inquilino y no puede ser abonada en este cobro.`,
+          );
+        }
       }
     }
 
@@ -132,29 +144,22 @@ const afterChangePayment: CollectionAfterChangeHook = async ({
 };
 
 const beforeDeletePayment: CollectionBeforeDeleteHook = async ({ id: _id, req }) => {
-  // Read document before deletion to reverse allocations
-  try {
-    const doc = await req.payload.findByID({
-      collection: 'customer-payments',
-      id: _id,
-      depth: 0,
-      req,
-      context: {
-        ...req.context,
-        skipBalanceRecalculation: true,
-      },
-    });
+  // Read document before deletion to reverse allocations atomically
+  const doc = await req.payload.findByID({
+    collection: 'customer-payments',
+    id: _id,
+    depth: 0,
+    req,
+    context: {
+      ...req.context,
+      skipBalanceRecalculation: true,
+    },
+  });
 
-    if (doc?.status === 'confirmed' && Array.isArray(doc.allocations)) {
-      await reversePaymentAllocations(doc.allocations as PaymentAllocation[], req, {
-        customerId: extractId(doc.customer),
-        tenantId: extractId(doc.tenant),
-      });
-    }
-  } catch (error) {
-    req.payload.logger.error({
-      err: error,
-      message: `Failed to reverse payment allocations during beforeDelete for payment ${_id}`,
+  if (doc?.status === 'confirmed' && Array.isArray(doc.allocations)) {
+    await reversePaymentAllocations(doc.allocations as PaymentAllocation[], req, {
+      customerId: extractId(doc.customer),
+      tenantId: extractId(doc.tenant),
     });
   }
 };

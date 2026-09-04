@@ -32,6 +32,27 @@ export function extractId(value: unknown): number | string | null {
 }
 
 /**
+ * Resolves the active database or transaction handle from Payload request.
+ */
+export function getActiveDb(req: PayloadRequest): {
+  execute: (query: unknown) => Promise<{ rows: Array<Record<string, unknown>> }>;
+} {
+  const dbAdapter = req.payload.db as unknown as {
+    sessions?: Record<
+      string,
+      { db: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> } }
+    >;
+    drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
+  };
+
+  if (req.transactionID && dbAdapter.sessions?.[req.transactionID as string]?.db) {
+    return dbAdapter.sessions[req.transactionID as string].db;
+  }
+
+  return dbAdapter.drizzle;
+}
+
+/**
  * Paginates through all open (non-voided, non-paid) invoices for a given customer,
  * ensuring ledger balances, aging buckets, and statements never truncate large customer accounts.
  */
@@ -82,10 +103,100 @@ export async function fetchAllCustomerOpenInvoices(
 }
 
 /**
+ * Reconstructs the exact total amount paid toward an invoice from durable confirmed payment allocations.
+ */
+export async function getInvoicePaidAmount(
+  invoiceIdRaw: unknown,
+  req: PayloadRequest,
+): Promise<number> {
+  const invoiceId = extractId(invoiceIdRaw);
+  if (!invoiceId) return 0;
+
+  const payments = await req.payload.find({
+    collection: 'customer-payments',
+    where: {
+      and: [
+        {
+          'allocations.invoice': {
+            equals: invoiceId,
+          },
+        },
+        {
+          status: {
+            equals: 'confirmed',
+          },
+        },
+      ],
+    },
+    limit: 500,
+    depth: 0,
+    req,
+    context: {
+      ...req.context,
+      skipBalanceRecalculation: true,
+    },
+  });
+
+  let totalPaid = 0;
+  for (const pay of payments.docs) {
+    if (Array.isArray(pay.allocations)) {
+      for (const alloc of pay.allocations) {
+        if (String(extractId(alloc.invoice)) === String(invoiceId)) {
+          totalPaid += Number(alloc.allocatedAmountUSD) || 0;
+        }
+      }
+    }
+  }
+
+  return Number(totalPaid.toFixed(2));
+}
+
+/**
+ * Calculates live overdue debt for a customer as of the current instant.
+ * Caches on req.context to optimize multi-field reads within the same request.
+ */
+export async function computeLiveCustomerOverdueDebt(
+  customerIdRaw: unknown,
+  req: PayloadRequest,
+): Promise<number> {
+  const customerId = extractId(customerIdRaw);
+  if (!customerId) return 0;
+
+  const cacheKey = `customer_overdue_${customerId}`;
+  if (req.context?.[cacheKey] !== undefined) {
+    return req.context[cacheKey] as number;
+  }
+
+  const invoices = await fetchAllCustomerOpenInvoices(customerId, req);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  let overdue = 0;
+  for (const inv of invoices) {
+    const balUSD = Number(inv.balanceUSD) || 0;
+    if (balUSD > 0 && inv.dueDate) {
+      const due = new Date(inv.dueDate as string);
+      if (due < now) {
+        overdue += balUSD;
+      }
+    }
+  }
+
+  const result = Number(overdue.toFixed(2));
+  if (req.context) {
+    req.context[cacheKey] = result;
+  }
+
+  return result;
+}
+
+/**
  * Atomically recalculates and updates a customer's ledger balances (current debt, overdue debt)
  * across ALL active, non-voided invoices without artificial cutoffs.
  *
- * Participates in the caller's transaction via `req`.
+ * Locks the customer row (`SELECT ... FOR UPDATE`) in the active transaction to serialize concurrent
+ * calculations on different invoices, preventing mutually stale snapshot overwrites.
+ *
  * Uses `req.context.skipBalanceRecalculation` to prevent infinite hook loops.
  */
 export async function recalculateCustomerBalance(
@@ -98,6 +209,13 @@ export async function recalculateCustomerBalance(
   if (req.context?.skipBalanceRecalculation) {
     return null;
   }
+
+  const db = getActiveDb(req);
+
+  // Serialize recalculations per customer inside the active transaction
+  await db.execute(
+    sql`SELECT id FROM customers WHERE id = ${customerId} FOR UPDATE`,
+  );
 
   const invoices = await fetchAllCustomerOpenInvoices(customerId, req);
 
@@ -150,24 +268,6 @@ export async function recalculateCustomerBalance(
     currentDebtVES: roundedVES,
     overdueDebtUSD: roundedOverdueUSD,
   };
-}
-
-/**
- * Resolves the active database or transaction handle from Payload request.
- */
-function getActiveDb(req: PayloadRequest): {
-  execute: (query: unknown) => Promise<{ rows: Array<Record<string, unknown>> }>;
-} {
-  const dbAdapter = req.payload.db as unknown as {
-    sessions?: Record<string, { db: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> } }>;
-    drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
-  };
-
-  if (req.transactionID && dbAdapter.sessions?.[req.transactionID as string]?.db) {
-    return dbAdapter.sessions[req.transactionID as string].db;
-  }
-
-  return dbAdapter.drizzle;
 }
 
 /**
@@ -265,6 +365,7 @@ export async function applyPaymentAllocations(
 
 /**
  * Concurrency-safe reversal of payment allocations (restores invoice balance and status).
+ * Preserves cancellation state so reversing a payment on a voided invoice never revives it.
  */
 export async function reversePaymentAllocations(
   allocations: PaymentAllocation[] | undefined | null,
@@ -293,10 +394,19 @@ export async function reversePaymentAllocations(
     if (!invoiceRow) continue;
 
     // Validate tenant & customer match if provided
-    if (expectedTenantId && invoiceRow.tenant_id && String(invoiceRow.tenant_id) !== String(expectedTenantId)) {
+    if (
+      expectedTenantId &&
+      invoiceRow.tenant_id &&
+      String(invoiceRow.tenant_id) !== String(expectedTenantId)
+    ) {
       continue;
     }
     if (expectedCustomerId && String(invoiceRow.customer_id) !== String(expectedCustomerId)) {
+      continue;
+    }
+
+    // Preserve cancellation state: reversing a payment on a voided invoice must never revive it
+    if (invoiceRow.status === 'voided') {
       continue;
     }
 

@@ -1,5 +1,9 @@
 import type { CollectionConfig, FieldHook, PayloadRequest } from 'payload';
-import { extractId, fetchAllCustomerOpenInvoices } from '../../utilities/financeLedger';
+import {
+  computeLiveCustomerOverdueDebt,
+  extractId,
+  fetchAllCustomerOpenInvoices,
+} from '../../utilities/financeLedger';
 
 async function getCustomerAging(
   customerIdRaw: unknown,
@@ -55,6 +59,11 @@ async function getCustomerAging(
 
   return result;
 }
+
+const overdueDebtUSDHook: FieldHook = async ({ siblingData, req, value }) => {
+  if (!siblingData?.id) return value ?? 0;
+  return await computeLiveCustomerOverdueDebt(siblingData.id, req);
+};
 
 const aging0to30Hook: FieldHook = async ({ siblingData, req }) => {
   if (!siblingData?.id || !siblingData.currentDebtUSD) return 0;
@@ -157,7 +166,7 @@ export const Customers: CollectionConfig = {
               : customer.tenant;
 
           if (
-            customerTenantId &&
+            !customerTenantId ||
             !userTenants.includes(customerTenantId as number)
           ) {
             return Response.json(
@@ -291,6 +300,9 @@ export const Customers: CollectionConfig = {
       defaultValue: 0,
       admin: {
         readOnly: true,
+      },
+      hooks: {
+        afterRead: [overdueDebtUSDHook],
       },
     },
     // Virtual Aging Fields
