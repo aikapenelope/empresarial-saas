@@ -13,7 +13,7 @@ import {
   type PaymentAllocation,
 } from '../../utilities/financeLedger';
 
-const beforeValidatePayment: CollectionBeforeValidateHook = ({ data }) => {
+const beforeValidatePayment: CollectionBeforeValidateHook = async ({ data, req }) => {
   if (!data) return data;
 
   if (Array.isArray(data.methods)) {
@@ -39,6 +39,56 @@ const beforeValidatePayment: CollectionBeforeValidateHook = ({ data }) => {
     data.totalUSD = Number(sumTotalUSD.toFixed(2));
   }
 
+  // Financial invariant validations
+  if (Array.isArray(data.allocations) && data.allocations.length > 0) {
+    const customerId = extractId(data.customer);
+    let totalAllocated = 0;
+
+    for (const alloc of data.allocations) {
+      const allocatedAmount = Number(alloc.allocatedAmountUSD) || 0;
+      if (allocatedAmount <= 0) {
+        throw new Error('El monto asignado a cada factura debe ser mayor a cero.');
+      }
+      totalAllocated += allocatedAmount;
+
+      const invoiceId = extractId(alloc.invoice);
+      if (invoiceId) {
+        const invoice = await req.payload.findByID({
+          collection: 'invoices',
+          id: invoiceId,
+          depth: 0,
+          req,
+          context: {
+            ...req.context,
+            skipBalanceRecalculation: true,
+          },
+        });
+
+        if (!invoice) {
+          throw new Error(`La factura con ID ${invoiceId} asignada en el cobro no existe.`);
+        }
+
+        if (customerId && extractId(invoice.customer) !== customerId) {
+          throw new Error(
+            `La factura ${invoice.invoiceNumber || invoiceId} pertenece a otro cliente y no puede ser abonada.`,
+          );
+        }
+
+        if (invoice.status === 'voided') {
+          throw new Error(
+            `La factura ${invoice.invoiceNumber || invoiceId} está anulada y no puede recibir abonos.`,
+          );
+        }
+      }
+    }
+
+    if (totalAllocated > (Number(data.totalUSD) || 0) + 0.01) {
+      throw new Error(
+        `El total asignado a facturas ($${totalAllocated.toFixed(2)} USD) no puede exceder el monto total del pago ($${(Number(data.totalUSD) || 0).toFixed(2)} USD).`,
+      );
+    }
+  }
+
   return data;
 };
 
@@ -49,22 +99,31 @@ const afterChangePayment: CollectionAfterChangeHook = async ({
 }) => {
   if (req.context?.skipBalanceRecalculation) return doc;
 
+  const currentCustomerId = extractId(doc.customer);
+  const currentTenantId = extractId(doc.tenant);
+  const previousCustomerId = extractId(previousDoc?.customer);
+  const previousTenantId = extractId(previousDoc?.tenant);
+
   // If previous doc was confirmed, reverse its allocations first
   if (previousDoc?.status === 'confirmed' && Array.isArray(previousDoc.allocations)) {
-    await reversePaymentAllocations(previousDoc.allocations as PaymentAllocation[], req);
+    await reversePaymentAllocations(previousDoc.allocations as PaymentAllocation[], req, {
+      customerId: previousCustomerId,
+      tenantId: previousTenantId,
+    });
   }
 
   // If current doc is confirmed, apply its allocations
   if (doc.status === 'confirmed' && Array.isArray(doc.allocations)) {
-    await applyPaymentAllocations(doc.allocations as PaymentAllocation[], req);
+    await applyPaymentAllocations(doc.allocations as PaymentAllocation[], req, {
+      customerId: currentCustomerId,
+      tenantId: currentTenantId,
+    });
   }
 
-  const currentCustomerId = extractId(doc.customer);
   if (currentCustomerId) {
     await recalculateCustomerBalance(currentCustomerId, req);
   }
 
-  const previousCustomerId = extractId(previousDoc?.customer);
   if (previousCustomerId && previousCustomerId !== currentCustomerId) {
     await recalculateCustomerBalance(previousCustomerId, req);
   }
@@ -87,7 +146,10 @@ const beforeDeletePayment: CollectionBeforeDeleteHook = async ({ id: _id, req })
     });
 
     if (doc?.status === 'confirmed' && Array.isArray(doc.allocations)) {
-      await reversePaymentAllocations(doc.allocations as PaymentAllocation[], req);
+      await reversePaymentAllocations(doc.allocations as PaymentAllocation[], req, {
+        customerId: extractId(doc.customer),
+        tenantId: extractId(doc.tenant),
+      });
     }
   } catch (error) {
     req.payload.logger.error({

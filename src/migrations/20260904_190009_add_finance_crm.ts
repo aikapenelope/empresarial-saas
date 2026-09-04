@@ -142,38 +142,41 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
 
 export async function down({ db }: MigrateDownArgs): Promise<void> {
   await db.execute(sql`
-   ALTER TABLE "customers" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "invoices_items" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "invoices" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "customer_payments_methods" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "customer_payments_allocations" DISABLE ROW LEVEL SECURITY;
-  ALTER TABLE "customer_payments" DISABLE ROW LEVEL SECURITY;
-  DROP TABLE "customers" CASCADE;
-  DROP TABLE "invoices_items" CASCADE;
-  DROP TABLE "invoices" CASCADE;
-  DROP TABLE "customer_payments_methods" CASCADE;
-  DROP TABLE "customer_payments_allocations" CASCADE;
-  DROP TABLE "customer_payments" CASCADE;
-  ALTER TABLE "users_tenants" DROP CONSTRAINT "users_tenants_tenant_id_tenants_id_fk";
+   ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_customers_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_invoices_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_customer_payments_fk";
   
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_customers_fk";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_customers_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_invoices_id_idx";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_customer_payments_id_idx";
   
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_invoices_fk";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "customers_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "invoices_id";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "customer_payments_id";
   
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_customer_payments_fk";
+  ALTER TABLE "users" DROP COLUMN IF EXISTS "password";
   
-  DROP INDEX "payload_locked_documents_rels_customers_id_idx";
-  DROP INDEX "payload_locked_documents_rels_invoices_id_idx";
-  DROP INDEX "payload_locked_documents_rels_customer_payments_id_idx";
+  ALTER TABLE "users_tenants" DROP CONSTRAINT IF EXISTS "users_tenants_tenant_id_tenants_id_fk";
   ALTER TABLE "users_tenants" ADD CONSTRAINT "users_tenants_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
-  ALTER TABLE "users" DROP COLUMN "password";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "customers_id";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "invoices_id";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "customer_payments_id";
-  DROP TYPE "public"."enum_customers_status";
-  DROP TYPE "public"."enum_invoices_payment_terms";
-  DROP TYPE "public"."enum_invoices_status";
-  DROP TYPE "public"."enum_customer_payments_methods_method";
-  DROP TYPE "public"."enum_customer_payments_methods_currency";
-  DROP TYPE "public"."enum_customer_payments_status";`)
+
+  ALTER TABLE IF EXISTS "customers" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS "invoices_items" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS "invoices" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS "customer_payments_methods" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS "customer_payments_allocations" DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS "customer_payments" DISABLE ROW LEVEL SECURITY;
+
+  DROP TABLE IF EXISTS "customer_payments_allocations" CASCADE;
+  DROP TABLE IF EXISTS "customer_payments_methods" CASCADE;
+  DROP TABLE IF EXISTS "customer_payments" CASCADE;
+  DROP TABLE IF EXISTS "invoices_items" CASCADE;
+  DROP TABLE IF EXISTS "invoices" CASCADE;
+  DROP TABLE IF EXISTS "customers" CASCADE;
+
+  DROP TYPE IF EXISTS "public"."enum_customers_status";
+  DROP TYPE IF EXISTS "public"."enum_invoices_payment_terms";
+  DROP TYPE IF EXISTS "public"."enum_invoices_status";
+  DROP TYPE IF EXISTS "public"."enum_customer_payments_methods_method";
+  DROP TYPE IF EXISTS "public"."enum_customer_payments_methods_currency";
+  DROP TYPE IF EXISTS "public"."enum_customer_payments_status";`)
 }

@@ -1,5 +1,5 @@
 import type { CollectionConfig, FieldHook, PayloadRequest } from 'payload';
-import { extractId } from '../../utilities/financeLedger';
+import { extractId, fetchAllCustomerOpenInvoices } from '../../utilities/financeLedger';
 
 async function getCustomerAging(
   customerIdRaw: unknown,
@@ -19,33 +19,18 @@ async function getCustomerAging(
     };
   }
 
-  const invoices = await req.payload.find({
-    collection: 'invoices',
-    where: {
-      and: [
-        { customer: { equals: customerId } },
-        { status: { in: ['issued', 'partially_paid'] } },
-      ],
-    },
-    limit: 500,
-    depth: 0,
-    req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
-  });
+  const invoices = await fetchAllCustomerOpenInvoices(customerId, req);
 
   const now = Date.now();
   let aging0to30 = 0;
   let aging31to60 = 0;
   let aging60Plus = 0;
 
-  for (const inv of invoices.docs) {
+  for (const inv of invoices) {
     const balUSD = Number(inv.balanceUSD) || 0;
     if (balUSD <= 0) continue;
 
-    const baseDateStr = inv.dueDate || inv.issueDate;
+    const baseDateStr = (inv.dueDate || inv.issueDate) as string;
     const baseDate = baseDateStr ? new Date(baseDateStr).getTime() : now;
     const diffDays = Math.max(0, Math.floor((now - baseDate) / (1000 * 60 * 60 * 24)));
 
@@ -135,6 +120,14 @@ export const Customers: CollectionConfig = {
       path: '/:id/statement',
       method: 'get',
       handler: async (req) => {
+        // Enforce authentication
+        if (!req.user) {
+          return Response.json(
+            { error: 'No autenticado: Se requiere iniciar sesión.' },
+            { status: 401 },
+          );
+        }
+
         const customerId = req.routeParams?.id;
         if (!customerId) {
           return Response.json({ error: 'Customer ID is required' }, { status: 400 });
@@ -150,19 +143,31 @@ export const Customers: CollectionConfig = {
           return Response.json({ error: 'Customer not found' }, { status: 404 });
         }
 
-        const invoices = await req.payload.find({
-          collection: 'invoices',
-          where: {
-            and: [
-              { customer: { equals: customerId } },
-              { status: { in: ['issued', 'partially_paid'] } },
-            ],
-          },
-          depth: 0,
-          limit: 100,
-          req,
-        });
+        // Multi-tenant authorization check
+        if (req.user.role !== 'super-admin') {
+          const userTenants = (
+            (req.user as unknown as { tenants?: Array<{ tenant: number | { id: number } }> })
+              ?.tenants || []
+          ).map((t) =>
+            typeof t.tenant === 'object' && t.tenant !== null ? t.tenant.id : t.tenant,
+          );
+          const customerTenantId =
+            typeof customer.tenant === 'object' && customer.tenant !== null
+              ? (customer.tenant as { id: number }).id
+              : customer.tenant;
 
+          if (
+            customerTenantId &&
+            !userTenants.includes(customerTenantId as number)
+          ) {
+            return Response.json(
+              { error: 'Prohibido: No tiene acceso a este inquilino.' },
+              { status: 403 },
+            );
+          }
+        }
+
+        const allOpenInvoices = await fetchAllCustomerOpenInvoices(customerId, req);
         const aging = await getCustomerAging(customerId, req);
 
         return Response.json({
@@ -178,7 +183,8 @@ export const Customers: CollectionConfig = {
             overdueDebtUSD: customer.overdueDebtUSD,
           },
           aging,
-          pendingInvoices: invoices.docs.map((inv) => ({
+          totalPendingInvoices: allOpenInvoices.length,
+          pendingInvoices: allOpenInvoices.map((inv) => ({
             id: inv.id,
             invoiceNumber: inv.invoiceNumber,
             issueDate: inv.issueDate,

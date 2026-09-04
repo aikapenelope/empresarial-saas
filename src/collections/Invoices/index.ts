@@ -6,12 +6,12 @@ import type {
 } from 'payload';
 import { extractId, recalculateCustomerBalance } from '../../utilities/financeLedger';
 
-const beforeValidateInvoice: CollectionBeforeValidateHook = ({ data, operation }) => {
+const beforeValidateInvoice: CollectionBeforeValidateHook = ({ data, operation, originalDoc }) => {
   if (!data) return data;
 
-  const rate = Number(data.exchangeRateSnapshot) || 1;
+  const rate = Number(data.exchangeRateSnapshot) || Number(originalDoc?.exchangeRateSnapshot) || 1;
 
-  // Compute line items totals
+  // 1. Compute line items and revised totals if items array is present
   if (Array.isArray(data.items)) {
     let sumTotalUSD = 0;
     data.items = data.items.map((item) => {
@@ -27,34 +27,108 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = ({ data, operation }
 
     data.totalUSD = Number(sumTotalUSD.toFixed(2));
     data.totalVES = Number((data.totalUSD * rate).toFixed(2));
+  } else if (data.exchangeRateSnapshot && originalDoc?.totalUSD) {
+    data.totalUSD = Number(originalDoc.totalUSD);
+    data.totalVES = Number((data.totalUSD * rate).toFixed(2));
   }
 
-  // Handle balance on creation
+  // 2. Handle Creation
   if (operation === 'create') {
-    if (data.balanceUSD === undefined || data.balanceUSD === null) {
-      if (data.status === 'paid') {
-        data.balanceUSD = 0;
-        data.balanceVES = 0;
-      } else {
-        data.balanceUSD = data.totalUSD || 0;
-        data.balanceVES = data.totalVES || 0;
-      }
-    } else {
-      data.balanceVES = Number(((Number(data.balanceUSD) || 0) * rate).toFixed(2));
-    }
-  } else if (operation === 'update') {
-    if (data.balanceUSD !== undefined && data.balanceUSD !== null) {
-      data.balanceUSD = Number(Number(data.balanceUSD).toFixed(2));
-      data.balanceVES = Number((data.balanceUSD * rate).toFixed(2));
-
-      if (data.balanceUSD <= 0.005 && data.status !== 'voided') {
-        data.status = 'paid';
-      }
-    }
-
-    if (data.status === 'voided') {
+    if (data.status === 'paid') {
       data.balanceUSD = 0;
       data.balanceVES = 0;
+    } else if (data.status === 'voided') {
+      data.balanceUSD = 0;
+      data.balanceVES = 0;
+    } else {
+      const initialTotal = Number(data.totalUSD) || 0;
+      data.balanceUSD =
+        data.balanceUSD !== undefined && data.balanceUSD !== null
+          ? Math.min(initialTotal, Number(Number(data.balanceUSD).toFixed(2)))
+          : initialTotal;
+      data.balanceVES = Number((data.balanceUSD * rate).toFixed(2));
+    }
+    return data;
+  }
+
+  // 3. Handle Update: reconcile outstanding balances and explicit status transitions
+  if (operation === 'update' && originalDoc) {
+    const origTotalUSD = Number(originalDoc.totalUSD) || 0;
+    const origBalanceUSD = Number(originalDoc.balanceUSD) || 0;
+    const currentTotalUSD = data.totalUSD !== undefined ? Number(data.totalUSD) : origTotalUSD;
+
+    // Calculate historical amount already paid toward this invoice
+    const priorPaidUSD = Math.max(0, Number((origTotalUSD - origBalanceUSD).toFixed(2)));
+
+    // Detect explicit status transitions
+    const originalStatus = originalDoc.status as string;
+    const requestedStatus = data.status || originalStatus;
+
+    if (requestedStatus === 'voided') {
+      data.status = 'voided';
+      data.balanceUSD = 0;
+      data.balanceVES = 0;
+      return data;
+    }
+
+    // Un-voiding a previously voided invoice
+    if (originalStatus === 'voided' && requestedStatus !== 'voided') {
+      const restoredBalUSD = Math.max(0, Number((currentTotalUSD - priorPaidUSD).toFixed(2)));
+      data.balanceUSD = restoredBalUSD;
+      data.balanceVES = Number((restoredBalUSD * rate).toFixed(2));
+      data.status =
+        restoredBalUSD <= 0.005 ? 'paid' : priorPaidUSD > 0 ? 'partially_paid' : requestedStatus;
+      return data;
+    }
+
+    // Reopening a previously paid invoice
+    if (originalStatus === 'paid' && (requestedStatus === 'issued' || requestedStatus === 'draft')) {
+      const newBalUSD =
+        data.balanceUSD !== undefined && Number(data.balanceUSD) > 0
+          ? Math.min(currentTotalUSD, Number(Number(data.balanceUSD).toFixed(2)))
+          : currentTotalUSD;
+      data.balanceUSD = newBalUSD;
+      data.balanceVES = Number((newBalUSD * rate).toFixed(2));
+      data.status = requestedStatus;
+      return data;
+    }
+
+    // If invoice items or exchange rate changed, dynamically reconcile remaining balance
+    const itemsChanged = Array.isArray(data.items);
+    const rateChanged =
+      data.exchangeRateSnapshot !== undefined &&
+      data.exchangeRateSnapshot !== originalDoc.exchangeRateSnapshot;
+
+    if (itemsChanged || rateChanged) {
+      const reconciledBalUSD = Math.max(0, Number((currentTotalUSD - priorPaidUSD).toFixed(2)));
+      data.balanceUSD = reconciledBalUSD;
+      data.balanceVES = Number((reconciledBalUSD * rate).toFixed(2));
+
+      if (reconciledBalUSD <= 0.005) {
+        data.status = 'paid';
+      } else if (reconciledBalUSD < currentTotalUSD) {
+        data.status = 'partially_paid';
+      } else {
+        data.status = requestedStatus === 'draft' ? 'draft' : 'issued';
+      }
+      return data;
+    }
+
+    // If balanceUSD was directly supplied
+    if (data.balanceUSD !== undefined && data.balanceUSD !== null) {
+      data.balanceUSD = Math.max(
+        0,
+        Math.min(currentTotalUSD, Number(Number(data.balanceUSD).toFixed(2))),
+      );
+      data.balanceVES = Number((data.balanceUSD * rate).toFixed(2));
+
+      if (data.balanceUSD <= 0.005 && requestedStatus !== 'draft') {
+        data.status = 'paid';
+      } else if (data.balanceUSD < currentTotalUSD && requestedStatus !== 'draft') {
+        data.status = 'partially_paid';
+      }
+    } else {
+      data.balanceVES = Number(((Number(originalDoc.balanceUSD) || 0) * rate).toFixed(2));
     }
   }
 
