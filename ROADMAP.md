@@ -38,33 +38,33 @@ Cada sprint concluye con:
 ### 🎯 Sprint 0: Cimientos Canónicos, Supabase, Vercel & Multi-Tenancy Base
 > **Objetivo:** Establecer el proyecto Next.js 15 + Payload 3.x con conexión real a Supabase, pipeline de migraciones, autenticación multi-tenant y primer despliegue en Vercel.
 
-- [ ] **Configuración del Entorno & Dependencias:**
+- [x] **Configuración del Entorno & Dependencias:**
   - `package.json` con dependencias oficiales: Next.js `15.x`, React `19.x`, Payload `3.x`, `@payloadcms/db-postgres`, `@payloadcms/plugin-multi-tenant`, `@payloadcms/richtext-lexical`, `sharp`.
   - `next.config.ts` envuelto canónicamente con `withPayload(nextConfig)`.
   - `tsconfig.json` configurado con alias `@/*` y `@payload-config`.
-- [ ] **Persistencia & Conexión Supabase:**
+- [x] **Persistencia & Conexión Supabase:**
   - `.env` configurado con Transaction Pooler (puerto 6543) y conexión directa para DDL (puerto 5432).
   - `src/payload.config.ts` con `@payloadcms/db-postgres`, `push: false`, `migrationDir: './src/migrations'`.
-- [ ] **Colecciones Fundacionales:**
+- [x] **Colecciones Fundacionales:**
   - `Tenants`: Inquilinos con `name`, `slug` único y datos fiscales básicos.
   - `Users`: Autenticación nativa de Payload con campo `roles` (`super-admin`, `tenant-admin`, `operador`), relación a `tenants` y `saveToJWT: true`.
   - `Media`: Almacenamiento de archivos y comprobantes con aislamiento por tenant.
-- [ ] **Plugin Multi-Tenant Base:**
+- [x] **Plugin Multi-Tenant Base:**
   - Integración oficial de `@payloadcms/plugin-multi-tenant` configurado para `Media` y colecciones base.
   - Reglas de acceso estrictas: `super-admin` con acceso global; inquilinos restringidos a sus filas.
-- [ ] **Rutas del Admin Panel (App Router):**
+- [x] **Rutas del Admin Panel (App Router):**
   - `src/app/(payload)/admin/[[...segments]]/page.tsx`
   - `src/app/(payload)/admin/[[...segments]]/not-found.tsx`
   - `src/app/(payload)/api/[...slug]/route.ts`
   - `src/app/(payload)/layout.tsx`
-- [ ] **Pipeline de Migraciones:**
+- [x] **Pipeline de Migraciones:**
   - Generación de migración inicial `src/migrations/*_init_core.ts`.
   - Ejecución exitosa de la migración en Supabase PostgreSQL.
-- [ ] **Despliegue & Validación en Vercel:**
+- [x] **Despliegue & Validación en Vercel:**
   - Vinculación del repositorio con Vercel (`vercel link`).
   - Configuración de variables en Vercel y verificación de build en verde.
-  - Acceso y registro del primer Super Admin en `/admin`.
-- **Entregable:** PR `feat/sprint-0-core-infra-multitenant` mergeado a `main`.
+  - Acceso verificado a producción: `https://empresarial-saas.vercel.app/admin`.
+- **Estado:** ✅ **Sprint 0 Concluido al 100%** (Listo para merge a `main`).
 
 ---
 

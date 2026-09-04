@@ -27,8 +27,12 @@ pnpm-debug.log*
 .DS_Store
 *.pem
 
-# IDEs
+# IDEs & Build Caches
 .idea
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+*.tsbuildinfo
+.vercel
+
+.env*
