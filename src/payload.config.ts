@@ -14,6 +14,9 @@ import { nodemailerAdapter } from '@payloadcms/email-nodemailer';
 import { Users } from './collections/Users';
 import { Tenants } from './collections/Tenants';
 import { Media } from './collections/Media';
+import { Customers } from './collections/Customers';
+import { Invoices } from './collections/Invoices';
+import { CustomerPayments } from './collections/CustomerPayments';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 
@@ -55,7 +58,7 @@ export default buildConfig({
     },
     fallbackLanguage: 'es',
   },
-  collections: [Tenants, Users, Media],
+  collections: [Tenants, Users, Media, Customers, Invoices, CustomerPayments],
   editor: lexicalEditor(),
   secret: payloadSecret,
   typescript: {
@@ -95,6 +98,9 @@ export default buildConfig({
     multiTenantPlugin({
       collections: {
         media: {},
+        customers: {},
+        invoices: {},
+        'customer-payments': {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),
       tenantsArrayField: {
