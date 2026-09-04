@@ -2,6 +2,7 @@ import * as migration_20260904_163409_init_core from './20260904_163409_init_cor
 import * as migration_20260904_190009_add_finance_crm from './20260904_190009_add_finance_crm';
 import * as migration_20260904_195815_add_inventory_bom from './20260904_195815_add_inventory_bom';
 import * as migration_20260904_221053_add_accounts_payable from './20260904_221053_add_accounts_payable';
+import * as migration_20260904_224151_add_cash_registers from './20260904_224151_add_cash_registers';
 
 export const migrations = [
   {
@@ -22,6 +23,11 @@ export const migrations = [
   {
     up: migration_20260904_221053_add_accounts_payable.up,
     down: migration_20260904_221053_add_accounts_payable.down,
-    name: '20260904_221053_add_accounts_payable'
+    name: '20260904_221053_add_accounts_payable',
+  },
+  {
+    up: migration_20260904_224151_add_cash_registers.up,
+    down: migration_20260904_224151_add_cash_registers.down,
+    name: '20260904_224151_add_cash_registers'
   },
 ];

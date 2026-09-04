@@ -82,6 +82,8 @@ export interface Config {
     suppliers: Supplier;
     'purchase-invoices': PurchaseInvoice;
     'supplier-payments': SupplierPayment;
+    'cash-registers': CashRegister;
+    'cash-closures': CashClosure;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -104,6 +106,8 @@ export interface Config {
     suppliers: SuppliersSelect<false> | SuppliersSelect<true>;
     'purchase-invoices': PurchaseInvoicesSelect<false> | PurchaseInvoicesSelect<true>;
     'supplier-payments': SupplierPaymentsSelect<false> | SupplierPaymentsSelect<true>;
+    'cash-registers': CashRegistersSelect<false> | CashRegistersSelect<true>;
+    'cash-closures': CashClosuresSelect<false> | CashClosuresSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -282,7 +286,7 @@ export interface CustomerPayment {
   paymentDate: string;
   status: 'pending' | 'confirmed' | 'rejected';
   methods: {
-    method: 'cash_usd' | 'cash_ves' | 'zelle' | 'pago_movil' | 'transfer_ves' | 'binance';
+    method: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'zelle' | 'pago_movil' | 'transfer_ves' | 'binance';
     currency: 'USD' | 'VES';
     amount: number;
     exchangeRate: number;
@@ -299,22 +303,27 @@ export interface CustomerPayment {
         id?: string | null;
       }[]
     | null;
+  cashRegister?: (number | null) | CashRegister;
+  cashClosure?: (number | null) | CashClosure;
   notes?: string | null;
   updatedAt: string;
   createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
+ * via the `definition` "cash-registers".
  */
-export interface Category {
+export interface CashRegister {
   id: number;
   tenant?: (number | null) | Tenant;
   name: string;
   code: string;
-  description?: string | null;
-  parentCategory?: (number | null) | Category;
-  isActive?: boolean | null;
+  warehouse: number | Warehouse;
+  assignedUsers?: (number | User)[] | null;
+  currentStatus: 'open' | 'closed';
+  currentClosure?: (number | null) | CashClosure;
+  active?: boolean | null;
+  notes?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -330,6 +339,99 @@ export interface Warehouse {
   type: 'main' | 'raw_materials' | 'work_in_progress' | 'scrap' | 'retail';
   location?: string | null;
   isDefault?: boolean | null;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-closures".
+ */
+export interface CashClosure {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  closureNumber: string;
+  cashRegister: number | CashRegister;
+  openedBy: number | User;
+  closedBy?: (number | null) | User;
+  auditedBy?: (number | null) | User;
+  status: 'open' | 'closed' | 'audited';
+  openedAt: string;
+  closedAt?: string | null;
+  auditedAt?: string | null;
+  openingFloat?: {
+    cashUSD?: number | null;
+    cashVES?: number | null;
+    notes?: string | null;
+  };
+  declaredTotals?: {
+    cashUSD?: number | null;
+    cashVES?: number | null;
+    posVES?: number | null;
+    pagoMovilVES?: number | null;
+    transferVES?: number | null;
+    zelleUSD?: number | null;
+    binanceUSD?: number | null;
+  };
+  systemTotals?: {
+    collections?: {
+      cashUSD?: number | null;
+      cashVES?: number | null;
+      posVES?: number | null;
+      pagoMovilVES?: number | null;
+      transferVES?: number | null;
+      zelleUSD?: number | null;
+      binanceUSD?: number | null;
+      totalCollectionsUSD?: number | null;
+    };
+    disbursements?: {
+      cashUSDOut?: number | null;
+      cashVESOut?: number | null;
+      posVESOut?: number | null;
+      pagoMovilVESOut?: number | null;
+      transferVESOut?: number | null;
+      zelleUSDOut?: number | null;
+      binanceUSDOut?: number | null;
+      totalDisbursementsUSD?: number | null;
+    };
+    expected?: {
+      expectedCashUSD?: number | null;
+      expectedCashVES?: number | null;
+      expectedPosVES?: number | null;
+      expectedPagoMovilVES?: number | null;
+      expectedTransferVES?: number | null;
+      expectedZelleUSD?: number | null;
+      expectedBinanceUSD?: number | null;
+      netTotalUSD?: number | null;
+    };
+  };
+  differences?: {
+    diffCashUSD?: number | null;
+    diffCashVES?: number | null;
+    diffPosVES?: number | null;
+    diffPagoMovilVES?: number | null;
+    diffTransferVES?: number | null;
+    diffZelleUSD?: number | null;
+    diffBinanceUSD?: number | null;
+    totalDiscrepancyUSD?: number | null;
+    hasDiscrepancy?: boolean | null;
+  };
+  notes?: string | null;
+  supervisorNotes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  code: string;
+  description?: string | null;
+  parentCategory?: (number | null) | Category;
   isActive?: boolean | null;
   updatedAt: string;
   createdAt: string;
@@ -516,7 +618,7 @@ export interface SupplierPayment {
   paymentDate: string;
   status: 'pending' | 'confirmed' | 'rejected';
   methods: {
-    method: 'cash_usd' | 'cash_ves' | 'zelle' | 'pago_movil' | 'transfer_ves' | 'binance';
+    method: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'zelle' | 'pago_movil' | 'transfer_ves' | 'binance';
     currency: 'USD' | 'VES';
     amount: number;
     exchangeRate: number;
@@ -533,6 +635,8 @@ export interface SupplierPayment {
         id?: string | null;
       }[]
     | null;
+  cashRegister?: (number | null) | CashRegister;
+  cashClosure?: (number | null) | CashClosure;
   notes?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -620,6 +724,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'supplier-payments';
         value: number | SupplierPayment;
+      } | null)
+    | ({
+        relationTo: 'cash-registers';
+        value: number | CashRegister;
+      } | null)
+    | ({
+        relationTo: 'cash-closures';
+        value: number | CashClosure;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -818,6 +930,8 @@ export interface CustomerPaymentsSelect<T extends boolean = true> {
         allocatedAmountUSD?: T;
         id?: T;
       };
+  cashRegister?: T;
+  cashClosure?: T;
   notes?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1038,7 +1152,117 @@ export interface SupplierPaymentsSelect<T extends boolean = true> {
         allocatedAmountUSD?: T;
         id?: T;
       };
+  cashRegister?: T;
+  cashClosure?: T;
   notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-registers_select".
+ */
+export interface CashRegistersSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  code?: T;
+  warehouse?: T;
+  assignedUsers?: T;
+  currentStatus?: T;
+  currentClosure?: T;
+  active?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "cash-closures_select".
+ */
+export interface CashClosuresSelect<T extends boolean = true> {
+  tenant?: T;
+  closureNumber?: T;
+  cashRegister?: T;
+  openedBy?: T;
+  closedBy?: T;
+  auditedBy?: T;
+  status?: T;
+  openedAt?: T;
+  closedAt?: T;
+  auditedAt?: T;
+  openingFloat?:
+    | T
+    | {
+        cashUSD?: T;
+        cashVES?: T;
+        notes?: T;
+      };
+  declaredTotals?:
+    | T
+    | {
+        cashUSD?: T;
+        cashVES?: T;
+        posVES?: T;
+        pagoMovilVES?: T;
+        transferVES?: T;
+        zelleUSD?: T;
+        binanceUSD?: T;
+      };
+  systemTotals?:
+    | T
+    | {
+        collections?:
+          | T
+          | {
+              cashUSD?: T;
+              cashVES?: T;
+              posVES?: T;
+              pagoMovilVES?: T;
+              transferVES?: T;
+              zelleUSD?: T;
+              binanceUSD?: T;
+              totalCollectionsUSD?: T;
+            };
+        disbursements?:
+          | T
+          | {
+              cashUSDOut?: T;
+              cashVESOut?: T;
+              posVESOut?: T;
+              pagoMovilVESOut?: T;
+              transferVESOut?: T;
+              zelleUSDOut?: T;
+              binanceUSDOut?: T;
+              totalDisbursementsUSD?: T;
+            };
+        expected?:
+          | T
+          | {
+              expectedCashUSD?: T;
+              expectedCashVES?: T;
+              expectedPosVES?: T;
+              expectedPagoMovilVES?: T;
+              expectedTransferVES?: T;
+              expectedZelleUSD?: T;
+              expectedBinanceUSD?: T;
+              netTotalUSD?: T;
+            };
+      };
+  differences?:
+    | T
+    | {
+        diffCashUSD?: T;
+        diffCashVES?: T;
+        diffPosVES?: T;
+        diffPagoMovilVES?: T;
+        diffTransferVES?: T;
+        diffZelleUSD?: T;
+        diffBinanceUSD?: T;
+        totalDiscrepancyUSD?: T;
+        hasDiscrepancy?: T;
+      };
+  notes?: T;
+  supervisorNotes?: T;
   updatedAt?: T;
   createdAt?: T;
 }

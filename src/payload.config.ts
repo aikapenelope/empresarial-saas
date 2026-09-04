@@ -26,6 +26,8 @@ import { ProductionOrders } from './collections/ProductionOrders';
 import { Suppliers } from './collections/Suppliers';
 import { PurchaseInvoices } from './collections/PurchaseInvoices';
 import { SupplierPayments } from './collections/SupplierPayments';
+import { CashRegisters } from './collections/CashRegisters';
+import { CashClosures } from './collections/CashClosures';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 
@@ -83,6 +85,8 @@ export default buildConfig({
     Suppliers,
     PurchaseInvoices,
     SupplierPayments,
+    CashRegisters,
+    CashClosures,
   ],
   editor: lexicalEditor(),
   secret: payloadSecret,
@@ -135,6 +139,8 @@ export default buildConfig({
         suppliers: {},
         'purchase-invoices': {},
         'supplier-payments': {},
+        'cash-registers': {},
+        'cash-closures': {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),
       tenantsArrayField: {
