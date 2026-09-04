@@ -70,6 +70,9 @@ export interface Config {
     tenants: Tenant;
     users: User;
     media: Media;
+    customers: Customer;
+    invoices: Invoice;
+    'customer-payments': CustomerPayment;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -80,6 +83,9 @@ export interface Config {
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    customers: CustomersSelect<false> | CustomersSelect<true>;
+    invoices: InvoicesSelect<false> | InvoicesSelect<true>;
+    'customer-payments': CustomerPaymentsSelect<false> | CustomerPaymentsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -192,6 +198,95 @@ export interface Media {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customers".
+ */
+export interface Customer {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  taxId: string;
+  phone: string;
+  email?: string | null;
+  address?: string | null;
+  status: 'lead' | 'first_time' | 'recurring' | 'vip' | 'inactive';
+  creditAllowed?: boolean | null;
+  creditLimitUSD?: number | null;
+  creditDays?: number | null;
+  currentDebtUSD?: number | null;
+  currentDebtVES?: number | null;
+  overdueDebtUSD?: number | null;
+  aging0to30?: number | null;
+  aging31to60?: number | null;
+  aging60Plus?: number | null;
+  whatsappDebtUrl?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "invoices".
+ */
+export interface Invoice {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  invoiceNumber: string;
+  customer: number | Customer;
+  issueDate: string;
+  dueDate: string;
+  paymentTerms: 'cash' | 'credit';
+  status: 'draft' | 'issued' | 'partially_paid' | 'paid' | 'voided';
+  exchangeRateSnapshot: number;
+  items: {
+    sku?: string | null;
+    description: string;
+    quantity: number;
+    unitPriceUSD: number;
+    totalUSD?: number | null;
+    id?: string | null;
+  }[];
+  totalUSD: number;
+  totalVES: number;
+  balanceUSD: number;
+  balanceVES: number;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customer-payments".
+ */
+export interface CustomerPayment {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  paymentNumber: string;
+  customer: number | Customer;
+  paymentDate: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  methods: {
+    method: 'cash_usd' | 'cash_ves' | 'zelle' | 'pago_movil' | 'transfer_ves' | 'binance';
+    currency: 'USD' | 'VES';
+    amount: number;
+    exchangeRate: number;
+    amountUSD?: number | null;
+    reference?: string | null;
+    receipt?: (number | null) | Media;
+    id?: string | null;
+  }[];
+  totalUSD: number;
+  allocations?:
+    | {
+        invoice: number | Invoice;
+        allocatedAmountUSD: number;
+        id?: string | null;
+      }[]
+    | null;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -225,6 +320,18 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'media';
         value: number | Media;
+      } | null)
+    | ({
+        relationTo: 'customers';
+        value: number | Customer;
+      } | null)
+    | ({
+        relationTo: 'invoices';
+        value: number | Invoice;
+      } | null)
+    | ({
+        relationTo: 'customer-payments';
+        value: number | CustomerPayment;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -336,6 +443,96 @@ export interface MediaSelect<T extends boolean = true> {
   height?: T;
   focalX?: T;
   focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customers_select".
+ */
+export interface CustomersSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  taxId?: T;
+  phone?: T;
+  email?: T;
+  address?: T;
+  status?: T;
+  creditAllowed?: T;
+  creditLimitUSD?: T;
+  creditDays?: T;
+  currentDebtUSD?: T;
+  currentDebtVES?: T;
+  overdueDebtUSD?: T;
+  aging0to30?: T;
+  aging31to60?: T;
+  aging60Plus?: T;
+  whatsappDebtUrl?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "invoices_select".
+ */
+export interface InvoicesSelect<T extends boolean = true> {
+  tenant?: T;
+  invoiceNumber?: T;
+  customer?: T;
+  issueDate?: T;
+  dueDate?: T;
+  paymentTerms?: T;
+  status?: T;
+  exchangeRateSnapshot?: T;
+  items?:
+    | T
+    | {
+        sku?: T;
+        description?: T;
+        quantity?: T;
+        unitPriceUSD?: T;
+        totalUSD?: T;
+        id?: T;
+      };
+  totalUSD?: T;
+  totalVES?: T;
+  balanceUSD?: T;
+  balanceVES?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customer-payments_select".
+ */
+export interface CustomerPaymentsSelect<T extends boolean = true> {
+  tenant?: T;
+  paymentNumber?: T;
+  customer?: T;
+  paymentDate?: T;
+  status?: T;
+  methods?:
+    | T
+    | {
+        method?: T;
+        currency?: T;
+        amount?: T;
+        exchangeRate?: T;
+        amountUSD?: T;
+        reference?: T;
+        receipt?: T;
+        id?: T;
+      };
+  totalUSD?: T;
+  allocations?:
+    | T
+    | {
+        invoice?: T;
+        allocatedAmountUSD?: T;
+        id?: T;
+      };
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

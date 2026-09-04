@@ -71,27 +71,27 @@ Cada sprint concluye con:
 ### 💳 Sprint 1: Módulo Finanzas & CRM de Clientes (CxC Bimonetaria & WhatsApp)
 > **Objetivo:** Cuentas por Cobrar (CxC), Facturación bimonetaria USD/VES y CRM de clientes con cálculo transaccional atómico y cobranza por WhatsApp.
 
-- [ ] **Colección `Customers`:**
+- [x] **Colección `Customers`:**
   - RIF/Cédula, Razón social, Teléfono validado internacionalmente para WhatsApp, Dirección fiscal.
   - Segmentación CRM: `'lead' | 'first_time' | 'recurring' | 'vip' | 'inactive'`.
   - Reglas de Crédito: `creditAllowed`, `creditLimitUSD`, `creditDays`.
   - Balances de Ledger: `currentDebtUSD`, `currentDebtVES`, `overdueDebtUSD`.
   - Campos Virtuales de Envejecimiento de Deuda (`aging0to30`, `aging31to60`, `aging60Plus`).
-- [ ] **Colección `Invoices`:**
+- [x] **Colección `Invoices`:**
   - Facturas y notas de entrega bimonetarias con snapshot de tasa de cambio al emitir (`exchangeRateSnapshot`).
   - Relación a `Customers`, fecha de vencimiento (`dueDate`), condición (`cash`/`credit`).
   - Totales bimonetarios: `totalUSD`, `totalVES`, `balanceUSD`, `balanceVES`.
   - Array de líneas de detalle (SKU, descripción, cantidad, precio unitario, subtotal).
-- [ ] **Colección `CustomerPayments`:**
+- [x] **Colección `CustomerPayments`:**
   - Abonos con métodos múltiples (`cash_usd`, `cash_ves`, `zelle`, `pago_movil`, `transfer_ves`, `binance`).
   - Asignación específica por factura (`allocations`) y comprobante adjunto (`Media`).
-- [ ] **Hooks de Ledger Transaccional:**
+- [x] **Hooks de Ledger Transaccional:**
   - Recalculación atómica en `afterChange` y reversión en `beforeDelete` pasando `{ req }`.
   - Prevención de recursión con `req.context.skipBalanceRecalculation`.
-- [ ] **Generador de Cobranza WhatsApp:**
-  - Endpoint de estado de cuenta consolidado con deep-link directo a WhatsApp (`https://wa.me/...`).
-- [ ] **Migración DDL & Validación:** Migración `add_finance_crm` aplicada y verificada en `/admin`.
-- **Entregable:** PR `feat/sprint-1-finance-crm` mergeado a `main`.
+- [x] **Generador de Cobranza WhatsApp:**
+  - Endpoint de estado de cuenta consolidado (`/api/customers/:id/statement`) y campo virtual `whatsappDebtUrl` con deep-link directo a WhatsApp (`https://wa.me/...`).
+- [x] **Migración DDL & Validación:** Migración `add_finance_crm` (`20260904_190009_add_finance_crm.ts`) aplicada y verificada en Supabase PostgreSQL.
+- **Estado:** ✅ **Sprint 1 Concluido al 100%** (Listo para PR y merge a `main`).
 
 ---
 
