@@ -1,5 +1,5 @@
 import type { CollectionBeforeValidateHook, CollectionConfig } from 'payload';
-import { extractId, resolveTenantId } from '../../utilities/inventoryLedger';
+import { extractId, getUserTenantIds, resolveTenantId } from '../../utilities/inventoryLedger';
 
 const beforeValidateCategory: CollectionBeforeValidateHook = async ({
   data,
@@ -8,10 +8,31 @@ const beforeValidateCategory: CollectionBeforeValidateHook = async ({
 }) => {
   if (!data) return data;
 
-  const currentTenant = resolveTenantId(data, originalDoc, req);
   const parentId = extractId(data.parentCategory ?? originalDoc?.parentCategory);
 
-  if (currentTenant && parentId) {
+  // Determine effective tenant
+  let effectiveTenant = resolveTenantId(data, originalDoc, req);
+
+  // If user is not super-admin and no tenant specified, resolve from user
+  if (!effectiveTenant && req.user && req.user.role !== 'super-admin') {
+    const userTenants = getUserTenantIds(req.user);
+    if (userTenants.length > 0) {
+      effectiveTenant = userTenants[0];
+      if (!data.tenant) {
+        data.tenant = effectiveTenant as number;
+      }
+    }
+  }
+
+  // If user is not super-admin, enforce caller tenant access
+  if (effectiveTenant && req.user && req.user.role !== 'super-admin') {
+    const userTenants = getUserTenantIds(req.user);
+    if (!userTenants.map(String).includes(String(effectiveTenant))) {
+      throw new Error('Prohibido: No tiene acceso a este inquilino.');
+    }
+  }
+
+  if (effectiveTenant && parentId) {
     const parent = await req.payload.findByID({
       collection: 'categories',
       id: parentId,
@@ -19,7 +40,7 @@ const beforeValidateCategory: CollectionBeforeValidateHook = async ({
       req,
     });
     const parentTenant = extractId(parent?.tenant);
-    if (parentTenant && String(currentTenant) !== String(parentTenant)) {
+    if (parentTenant && String(effectiveTenant) !== String(parentTenant)) {
       throw new Error(
         'Violación de multi-inquilino: La categoría padre pertenece a otro inquilino.',
       );

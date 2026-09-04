@@ -170,6 +170,20 @@ export function resolveTenantId(
 }
 
 /**
+ * Extracts list of tenant IDs assigned to a user.
+ */
+export function getUserTenantIds(user: unknown): Array<number | string> {
+  if (!user || typeof user !== 'object') return [];
+  const u = user as {
+    tenants?: Array<{ tenant: number | string | { id: number | string } }>;
+  };
+  if (!Array.isArray(u.tenants)) return [];
+  return u.tenants
+    .map((t) => (typeof t.tenant === 'object' && t.tenant !== null ? t.tenant.id : t.tenant))
+    .filter((id): id is number | string => id !== null && id !== undefined);
+}
+
+/**
  * Concurrency-safe execution of a completed production order.
  * 
  * 1. Locks all raw material product rows and finished product row sorted by ID (deadlock prevention).
@@ -199,11 +213,11 @@ export async function executeProductionOrder(
     throw new Error(`La orden de producción ID ${orderId} no existe.`);
   }
 
-  // Idempotency check: verify if stock movements have already been posted for this production order
-  const existingMovements = await db.execute(
-    sql`SELECT id FROM stock_movements WHERE production_order_id = ${orderId} LIMIT 1`,
+  // Idempotency check: verify if finished goods output has already been posted for this production order
+  const existingOutput = await db.execute(
+    sql`SELECT id FROM stock_movements WHERE production_order_id = ${orderId} AND movement_type = 'production_output' LIMIT 1`,
   );
-  if (existingMovements.rows && existingMovements.rows.length > 0) {
+  if (existingOutput.rows && existingOutput.rows.length > 0) {
     return {
       totalBatchCostUSD: Number(lockedOrder.total_cost_u_s_d) || 0,
       unitCostUSD: Number(lockedOrder.unit_cost_u_s_d) || 0,

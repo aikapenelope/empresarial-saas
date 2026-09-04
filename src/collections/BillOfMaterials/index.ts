@@ -1,29 +1,45 @@
 import type { CollectionBeforeValidateHook, CollectionConfig } from 'payload';
-import { extractId, resolveTenantId } from '../../utilities/inventoryLedger';
+import { extractId, getUserTenantIds, resolveTenantId } from '../../utilities/inventoryLedger';
 
 const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, originalDoc, req }) => {
   if (!data) return data;
 
-  const currentTenant = resolveTenantId(data, originalDoc, req);
-
-  // Validate finished product belongs to same tenant
   const finishedProductId = extractId(data.product ?? originalDoc?.product);
-  if (currentTenant && finishedProductId) {
-    const finishedProduct = await req.payload.findByID({
-      collection: 'products',
-      id: finishedProductId,
-      depth: 0,
-      req,
-      context: {
-        ...req.context,
-        skipInventoryRecalculation: true,
-      },
-    });
-    const prodTenant = extractId(finishedProduct?.tenant);
-    if (prodTenant && String(currentTenant) !== String(prodTenant)) {
-      throw new Error(
-        'Violación de multi-inquilino: El producto terminado resultante pertenece a otro inquilino.',
-      );
+  if (!finishedProductId) {
+    throw new Error('Debe especificar un producto terminado válido para la receta (BOM).');
+  }
+
+  const finishedProduct = await req.payload.findByID({
+    collection: 'products',
+    id: finishedProductId,
+    depth: 0,
+    req,
+    context: {
+      ...req.context,
+      skipInventoryRecalculation: true,
+    },
+  });
+
+  const productTenant = extractId(finishedProduct?.tenant);
+  if (!productTenant) {
+    throw new Error('El producto terminado asignado no tiene un inquilino válido.');
+  }
+
+  const specifiedTenant = resolveTenantId(data, originalDoc, req);
+  if (specifiedTenant && String(specifiedTenant) !== String(productTenant)) {
+    throw new Error('Violación de multi-inquilino: El producto terminado pertenece a otro inquilino.');
+  }
+
+  const effectiveTenant = productTenant;
+  if (!data.tenant) {
+    data.tenant = productTenant as number;
+  }
+
+  // Enforce caller tenant access for non-super-admins
+  if (req.user && req.user.role !== 'super-admin') {
+    const userTenants = getUserTenantIds(req.user);
+    if (!userTenants.map(String).includes(String(effectiveTenant))) {
+      throw new Error('Prohibido: No tiene acceso a este inquilino.');
     }
   }
 
@@ -55,13 +71,11 @@ const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, originalD
         },
       });
 
-      if (currentTenant) {
-        const rawTenant = extractId(rawDoc?.tenant);
-        if (rawTenant && String(currentTenant) !== String(rawTenant)) {
-          throw new Error(
-            `Violación de multi-inquilino: La materia prima "${rawDoc?.name || rawId}" pertenece a otro inquilino.`,
-          );
-        }
+      const rawTenant = extractId(rawDoc?.tenant);
+      if (rawTenant && String(effectiveTenant) !== String(rawTenant)) {
+        throw new Error(
+          `Violación de multi-inquilino: La materia prima "${rawDoc?.name || rawId}" pertenece a otro inquilino.`,
+        );
       }
 
       const costSnapshot = Number(rawDoc?.costUSD) || 0;

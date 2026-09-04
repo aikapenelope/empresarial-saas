@@ -1,5 +1,10 @@
 import type { CollectionBeforeValidateHook, CollectionConfig } from 'payload';
-import { extractId, getActiveDb, resolveTenantId } from '../../utilities/inventoryLedger';
+import {
+  extractId,
+  getActiveDb,
+  getUserTenantIds,
+  resolveTenantId,
+} from '../../utilities/inventoryLedger';
 import { sql } from '@payloadcms/db-postgres';
 
 const beforeValidateProduct: CollectionBeforeValidateHook = async ({
@@ -9,10 +14,31 @@ const beforeValidateProduct: CollectionBeforeValidateHook = async ({
 }) => {
   if (!data) return data;
 
-  const currentTenant = resolveTenantId(data, originalDoc, req);
   const categoryId = extractId(data.category ?? originalDoc?.category);
 
-  if (currentTenant && categoryId) {
+  // Determine effective tenant
+  let effectiveTenant = resolveTenantId(data, originalDoc, req);
+
+  // If user is not super-admin and no tenant specified, resolve from user
+  if (!effectiveTenant && req.user && req.user.role !== 'super-admin') {
+    const userTenants = getUserTenantIds(req.user);
+    if (userTenants.length > 0) {
+      effectiveTenant = userTenants[0];
+      if (!data.tenant) {
+        data.tenant = effectiveTenant as number;
+      }
+    }
+  }
+
+  // If user is not super-admin, enforce caller tenant access
+  if (effectiveTenant && req.user && req.user.role !== 'super-admin') {
+    const userTenants = getUserTenantIds(req.user);
+    if (!userTenants.map(String).includes(String(effectiveTenant))) {
+      throw new Error('Prohibido: No tiene acceso a este inquilino.');
+    }
+  }
+
+  if (effectiveTenant && categoryId) {
     const category = await req.payload.findByID({
       collection: 'categories',
       id: categoryId,
@@ -20,7 +46,7 @@ const beforeValidateProduct: CollectionBeforeValidateHook = async ({
       req,
     });
     const categoryTenant = extractId(category?.tenant);
-    if (categoryTenant && String(currentTenant) !== String(categoryTenant)) {
+    if (categoryTenant && String(effectiveTenant) !== String(categoryTenant)) {
       throw new Error(
         'Violación de multi-inquilino: La categoría seleccionada pertenece a otro inquilino.',
       );

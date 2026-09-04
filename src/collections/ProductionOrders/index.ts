@@ -6,6 +6,7 @@ import type {
 import {
   executeProductionOrder,
   extractId,
+  getUserTenantIds,
   resolveTenantId,
 } from '../../utilities/inventoryLedger';
 
@@ -35,6 +36,9 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
       );
     }
 
+    // Allow internal completion hook to write computed batch costs
+    const isInternalCostUpdate = Boolean(req.context?.allowInternalCostUpdate);
+
     const immutableFields = [
       'product',
       'bom',
@@ -43,8 +47,7 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
       'sourceWarehouse',
       'targetWarehouse',
       'completionDate',
-      'totalCostUSD',
-      'unitCostUSD',
+      ...(isInternalCostUpdate ? [] : (['totalCostUSD', 'unitCostUSD'] as const)),
     ] as const;
 
     for (const field of immutableFields) {
@@ -65,28 +68,46 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
     throw new Error('La cantidad planificada a fabricar debe ser mayor a cero.');
   }
 
-  // Cross-tenant boundary verification
-  const orderTenant = resolveTenantId(data, originalDoc, req);
+  // Cross-tenant boundary verification anchored on the finished product
   const targetProductId = extractId(data.product ?? originalDoc?.product);
   const targetBomId = extractId(data.bom ?? originalDoc?.bom);
   const sourceWhId = extractId(data.sourceWarehouse ?? originalDoc?.sourceWarehouse);
   const targetWhId = extractId(data.targetWarehouse ?? originalDoc?.targetWarehouse);
 
-  if (orderTenant) {
-    if (targetProductId) {
-      const prodDoc = await req.payload.findByID({
-        collection: 'products',
-        id: targetProductId,
-        depth: 0,
-        req,
-        context: { ...req.context, skipInventoryRecalculation: true },
-      });
-      const pTenant = extractId(prodDoc?.tenant);
-      if (pTenant && String(orderTenant) !== String(pTenant)) {
-        throw new Error('Violación de multi-inquilino: El producto a fabricar pertenece a otro inquilino.');
-      }
+  let activeTenantId = resolveTenantId(data, originalDoc, req);
+
+  if (targetProductId) {
+    const prodDoc = await req.payload.findByID({
+      collection: 'products',
+      id: targetProductId,
+      depth: 0,
+      req,
+      context: { ...req.context, skipInventoryRecalculation: true },
+    });
+    const pTenant = extractId(prodDoc?.tenant);
+    if (!pTenant) {
+      throw new Error('El producto a fabricar no tiene un inquilino asignado.');
     }
 
+    if (activeTenantId && String(activeTenantId) !== String(pTenant)) {
+      throw new Error('Violación de multi-inquilino: El producto a fabricar pertenece a otro inquilino.');
+    }
+
+    activeTenantId = pTenant;
+    if (!data.tenant) {
+      data.tenant = pTenant as number;
+    }
+  }
+
+  // Enforce caller tenant access for non-super-admins
+  if (activeTenantId && req.user && req.user.role !== 'super-admin') {
+    const userTenants = getUserTenantIds(req.user);
+    if (!userTenants.map(String).includes(String(activeTenantId))) {
+      throw new Error('Prohibido: No tiene acceso a este inquilino.');
+    }
+  }
+
+  if (activeTenantId) {
     if (targetBomId) {
       const bomDoc = await req.payload.findByID({
         collection: 'bill-of-materials',
@@ -96,7 +117,7 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
         context: { ...req.context, skipInventoryRecalculation: true },
       });
       const bTenant = extractId(bomDoc?.tenant);
-      if (bTenant && String(orderTenant) !== String(bTenant)) {
+      if (bTenant && String(activeTenantId) !== String(bTenant)) {
         throw new Error('Violación de multi-inquilino: La fórmula / receta (BOM) pertenece a otro inquilino.');
       }
     }
@@ -110,7 +131,7 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
         context: { ...req.context, skipInventoryRecalculation: true },
       });
       const sTenant = extractId(sWhDoc?.tenant);
-      if (sTenant && String(orderTenant) !== String(sTenant)) {
+      if (sTenant && String(activeTenantId) !== String(sTenant)) {
         throw new Error('Violación de multi-inquilino: El almacén de insumos origen pertenece a otro inquilino.');
       }
     }
@@ -124,7 +145,7 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
         context: { ...req.context, skipInventoryRecalculation: true },
       });
       const tTenant = extractId(tWhDoc?.tenant);
-      if (tTenant && String(orderTenant) !== String(tTenant)) {
+      if (tTenant && String(activeTenantId) !== String(tTenant)) {
         throw new Error('Violación de multi-inquilino: El almacén de producto terminado destino pertenece a otro inquilino.');
       }
     }
@@ -184,7 +205,7 @@ const afterChangeProductionOrder: CollectionAfterChangeHook = async ({
       req,
     );
 
-    // Save final costs on the production order doc
+    // Save final costs on the production order doc with allowInternalCostUpdate
     await req.payload.update({
       collection: 'production-orders',
       id: doc.id,
@@ -196,6 +217,7 @@ const afterChangeProductionOrder: CollectionAfterChangeHook = async ({
       context: {
         ...req.context,
         skipInventoryRecalculation: true,
+        allowInternalCostUpdate: true,
       },
     });
   }

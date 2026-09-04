@@ -1,4 +1,34 @@
-import type { CollectionConfig } from 'payload';
+import type { CollectionBeforeValidateHook, CollectionConfig } from 'payload';
+import { getUserTenantIds, resolveTenantId } from '../../utilities/inventoryLedger';
+
+const beforeValidateWarehouse: CollectionBeforeValidateHook = async ({
+  data,
+  originalDoc,
+  req,
+}) => {
+  if (!data) return data;
+
+  let effectiveTenant = resolveTenantId(data, originalDoc, req);
+
+  if (!effectiveTenant && req.user && req.user.role !== 'super-admin') {
+    const userTenants = getUserTenantIds(req.user);
+    if (userTenants.length > 0) {
+      effectiveTenant = userTenants[0];
+      if (!data.tenant) {
+        data.tenant = effectiveTenant as number;
+      }
+    }
+  }
+
+  if (effectiveTenant && req.user && req.user.role !== 'super-admin') {
+    const userTenants = getUserTenantIds(req.user);
+    if (!userTenants.map(String).includes(String(effectiveTenant))) {
+      throw new Error('Prohibido: No tiene acceso a este inquilino.');
+    }
+  }
+
+  return data;
+};
 
 export const Warehouses: CollectionConfig = {
   slug: 'warehouses',
@@ -27,6 +57,9 @@ export const Warehouses: CollectionConfig = {
       ),
     delete: ({ req: { user } }) =>
       Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+  },
+  hooks: {
+    beforeValidate: [beforeValidateWarehouse],
   },
   fields: [
     {

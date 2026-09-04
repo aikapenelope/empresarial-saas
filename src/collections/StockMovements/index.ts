@@ -6,6 +6,7 @@ import type {
 import {
   extractId,
   getProductWarehouseStock,
+  getUserTenantIds,
   recalculateProductTotalStock,
   resolveTenantId,
   updateProductWeightedCostOnPurchase,
@@ -90,12 +91,29 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
     }
 
     // Verify tenant match across product, warehouses, production order, and invoice
-    const movementTenant = resolveTenantId(data, undefined, req);
     const productTenant = extractId(product.tenant);
-    if (movementTenant && productTenant && String(movementTenant) !== String(productTenant)) {
+    if (!productTenant) {
+      throw new Error('El producto asignado no tiene un inquilino válido.');
+    }
+
+    const specifiedTenant = resolveTenantId(data, undefined, req);
+    if (specifiedTenant && String(specifiedTenant) !== String(productTenant)) {
       throw new Error(
-        'Violación de multi-inquilino: El producto no pertenece al mismo inquilino del movimiento.',
+        'Violación de multi-inquilino: El producto no pertenece al inquilino especificado.',
       );
+    }
+
+    const effectiveTenant = productTenant;
+    if (!data.tenant) {
+      data.tenant = productTenant as number;
+    }
+
+    // Enforce caller tenant access for non-super-admins
+    if (req.user && req.user.role !== 'super-admin') {
+      const userTenants = getUserTenantIds(req.user);
+      if (!userTenants.map(String).includes(String(effectiveTenant))) {
+        throw new Error('Prohibido: No tiene acceso a este inquilino.');
+      }
     }
 
     if (sourceId) {
@@ -107,7 +125,7 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         context: { ...req.context, skipInventoryRecalculation: true },
       });
       const swTenant = extractId(sourceWarehouse?.tenant);
-      if (movementTenant && swTenant && String(movementTenant) !== String(swTenant)) {
+      if (swTenant && String(effectiveTenant) !== String(swTenant)) {
         throw new Error('Violación de multi-inquilino: El almacén de origen pertenece a otro inquilino.');
       }
     }
@@ -121,13 +139,19 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         context: { ...req.context, skipInventoryRecalculation: true },
       });
       const twTenant = extractId(targetWarehouse?.tenant);
-      if (movementTenant && twTenant && String(movementTenant) !== String(twTenant)) {
+      if (twTenant && String(effectiveTenant) !== String(twTenant)) {
         throw new Error('Violación de multi-inquilino: El almacén de destino pertenece a otro inquilino.');
       }
     }
 
     const prodOrderId = extractId(data.productionOrder);
-    if (movementTenant && prodOrderId) {
+    if (prodOrderId) {
+      if (type !== 'production_consume' && type !== 'production_output') {
+        throw new Error(
+          'El campo "productionOrder" solo puede asociarse a movimientos de tipo "production_consume" o "production_output".',
+        );
+      }
+
       const prodOrder = await req.payload.findByID({
         collection: 'production-orders',
         id: prodOrderId,
@@ -135,14 +159,27 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         req,
         context: { ...req.context, skipInventoryRecalculation: true },
       });
+      if (!prodOrder) {
+        throw new Error(`La orden de producción ID ${prodOrderId} no existe.`);
+      }
+
       const poTenant = extractId(prodOrder?.tenant);
-      if (poTenant && String(movementTenant) !== String(poTenant)) {
+      if (poTenant && String(effectiveTenant) !== String(poTenant)) {
         throw new Error('Violación de multi-inquilino: La orden de producción pertenece a otro inquilino.');
+      }
+
+      if (type === 'production_output') {
+        const orderProductId = extractId(prodOrder.product);
+        if (orderProductId && String(orderProductId) !== String(productId)) {
+          throw new Error(
+            'Inconsistencia: El producto en la salida de producción no coincide con el producto terminado de la orden de producción.',
+          );
+        }
       }
     }
 
     const invoiceId = extractId(data.invoice);
-    if (movementTenant && invoiceId) {
+    if (invoiceId) {
       const invoice = await req.payload.findByID({
         collection: 'invoices',
         id: invoiceId,
@@ -151,7 +188,7 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         context: { ...req.context, skipInventoryRecalculation: true },
       });
       const invTenant = extractId(invoice?.tenant);
-      if (invTenant && String(movementTenant) !== String(invTenant)) {
+      if (invTenant && String(effectiveTenant) !== String(invTenant)) {
         throw new Error('Violación de multi-inquilino: La factura asociada pertenece a otro inquilino.');
       }
     }
