@@ -1,124 +1,163 @@
 # ROADMAP.md — Hoja de Ruta Detallada de Ingeniería
 ## Empresarial SaaS (Payload CMS 3.x · Next.js 15 · Supabase)
 
-> Este roadmap define las fases de desarrollo, contratos de datos, dependencias técnicas y estándares canónicos basados en la skill oficial de Payload CMS 3.x, las mejores prácticas de Context7 y la arquitectura consolidada de Cendaro, Supasheet y Storelink.
+> Este documento define las fases de desarrollo, contratos de datos, dependencias técnicas y estándares canónicos basados en la skill oficial de Payload CMS 3.x, las directivas de Context7 y la arquitectura consolidada de Cendaro ERP.
 
 ---
 
 ## 🧭 Visión del Producto
-Transformar las capacidades probadas de **Cendaro ERP** en una suite de plugins nativos de **Payload CMS 3.x** (`payloadPluginERP`), montado sobre **Next.js 15 App Router** y respaldado por el Transaction Pooler de **Supabase PostgreSQL** con aislamiento multi-inquilino de fila (`@payloadcms/plugin-multi-tenant`).
+Transformar las capacidades probadas de **Cendaro ERP** en una plataforma modular gobernada por **Payload CMS 3.x**, montada sobre el **App Router de Next.js 15**, respaldada por el Transaction Pooler de **Supabase PostgreSQL** y con aislamiento multi-inquilino estricto a nivel de fila (`@payloadcms/plugin-multi-tenant`).
 
 ---
 
-## 📦 Fases de Implementación
+## 🏗️ Metodología de Ejecución (Bottom-Up Riguroso)
 
-### Fase 0: Cimientos de Infraestructura & Plugin Skeleton
-- [ ] Inicializar proyecto Next.js 15 con App Router y TypeScript estricto.
-- [ ] Configurar `@payloadcms/db-postgres` con el Transaction Pooler de Supabase (puerto 6543, `pool: { max: 10 }`, TLS según CA cert).
-- [ ] Configurar `@payloadcms/plugin-multi-tenant` sobre colecciones base (`Users`, `Tenants`, `Media`).
-- [ ] Estructurar el paquete de plugin `src/plugins/erp/` con la signatura canónica:
-  `(options: ERPPluginConfig): Plugin => (config: Config): Config => { ... }`.
-- [ ] Configurar Payload Jobs Queue para operaciones en segundo plano con soporte serverless (`after()`).
+A diferencia del enfoque anterior (donde se codificaron 6 módulos de plugins de forma especulativa y sin una base de datos conectada), el desarrollo se ejecutará mediante **Sprints Atómicos**:
+
+```mermaid
+flowchart LR
+    S0["Sprint 0: Cimientos Core"] --> S1["Sprint 1: Finanzas & CRM"]
+    S1 --> S2["Sprint 2: Inventario & BOM"]
+    S2 --> S3["Sprint 3: Proveedores & CxP"]
+    S3 --> S4["Sprint 4: Cajas & Tasas"]
+    S4 --> S5["Sprint 5: Templates"]
+    S5 --> S6["Sprint 6: Frontend ERP"]
+```
+
+Cada sprint concluye con:
+1. Una rama dedicada: `feat/sprint-X-nombre`.
+2. Migración DDL en `src/migrations` ejecutada en Supabase.
+3. Verificación de TypeScript (`tsc --noEmit`) y build local (`pnpm build`).
+4. Despliegue en Vercel (Preview Environment) verificado y sin errores.
+5. Merge limpio a `main`.
 
 ---
 
-### Fase 1: Módulo 1 — Finance & Customer CRM Core (🎯 Sprint Actual)
-> **Objetivo:** Implementar la infraestructura de Cuentas por Cobrar (CxC), Facturación Multi-moneda Bimonetaria (USD/Bs) y CRM Ligero de Clientes con cálculo inmutable de saldo y cobranza por WhatsApp.
+## 📦 Sprints de Implementación
 
-- [ ] **Colección `Customers` (Enriquecida con CRM y Crédito):**
-  - Identificación fiscal (`rifCi`), Razón social / Nombre, Teléfono formateado internacional para WhatsApp, Email, Dirección.
-  - Clasificación CRM de ciclo de vida (`lifecycleStage`: `'lead' | 'first_time' | 'recurring' | 'vip' | 'inactive'`).
-  - Términos de Crédito: `creditAllowed: boolean`, `creditLimitUSD: number`, `creditDays: number`.
-  - Campos de Balance (Mantenidos por Ledger Hooks):
-    - `currentDebtUSD`: Total adeudado en USD.
-    - `currentDebtVES`: Total adeudado equivalente en moneda local.
-    - `overdueDebtUSD`: Deuda vencida fuera del plazo pactado.
-  - Campos Virtuales de Antigüedad (Aging Analysis via `afterRead` field hooks):
-    - `aging0to30`: Cartera corriente (0 a 30 días).
-    - `aging31to60`: Cartera en mora temprana (31 a 60 días).
-    - `aging60Plus`: Cartera en mora crítica (+60 días).
-  - Notas de seguimiento comercial y URL de chat directo de WhatsApp (`https://wa.me/...`).
+### 🎯 Sprint 0: Cimientos Canónicos, Supabase, Vercel & Multi-Tenancy Base
+> **Objetivo:** Establecer el proyecto Next.js 15 + Payload 3.x con conexión real a Supabase, pipeline de migraciones, autenticación multi-tenant y primer despliegue en Vercel.
 
-- [ ] **Colección `Invoices` (Facturas y Notas de Entrega Bimonetarias):**
-  - Número correlativo de factura / control.
-  - Relación a `Customers` y relación opcional a `Orders`.
-  - Tipo de condición: `'cash' | 'credit'`.
-  - Fecha de emisión y fecha de vencimiento (`dueDate`).
-  - Snapshot cambiario: `exchangeRateSnapshot` (tasa fijada al momento exacto de emisión).
-  - Totales bimonetarios: `totalUSD`, `totalVES`, `balanceUSD` (saldo pendiente).
-  - Estado: `'draft' | 'pending' | 'partially_paid' | 'paid' | 'cancelled'`.
-  - Array de items facturados con SKU, descripción, cantidad, precio unitario y subtotal.
+- [ ] **Configuración del Entorno & Dependencias:**
+  - `package.json` con dependencias oficiales: Next.js `15.x`, React `19.x`, Payload `3.x`, `@payloadcms/db-postgres`, `@payloadcms/plugin-multi-tenant`, `@payloadcms/richtext-lexical`, `sharp`.
+  - `next.config.ts` envuelto canónicamente con `withPayload(nextConfig)`.
+  - `tsconfig.json` configurado con alias `@/*` y `@payload-config`.
+- [ ] **Persistencia & Conexión Supabase:**
+  - `.env` configurado con Transaction Pooler (puerto 6543) y conexión directa para DDL (puerto 5432).
+  - `src/payload.config.ts` con `@payloadcms/db-postgres`, `push: false`, `migrationDir: './src/migrations'`.
+- [ ] **Colecciones Fundacionales:**
+  - `Tenants`: Inquilinos con `name`, `slug` único y datos fiscales básicos.
+  - `Users`: Autenticación nativa de Payload con campo `roles` (`super-admin`, `tenant-admin`, `operador`), relación a `tenants` y `saveToJWT: true`.
+  - `Media`: Almacenamiento de archivos y comprobantes con aislamiento por tenant.
+- [ ] **Plugin Multi-Tenant Base:**
+  - Integración oficial de `@payloadcms/plugin-multi-tenant` configurado para `Media` y colecciones base.
+  - Reglas de acceso estrictas: `super-admin` con acceso global; inquilinos restringidos a sus filas.
+- [ ] **Rutas del Admin Panel (App Router):**
+  - `src/app/(payload)/admin/[[...segments]]/page.tsx`
+  - `src/app/(payload)/admin/[[...segments]]/not-found.tsx`
+  - `src/app/(payload)/api/[...slug]/route.ts`
+  - `src/app/(payload)/layout.tsx`
+- [ ] **Pipeline de Migraciones:**
+  - Generación de migración inicial `src/migrations/*_init_core.ts`.
+  - Ejecución exitosa de la migración en Supabase PostgreSQL.
+- [ ] **Despliegue & Validación en Vercel:**
+  - Vinculación del repositorio con Vercel (`vercel link`).
+  - Configuración de variables en Vercel y verificación de build en verde.
+  - Acceso y registro del primer Super Admin en `/admin`.
+- **Entregable:** PR `feat/sprint-0-core-infra-multitenant` mergeado a `main`.
 
-- [ ] **Colección `CustomerPayments` (Abonos y Cobranzas):**
-  - Relación a `Customers`.
-  - Monto pagado: `amountUSD`, `amountVES`, tasa de cambio aplicada.
-  - Método de pago: `'cash_usd' | 'cash_ves' | 'zelle' | 'pago_movil' | 'transfer_ves' | 'binance'`.
-  - Referencia bancaria / recibo de pago y comprobante adjunto (`Media`).
-  - Desglose de asignación (`allocations`):
-    - Relación a `Invoices`.
-    - `allocatedAmountUSD`: Monto aplicado específicamente a cada factura.
+---
 
-- [ ] **Hooks de Ledger Transaccional & Integridad de Balances:**
-  - Hook `afterChange` en `Invoices` y `CustomerPayments` que recalcula de forma atómica y consistente el balance del cliente en `Customers`.
+### 💳 Sprint 1: Módulo Finanzas & CRM de Clientes (CxC Bimonetaria & WhatsApp)
+> **Objetivo:** Cuentas por Cobrar (CxC), Facturación bimonetaria USD/VES y CRM de clientes con cálculo transaccional atómico y cobranza por WhatsApp.
+
+- [ ] **Colección `Customers`:**
+  - RIF/Cédula, Razón social, Teléfono validado internacionalmente para WhatsApp, Dirección fiscal.
+  - Segmentación CRM: `'lead' | 'first_time' | 'recurring' | 'vip' | 'inactive'`.
+  - Reglas de Crédito: `creditAllowed`, `creditLimitUSD`, `creditDays`.
+  - Balances de Ledger: `currentDebtUSD`, `currentDebtVES`, `overdueDebtUSD`.
+  - Campos Virtuales de Envejecimiento de Deuda (`aging0to30`, `aging31to60`, `aging60Plus`).
+- [ ] **Colección `Invoices`:**
+  - Facturas y notas de entrega bimonetarias con snapshot de tasa de cambio al emitir (`exchangeRateSnapshot`).
+  - Relación a `Customers`, fecha de vencimiento (`dueDate`), condición (`cash`/`credit`).
+  - Totales bimonetarios: `totalUSD`, `totalVES`, `balanceUSD`, `balanceVES`.
+  - Array de líneas de detalle (SKU, descripción, cantidad, precio unitario, subtotal).
+- [ ] **Colección `CustomerPayments`:**
+  - Abonos con métodos múltiples (`cash_usd`, `cash_ves`, `zelle`, `pago_movil`, `transfer_ves`, `binance`).
+  - Asignación específica por factura (`allocations`) y comprobante adjunto (`Media`).
+- [ ] **Hooks de Ledger Transaccional:**
+  - Recalculación atómica en `afterChange` y reversión en `beforeDelete` pasando `{ req }`.
   - Prevención de recursión con `req.context.skipBalanceRecalculation`.
-  - Propagación de transacciones pasando `{ req }` a cada llamada interna de la Local API.
-  - Reversión atómica en hooks `beforeDelete` para mantener la simetría del ledger ante anulaciones.
-
-- [ ] **Acción y Generación de Cobranza por WhatsApp:**
-  - Endpoint o Server Action `/api/customers/:id/statement`: Genera el estado de cuenta consolidado con desglose de facturas pendientes.
-  - Generador de mensaje preformateado para WhatsApp con saldo total, facturas vencidas y datos de cuentas bancarias/pago móvil del tenant.
+- [ ] **Generador de Cobranza WhatsApp:**
+  - Endpoint de estado de cuenta consolidado con deep-link directo a WhatsApp (`https://wa.me/...`).
+- [ ] **Migración DDL & Validación:** Migración `add_finance_crm` aplicada y verificada en `/admin`.
+- **Entregable:** PR `feat/sprint-1-finance-crm` mergeado a `main`.
 
 ---
 
-### Fase 2: Módulo 2 — BOM (Bill of Materials) & Producción
-- [ ] **Colección `BillOfMaterials` (Fórmulas de Fabricación):**
-  - Relación a producto terminado (`Products` con `productType = 'manufactured'`).
-  - Rendimiento base (`yieldQuantity`) y unidad de medida.
-  - Lista de componentes e insumos (`rawMaterial`, cantidad requerida, unidad, porcentaje de merma).
-  - Costo de mano de obra y costos indirectos de fabricación (CIF).
-- [ ] **Colección `ProductionOrders` (Órdenes de Fabricación):**
-  - Folio correlativo (`OP-0001`).
-  - Relación a `BillOfMaterials`.
-  - Cantidad a fabricar y fechas programadas.
-  - Estados: `'draft' | 'planned' | 'in_progress' | 'completed' | 'cancelled'`.
-- [ ] **Hooks Transaccionales de Consumo y Costeo:**
-  - Al completar orden: descuento automático de stock de materias primas vía `StockMovements`.
-  - Entrada de producto terminado al inventario.
-  - Cálculo del Costo Unitario Real basado en ingredientes consumidos y actualización del costo ponderado.
+### 📦 Sprint 2: Módulo Inventario, Almacenes y Producción / BOM
+> **Objetivo:** Catálogo de productos, control de stock multi-almacén y órdenes de fabricación con consumo de recetas (BOM).
+
+- [ ] **Colección `Categories` & `Warehouses`:** Clasificación y depósitos físicos/virtuales por tenant.
+- [ ] **Colección `Products`:** Artículos simples y manufacturados (`standard` / `manufactured`), control de stock mínimo, costos ponderados y precios de venta.
+- [ ] **Colección `StockMovements`:** Trazabilidad inmutable de entradas, salidas, transferencias y ajustes de inventario.
+- [ ] **Colección `BillOfMaterials` (Fórmulas/Recetas):** Estructura de insumos requeridos por unidad de producto terminado, cálculo de mermas y costos indirectos de fabricación.
+- [ ] **Colección `ProductionOrders`:** Órdenes de fabricación con estados (`draft`, `planned`, `in_progress`, `completed`).
+- [ ] **Hooks Transaccionales de Producción:**
+  - Al completar la orden: descuento atómico de materias primas e ingreso de producto terminado en la misma transacción de PostgreSQL.
+- [ ] **Migración DDL & Validación:** Migración `add_inventory_bom` aplicada y verificada.
+- **Entregable:** PR `feat/sprint-2-inventory-bom` mergeado a `main`.
 
 ---
 
-### Fase 3: Módulo 3 — Cuentas por Pagar (CxP) & Proveedores
-- [ ] **Colección `Suppliers`:** Registro de proveedores, RIF/taxId, crédito comercial y deuda acumulada.
-- [ ] **Colección `PurchaseInvoices`:** Facturas de compras a proveedores con vencimiento y saldo pendiente.
-- [ ] **Colección `SupplierPayments`:** Comprobantes de egreso y abonos a facturas de proveedores.
-- [ ] Hooks de conciliación automática de saldo deudor con proveedores.
+### 🏢 Sprint 3: Módulo Proveedores & Cuentas por Pagar (CxP)
+> **Objetivo:** Registro de compras a proveedores, control de deuda comercial y recepción atómica de inventario.
+
+- [ ] **Colección `Suppliers`:** Padrón de proveedores con condiciones de crédito y balance de deuda deudor.
+- [ ] **Colección `PurchaseInvoices`:** Facturas de compras con vencimiento y registro de recepción de mercancía.
+- [ ] **Colección `SupplierPayments`:** Comprobantes de egreso con asignación a facturas de compra.
+- [ ] **Hooks de Conciliación de Compras:** Actualización del balance del proveedor y creación automática de movimientos de inventario (`StockMovements`) al recepcionar compras.
+- [ ] **Migración DDL & Validación:** Migración `add_accounts_payable` aplicada y verificada.
+- **Entregable:** PR `feat/sprint-3-accounts-payable` mergeado a `main`.
 
 ---
 
-### Fase 4: Módulo 4 — Cierre de Caja & POS
-- [ ] **Colección `CashRegisters`:** Cajas registradoras / puntos de venta físicos por sucursal.
-- [ ] **Colección `CashClosures`:** Sesiones de turno con registro de apertura, conteo ciego de cierre, desglose multimétodo y cálculo de sobrante/faltante.
-- [ ] Servicio de consulta de tasas automáticas (BCV / Binance P2P) con cache serverless (120s) e invalidación bajo demanda.
+### 💵 Sprint 4: Módulo Cajas Registradoras, Cierre de Turno y Tasas Cambiarias
+> **Objetivo:** Gestión de puntos de venta físicos, arqueo ciego multimétodo y servicio en vivo de tasas de cambio (BCV / Paralelo).
+
+- [ ] **Colección `CashRegisters`:** Cajas registradoras asignadas a sucursales y usuarios.
+- [ ] **Colección `CashClosures`:** Sesiones de turno con balance de apertura, recaudación por método (Efectivo USD/Bs, Punto, Pago Móvil, Zelle), conteo ciego de cierre y cálculo de sobrante/faltante.
+- [ ] **Servicio de Tasas Cambiarias:**
+  - Consulta automatizada de tasa oficial BCV y Binance P2P con cache serverless (revalidate: 120s).
+- [ ] **Migración DDL & Validación:** Migración `add_cash_registers` aplicada y verificada.
+- **Entregable:** PR `feat/sprint-4-cash-registers` mergeado a `main`.
 
 ---
 
-### Fase 5: Módulo 5 — Frontend Operativo Dedicado (UI Cendaro)
-- [ ] Montar ruta en Next.js 15: `src/app/(app)/[tenant]/erp/`.
-- [ ] Adaptar App Shell, Sidebar colapsable y navegación modular de Cendaro.
-- [ ] Data Grids virtuales con `@tanstack/react-table` y `@tanstack/react-virtual` para catálogos masivos.
-- [ ] Vistas operativas: Dashboard financiero, POS rápido, Cartera y envejecimiento de deuda, Cierre de turno.
+### 🏭 Sprint 5: Motor de Plantillas Industriales & Onboarding Atómico
+> **Objetivo:** Wizard de inicialización por industria (Alimentos/Panadería, Farmacia/Retail, Mayorista B2B) que auto-puebla catálogos, recetas y almacenes en un clic.
+
+- [ ] **Colección `IndustryTemplates`:** Definiciones declarativas de industrias con sus categorías, productos base, fórmulas BOM y métodos de pago sugeridos.
+- [ ] **Seeder Atómico con Payload Jobs:** Carga de datos iniciales encolada para ejecución segura en entornos serverless sin sobrepasar el timeout de Next.js.
+- [ ] **Migración DDL & Validación:** Migración `add_industry_templates` aplicada y verificada.
+- **Entregable:** PR `feat/sprint-5-industry-templates` mergeado a `main`.
 
 ---
 
-### Fase 6: Módulo 6 — Motor de Plantillas por Industria (Inspirado en Supasheet)
-- [ ] Presets de datos de industria (`industry-presets.ts`): Alimentos/Panadería, Ferretería, Mayorista B2B, Moda.
-- [ ] Wizard de onboarding que auto-puebla categorías, unidades de medida, métodos de pago y BOMs de ejemplo mediante Jobs Queue.
+### 🖥️ Sprint 6: Frontend Operativo Cendaro ERP (App Shell Next.js 15)
+> **Objetivo:** Interfaz de usuario de alta densidad montada sobre el App Router de Next.js 15, consumiendo la Payload Local API con latencia cero.
+
+- [ ] **Ruta Dinámica Tenant:** `src/app/(app)/[tenant]/erp/`.
+- [ ] **Componentes de App Shell:** Sidebar colapsable modular, Header interactivo con ticker de tasa BCV en vivo y selector de tenant.
+- [ ] **Dashboard Ejecutivo de Finanzas:** Tarjetas KPI de liquidez, cuentas por cobrar, cuentas por pagar y flujo de caja en tiempo real.
+- [ ] **Data Grids de Alta Eficiencia:** Tablas virtuales con `@tanstack/react-table` y filtros de búsqueda instantáneos.
+- [ ] **Despliegue Final & Pruebas E2E:** Verificación de rendimiento en Vercel con Core Web Vitals optimizados.
+- **Entregable:** PR `feat/sprint-6-cendaro-ui` mergeado a `main`.
 
 ---
 
-## 🔒 Estándares de Seguridad y Calidad
-- 100% TypeScript sin `any` ni `unknown` sin validar.
-- Control de acceso estricto por roles (`super-admin`, `tenant-admin`, `cajero`, `supervisor`).
-- Validación con esquemas Zod en todas las entradas de mutación.
-- Pruebas unitarias de cálculo financiero con Vitest.
+## 🔒 Estándares No Negociables de Calidad y Seguridad
+- **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
+- **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.
+- **Aislamiento Multi-Tenant Blindado:** Filtrado automático por `tenant` en todas las consultas y mutaciones.
+- **Validación Zod:** Contratos de entrada validados en cada endpoint y Server Action.
