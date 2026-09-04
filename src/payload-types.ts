@@ -73,6 +73,12 @@ export interface Config {
     customers: Customer;
     invoices: Invoice;
     'customer-payments': CustomerPayment;
+    categories: Category;
+    warehouses: Warehouse;
+    products: Product;
+    'stock-movements': StockMovement;
+    'bill-of-materials': BillOfMaterial;
+    'production-orders': ProductionOrder;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -86,6 +92,12 @@ export interface Config {
     customers: CustomersSelect<false> | CustomersSelect<true>;
     invoices: InvoicesSelect<false> | InvoicesSelect<true>;
     'customer-payments': CustomerPaymentsSelect<false> | CustomerPaymentsSelect<true>;
+    categories: CategoriesSelect<false> | CategoriesSelect<true>;
+    warehouses: WarehousesSelect<false> | WarehousesSelect<true>;
+    products: ProductsSelect<false> | ProductsSelect<true>;
+    'stock-movements': StockMovementsSelect<false> | StockMovementsSelect<true>;
+    'bill-of-materials': BillOfMaterialsSelect<false> | BillOfMaterialsSelect<true>;
+    'production-orders': ProductionOrdersSelect<false> | ProductionOrdersSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -287,6 +299,143 @@ export interface CustomerPayment {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  code: string;
+  description?: string | null;
+  parentCategory?: (number | null) | Category;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "warehouses".
+ */
+export interface Warehouse {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  code: string;
+  type: 'main' | 'raw_materials' | 'work_in_progress' | 'scrap' | 'retail';
+  location?: string | null;
+  isDefault?: boolean | null;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "products".
+ */
+export interface Product {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  sku: string;
+  barcode?: string | null;
+  productType: 'standard' | 'raw_material' | 'manufactured' | 'service';
+  category?: (number | null) | Category;
+  unitOfMeasure: 'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box';
+  costUSD: number;
+  priceUSD: number;
+  taxRate: 'exempt' | 'general' | 'reduced';
+  trackInventory?: boolean | null;
+  minStockAlert?: number | null;
+  maxStock?: number | null;
+  currentStock?: number | null;
+  description?: string | null;
+  image?: (number | null) | Media;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "stock-movements".
+ */
+export interface StockMovement {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  reference: string;
+  movementType:
+    | 'purchase_in'
+    | 'sale_out'
+    | 'production_consume'
+    | 'production_output'
+    | 'transfer'
+    | 'adjustment_positive'
+    | 'adjustment_negative'
+    | 'scrap';
+  product: number | Product;
+  sourceWarehouse?: (number | null) | Warehouse;
+  targetWarehouse?: (number | null) | Warehouse;
+  quantity: number;
+  unitCostUSD: number;
+  totalCostUSD: number;
+  reason?: string | null;
+  productionOrder?: (number | null) | ProductionOrder;
+  invoice?: (number | null) | Invoice;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "production-orders".
+ */
+export interface ProductionOrder {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  orderNumber: string;
+  product: number | Product;
+  bom: number | BillOfMaterial;
+  quantityPlanned: number;
+  quantityProduced?: number | null;
+  sourceWarehouse: number | Warehouse;
+  targetWarehouse: number | Warehouse;
+  status: 'draft' | 'planned' | 'in_progress' | 'completed' | 'cancelled';
+  startDate?: string | null;
+  completionDate?: string | null;
+  totalCostUSD?: number | null;
+  unitCostUSD?: number | null;
+  assignedTo?: (number | null) | User;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "bill-of-materials".
+ */
+export interface BillOfMaterial {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  product: number | Product;
+  outputQuantity: number;
+  items: {
+    rawMaterial: number | Product;
+    quantity: number;
+    scrapFactorPercent?: number | null;
+    unitCostSnapshotUSD?: number | null;
+    subtotalCostUSD?: number | null;
+    id?: string | null;
+  }[];
+  laborCostUSD?: number | null;
+  indirectCostsUSD?: number | null;
+  totalBatchCostUSD?: number | null;
+  totalUnitCostUSD?: number | null;
+  instructions?: string | null;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -332,6 +481,30 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'customer-payments';
         value: number | CustomerPayment;
+      } | null)
+    | ({
+        relationTo: 'categories';
+        value: number | Category;
+      } | null)
+    | ({
+        relationTo: 'warehouses';
+        value: number | Warehouse;
+      } | null)
+    | ({
+        relationTo: 'products';
+        value: number | Product;
+      } | null)
+    | ({
+        relationTo: 'stock-movements';
+        value: number | StockMovement;
+      } | null)
+    | ({
+        relationTo: 'bill-of-materials';
+        value: number | BillOfMaterial;
+      } | null)
+    | ({
+        relationTo: 'production-orders';
+        value: number | ProductionOrder;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -530,6 +703,131 @@ export interface CustomerPaymentsSelect<T extends boolean = true> {
         allocatedAmountUSD?: T;
         id?: T;
       };
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories_select".
+ */
+export interface CategoriesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  code?: T;
+  description?: T;
+  parentCategory?: T;
+  isActive?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "warehouses_select".
+ */
+export interface WarehousesSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  code?: T;
+  type?: T;
+  location?: T;
+  isDefault?: T;
+  isActive?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "products_select".
+ */
+export interface ProductsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  sku?: T;
+  barcode?: T;
+  productType?: T;
+  category?: T;
+  unitOfMeasure?: T;
+  costUSD?: T;
+  priceUSD?: T;
+  taxRate?: T;
+  trackInventory?: T;
+  minStockAlert?: T;
+  maxStock?: T;
+  currentStock?: T;
+  description?: T;
+  image?: T;
+  isActive?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "stock-movements_select".
+ */
+export interface StockMovementsSelect<T extends boolean = true> {
+  tenant?: T;
+  reference?: T;
+  movementType?: T;
+  product?: T;
+  sourceWarehouse?: T;
+  targetWarehouse?: T;
+  quantity?: T;
+  unitCostUSD?: T;
+  totalCostUSD?: T;
+  reason?: T;
+  productionOrder?: T;
+  invoice?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "bill-of-materials_select".
+ */
+export interface BillOfMaterialsSelect<T extends boolean = true> {
+  tenant?: T;
+  name?: T;
+  product?: T;
+  outputQuantity?: T;
+  items?:
+    | T
+    | {
+        rawMaterial?: T;
+        quantity?: T;
+        scrapFactorPercent?: T;
+        unitCostSnapshotUSD?: T;
+        subtotalCostUSD?: T;
+        id?: T;
+      };
+  laborCostUSD?: T;
+  indirectCostsUSD?: T;
+  totalBatchCostUSD?: T;
+  totalUnitCostUSD?: T;
+  instructions?: T;
+  isActive?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "production-orders_select".
+ */
+export interface ProductionOrdersSelect<T extends boolean = true> {
+  tenant?: T;
+  orderNumber?: T;
+  product?: T;
+  bom?: T;
+  quantityPlanned?: T;
+  quantityProduced?: T;
+  sourceWarehouse?: T;
+  targetWarehouse?: T;
+  status?: T;
+  startDate?: T;
+  completionDate?: T;
+  totalCostUSD?: T;
+  unitCostUSD?: T;
+  assignedTo?: T;
   notes?: T;
   updatedAt?: T;
   createdAt?: T;

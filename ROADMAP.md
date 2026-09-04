@@ -98,15 +98,15 @@ Cada sprint concluye con:
 ### 📦 Sprint 2: Módulo Inventario, Almacenes y Producción / BOM
 > **Objetivo:** Catálogo de productos, control de stock multi-almacén y órdenes de fabricación con consumo de recetas (BOM).
 
-- [ ] **Colección `Categories` & `Warehouses`:** Clasificación y depósitos físicos/virtuales por tenant.
-- [ ] **Colección `Products`:** Artículos simples y manufacturados (`standard` / `manufactured`), control de stock mínimo, costos ponderados y precios de venta.
-- [ ] **Colección `StockMovements`:** Trazabilidad inmutable de entradas, salidas, transferencias y ajustes de inventario.
-- [ ] **Colección `BillOfMaterials` (Fórmulas/Recetas):** Estructura de insumos requeridos por unidad de producto terminado, cálculo de mermas y costos indirectos de fabricación.
-- [ ] **Colección `ProductionOrders`:** Órdenes de fabricación con estados (`draft`, `planned`, `in_progress`, `completed`).
-- [ ] **Hooks Transaccionales de Producción:**
+- [x] **Colección `Categories` & `Warehouses`:** Clasificación y depósitos físicos/virtuales por tenant.
+- [x] **Colección `Products`:** Artículos simples y manufacturados (`standard` / `manufactured`), control de stock mínimo, costos ponderados y precios de venta.
+- [x] **Colección `StockMovements`:** Trazabilidad inmutable de entradas, salidas, transferencias y ajustes de inventario.
+- [x] **Colección `BillOfMaterials` (Fórmulas/Recetas):** Estructura de insumos requeridos por unidad de producto terminado, cálculo de mermas y costos indirectos de fabricación.
+- [x] **Colección `ProductionOrders`:** Órdenes de fabricación con estados (`draft`, `planned`, `in_progress`, `completed`).
+- [x] **Hooks Transaccionales de Producción:**
   - Al completar la orden: descuento atómico de materias primas e ingreso de producto terminado en la misma transacción de PostgreSQL.
-- [ ] **Migración DDL & Validación:** Migración `add_inventory_bom` aplicada y verificada.
-- **Entregable:** PR `feat/sprint-2-inventory-bom` mergeado a `main`.
+- [x] **Migración DDL & Validación:** Migración `add_inventory_bom` (`20260904_195815_add_inventory_bom.ts`) aplicada y verificada en Supabase PostgreSQL.
+- **Estado:** ✅ **Sprint 2 Concluido al 100%** (Listo para PR y merge a `main`).
 
 ---
 

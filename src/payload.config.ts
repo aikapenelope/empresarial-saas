@@ -17,6 +17,12 @@ import { Media } from './collections/Media';
 import { Customers } from './collections/Customers';
 import { Invoices } from './collections/Invoices';
 import { CustomerPayments } from './collections/CustomerPayments';
+import { Categories } from './collections/Categories';
+import { Warehouses } from './collections/Warehouses';
+import { Products } from './collections/Products';
+import { StockMovements } from './collections/StockMovements';
+import { BillOfMaterials } from './collections/BillOfMaterials';
+import { ProductionOrders } from './collections/ProductionOrders';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 
@@ -58,7 +64,20 @@ export default buildConfig({
     },
     fallbackLanguage: 'es',
   },
-  collections: [Tenants, Users, Media, Customers, Invoices, CustomerPayments],
+  collections: [
+    Tenants,
+    Users,
+    Media,
+    Customers,
+    Invoices,
+    CustomerPayments,
+    Categories,
+    Warehouses,
+    Products,
+    StockMovements,
+    BillOfMaterials,
+    ProductionOrders,
+  ],
   editor: lexicalEditor(),
   secret: payloadSecret,
   typescript: {
@@ -101,6 +120,12 @@ export default buildConfig({
         customers: {},
         invoices: {},
         'customer-payments': {},
+        categories: {},
+        warehouses: {},
+        products: {},
+        'stock-movements': {},
+        'bill-of-materials': {},
+        'production-orders': {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),
       tenantsArrayField: {
