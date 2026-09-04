@@ -84,7 +84,9 @@ export interface Config {
     'supplier-payments': SupplierPayment;
     'cash-registers': CashRegister;
     'cash-closures': CashClosure;
+    'industry-templates': IndustryTemplate;
     'payload-kv': PayloadKv;
+    'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
@@ -108,7 +110,9 @@ export interface Config {
     'supplier-payments': SupplierPaymentsSelect<false> | SupplierPaymentsSelect<true>;
     'cash-registers': CashRegistersSelect<false> | CashRegistersSelect<true>;
     'cash-closures': CashClosuresSelect<false> | CashClosuresSelect<true>;
+    'industry-templates': IndustryTemplatesSelect<false> | IndustryTemplatesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
+    'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
@@ -125,7 +129,13 @@ export interface Config {
   };
   user: User;
   jobs: {
-    tasks: unknown;
+    tasks: {
+      seedIndustryTemplate: TaskSeedIndustryTemplate;
+      inline: {
+        input: unknown;
+        output: unknown;
+      };
+    };
     workflows: unknown;
   };
 }
@@ -643,6 +653,32 @@ export interface SupplierPayment {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "industry-templates".
+ */
+export interface IndustryTemplate {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  industryType: 'food_production' | 'retail_health' | 'wholesale' | 'services';
+  icon?: string | null;
+  isPublished?: boolean | null;
+  defaultPaymentMethods?:
+    ('cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance')[] | null;
+  templateData?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -657,6 +693,98 @@ export interface PayloadKv {
     | number
     | boolean
     | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs".
+ */
+export interface PayloadJob {
+  id: number;
+  /**
+   * Input data provided to the job
+   */
+  input?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  taskStatus?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  completedAt?: string | null;
+  totalTried?: number | null;
+  /**
+   * If hasError is true this job will not be retried
+   */
+  hasError?: boolean | null;
+  /**
+   * If hasError is true, this is the error that caused it
+   */
+  error?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * Task execution log
+   */
+  log?:
+    | {
+        executedAt: string;
+        completedAt: string;
+        taskSlug: 'inline' | 'seedIndustryTemplate';
+        taskID: string;
+        input?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        output?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        state: 'failed' | 'succeeded';
+        error?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        id?: string | null;
+      }[]
+    | null;
+  taskSlug?: ('inline' | 'seedIndustryTemplate') | null;
+  queue?: string | null;
+  waitUntil?: string | null;
+  processing?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -732,6 +860,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'cash-closures';
         value: number | CashClosure;
+      } | null)
+    | ({
+        relationTo: 'industry-templates';
+        value: number | IndustryTemplate;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1268,11 +1400,58 @@ export interface CashClosuresSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "industry-templates_select".
+ */
+export interface IndustryTemplatesSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  description?: T;
+  industryType?: T;
+  icon?: T;
+  isPublished?: T;
+  defaultPaymentMethods?: T;
+  templateData?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
   key?: T;
   data?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs_select".
+ */
+export interface PayloadJobsSelect<T extends boolean = true> {
+  input?: T;
+  taskStatus?: T;
+  completedAt?: T;
+  totalTried?: T;
+  hasError?: T;
+  error?: T;
+  log?:
+    | T
+    | {
+        executedAt?: T;
+        completedAt?: T;
+        taskSlug?: T;
+        taskID?: T;
+        input?: T;
+        output?: T;
+        state?: T;
+        error?: T;
+        id?: T;
+      };
+  taskSlug?: T;
+  queue?: T;
+  waitUntil?: T;
+  processing?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1315,6 +1494,21 @@ export interface CollectionsWidget {
     [k: string]: unknown;
   };
   width: 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskSeedIndustryTemplate".
+ */
+export interface TaskSeedIndustryTemplate {
+  input: {
+    tenantId: number;
+    templateSlug: string;
+  };
+  output: {
+    success: boolean;
+    message: string;
+    templateName: string;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
