@@ -9,6 +9,7 @@
 - **Pensar antes de actuar:** Analizar contratos de datos, dependencias cruzadas y radio de impacto antes de modificar cualquier archivo.
 - **Cero código destructivo:** Prohibido borrar comentarios explicativos, eliminar utilidades no referenciadas o insertar atajos tipo `// rest remains the same`.
 - **TypeScript Estricto:** Prohibido eludir el tipado con `any`, `unknown` forzados o `@ts-ignore` sin justificación técnica crítica documentada.
+- **Cero Espera de Builds o Bots (Crear PR y Terminar):** Prohibido esperar activamente (`sleep`, polling o chequeos repetitivos) a que terminen los builds de Vercel, CI o reviews externos como Devin Review. Una vez abierto el Pull Request, el agente DEBE entregar el enlace al PR y TERMINAR su respuesta inmediatamente sin esperar. El usuario es quien revisa los builds y las revisiones externas.
 
 ---
 
@@ -60,3 +61,13 @@
   `const { tenant } = await params;`.
 - La UI operativa consume la **Payload Local API** (`const payload = await getPayload({ config })`) dentro de React Server Components con cero latencia de red.
 - En Client Components, consumir Server Actions o endpoints REST seguros de Payload.
+
+---
+
+## 5. Protocolo de Entrega y Cero Espera (Zero Build/Bot Waiting)
+- **Cero Espera Activa:** Prohibido terminantemente ejecutar comandos `sleep` o bucles de verificación para aguardar builds de Vercel, CI o revisiones de bots (Devin Review, etc.).
+- **Ciclo de Cierre Inmediato:** Una vez creadas las migraciones, verificados los tipos con TypeScript (`tsc --noEmit`), comiteado y abierto el Pull Request:
+  1. Dejar el link del PR en la respuesta.
+  2. Terminar el turno de inmediato.
+- **Responsabilidad del Usuario:** El usuario revisa los builds remotos y los comentarios de Devin en GitHub, y solicitará los ajustes pertinentes en turnos posteriores.
+
