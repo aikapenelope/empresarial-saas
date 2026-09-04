@@ -10,9 +10,34 @@ import { sql } from '@payloadcms/db-postgres';
 const beforeValidateProduct: CollectionBeforeValidateHook = async ({
   data,
   originalDoc,
+  operation,
   req,
 }) => {
   if (!data) return data;
+
+  // Enforce currentStock immutability outside internal ledger recalculation
+  const isInternalStockUpdate = Boolean(req.context?.allowInternalStockUpdate);
+
+  if (!isInternalStockUpdate) {
+    if (operation === 'create') {
+      if (data.currentStock !== undefined && Number(data.currentStock) !== 0) {
+        throw new Error(
+          'El campo "currentStock" es inmutable y no puede asignarse manualmente al crear el producto. Registre una entrada de inventario.',
+        );
+      }
+      data.currentStock = 0;
+    } else if (operation === 'update' && data.currentStock !== undefined) {
+      if (
+        originalDoc &&
+        Number(data.currentStock) !== Number(originalDoc.currentStock)
+      ) {
+        throw new Error(
+          'El campo "currentStock" es inmutable y solo puede modificarse mediante movimientos de inventario en el Kardex.',
+        );
+      }
+      delete data.currentStock;
+    }
+  }
 
   const categoryId = extractId(data.category ?? originalDoc?.category);
 

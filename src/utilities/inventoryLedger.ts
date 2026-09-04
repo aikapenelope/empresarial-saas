@@ -142,6 +142,7 @@ export async function recalculateProductTotalStock(
     context: {
       ...req.context,
       skipInventoryRecalculation: true,
+      allowInternalStockUpdate: true,
     },
   });
 

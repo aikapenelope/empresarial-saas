@@ -43,15 +43,23 @@ const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, originalD
     }
   }
 
-  const outputQty = Number(data.outputQuantity) || 1;
+  const outputQty = Number(data.outputQuantity ?? originalDoc?.outputQuantity) || 1;
   if (outputQty <= 0) {
     throw new Error('El rendimiento estándar base (cantidad producida) debe ser mayor a cero.');
   }
 
   let totalMaterialsCostUSD = 0;
 
-  if (Array.isArray(data.items)) {
-    for (const item of data.items) {
+  // Merge items: if data.items was supplied, use it and recalculate snapshots; otherwise reuse originalDoc.items
+  const itemsSupplied = Array.isArray(data.items);
+  const itemsToProcess = itemsSupplied
+    ? (data.items as Array<Record<string, unknown>>)
+    : Array.isArray(originalDoc?.items)
+      ? (originalDoc.items as Array<Record<string, unknown>>)
+      : [];
+
+  if (itemsToProcess.length > 0) {
+    for (const item of itemsToProcess) {
       const rawId = extractId(item.rawMaterial);
       const qty = Number(item.quantity) || 0;
       const scrap = (Number(item.scrapFactorPercent) || 0) / 100;
@@ -60,37 +68,43 @@ const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, originalD
         throw new Error('Cada insumo de la receta requiere un producto válido y una cantidad mayor a cero.');
       }
 
-      const rawDoc = await req.payload.findByID({
-        collection: 'products',
-        id: rawId,
-        depth: 0,
-        req,
-        context: {
-          ...req.context,
-          skipInventoryRecalculation: true,
-        },
-      });
+      let costSnapshot = Number(item.unitCostSnapshotUSD) || 0;
+      let subtotal = Number(item.subtotalCostUSD) || 0;
 
-      const rawTenant = extractId(rawDoc?.tenant);
-      if (rawTenant && String(effectiveTenant) !== String(rawTenant)) {
-        throw new Error(
-          `Violación de multi-inquilino: La materia prima "${rawDoc?.name || rawId}" pertenece a otro inquilino.`,
-        );
+      // Recalculate snapshot if new items supplied, or if snapshot was not previously saved
+      if (itemsSupplied || costSnapshot <= 0) {
+        const rawDoc = await req.payload.findByID({
+          collection: 'products',
+          id: rawId,
+          depth: 0,
+          req,
+          context: {
+            ...req.context,
+            skipInventoryRecalculation: true,
+          },
+        });
+
+        const rawTenant = extractId(rawDoc?.tenant);
+        if (rawTenant && String(effectiveTenant) !== String(rawTenant)) {
+          throw new Error(
+            `Violación de multi-inquilino: La materia prima "${rawDoc?.name || rawId}" pertenece a otro inquilino.`,
+          );
+        }
+
+        costSnapshot = Number(rawDoc?.costUSD) || 0;
+        item.unitCostSnapshotUSD = costSnapshot;
+
+        const effectiveQty = Number((qty * (1 + scrap)).toFixed(4));
+        subtotal = Number((effectiveQty * costSnapshot).toFixed(2));
+        item.subtotalCostUSD = subtotal;
       }
-
-      const costSnapshot = Number(rawDoc?.costUSD) || 0;
-      item.unitCostSnapshotUSD = costSnapshot;
-
-      const effectiveQty = Number((qty * (1 + scrap)).toFixed(4));
-      const subtotal = Number((effectiveQty * costSnapshot).toFixed(2));
-      item.subtotalCostUSD = subtotal;
 
       totalMaterialsCostUSD += subtotal;
     }
   }
 
-  const labor = Number(data.laborCostUSD) || 0;
-  const indirect = Number(data.indirectCostsUSD) || 0;
+  const labor = Number(data.laborCostUSD ?? originalDoc?.laborCostUSD) || 0;
+  const indirect = Number(data.indirectCostsUSD ?? originalDoc?.indirectCostsUSD) || 0;
 
   data.totalBatchCostUSD = Number((totalMaterialsCostUSD + labor + indirect).toFixed(2));
   data.totalUnitCostUSD = Number((data.totalBatchCostUSD / outputQty).toFixed(4));

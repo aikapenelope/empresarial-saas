@@ -1,14 +1,17 @@
 import type {
   CollectionAfterChangeHook,
+  CollectionBeforeDeleteHook,
   CollectionBeforeValidateHook,
   CollectionConfig,
 } from 'payload';
 import {
   executeProductionOrder,
   extractId,
+  getActiveDb,
   getUserTenantIds,
   resolveTenantId,
 } from '../../utilities/inventoryLedger';
+import { sql } from '@payloadcms/db-postgres';
 
 const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
   data,
@@ -225,6 +228,34 @@ const afterChangeProductionOrder: CollectionAfterChangeHook = async ({
   return doc;
 };
 
+const beforeDeleteProductionOrder: CollectionBeforeDeleteHook = async ({ id, req }) => {
+  const order = await req.payload.findByID({
+    collection: 'production-orders',
+    id,
+    depth: 0,
+    req,
+  });
+
+  if (!order) return;
+
+  if (order.status === 'completed') {
+    throw new Error(
+      `No se puede eliminar la orden de producción "${order.orderNumber || id}" porque está completada y sus movimientos de inventario ya están asentados en el Kardex.`,
+    );
+  }
+
+  const db = getActiveDb(req);
+  const existingMovements = await db.execute(
+    sql`SELECT id FROM stock_movements WHERE production_order_id = ${id} LIMIT 1`,
+  );
+
+  if (existingMovements.rows && existingMovements.rows.length > 0) {
+    throw new Error(
+      `No se puede eliminar la orden de producción "${order.orderNumber || id}" porque tiene movimientos de inventario vinculados en el Kardex.`,
+    );
+  }
+};
+
 export const ProductionOrders: CollectionConfig = {
   slug: 'production-orders',
   labels: {
@@ -259,12 +290,21 @@ export const ProductionOrders: CollectionConfig = {
           user?.role === 'tenant-admin' ||
           user?.role === 'supervisor',
       ),
-    delete: ({ req: { user } }) =>
-      Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+    delete: ({ req: { user } }) => {
+      if (user?.role !== 'super-admin' && user?.role !== 'tenant-admin') {
+        return false;
+      }
+      return {
+        status: {
+          in: ['draft', 'cancelled'],
+        },
+      };
+    },
   },
   hooks: {
     beforeValidate: [beforeValidateProductionOrder],
     afterChange: [afterChangeProductionOrder],
+    beforeDelete: [beforeDeleteProductionOrder],
   },
   fields: [
     {
