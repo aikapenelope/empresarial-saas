@@ -11,9 +11,9 @@
     "payload": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload",
     "generate:types": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload generate:types",
     "generate:importmap": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload generate:importmap",
-    "migrate:create": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload migrate:create",
-    "migrate": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload migrate",
-    "migrate:status": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload migrate:status"
+    "migrate:create": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts IS_PAYLOAD_MIGRATION=true payload migrate:create",
+    "migrate": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts IS_PAYLOAD_MIGRATION=true payload migrate",
+    "migrate:status": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts IS_PAYLOAD_MIGRATION=true payload migrate:status"
   },
   "packageManager": "pnpm@10.27.0",
   "dependencies": {
@@ -40,6 +40,8 @@
     "@types/react-dom": "^19.2.0",
     "autoprefixer": "^10.5.4",
     "cross-env": "^10.1.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.4.11",
     "postcss": "^8.5.2",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.0"

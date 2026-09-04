@@ -14,7 +14,21 @@ export const Tenants: CollectionConfig = {
   access: {
     read: ({ req: { user } }) => Boolean(user),
     create: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
-    update: ({ req: { user } }) => Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+    update: ({ req: { user } }) => {
+      if (user?.role === 'super-admin') return true;
+      if (user?.role === 'tenant-admin') {
+        const userTenants = (user as { tenants?: Array<{ tenant: number | { id: number } }> })?.tenants || [];
+        const tenantIds = userTenants
+          .map((t) => (typeof t.tenant === 'object' && t.tenant !== null ? t.tenant.id : t.tenant))
+          .filter(Boolean);
+        return {
+          id: {
+            in: tenantIds,
+          },
+        };
+      }
+      return false;
+    },
     delete: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
   },
   fields: [

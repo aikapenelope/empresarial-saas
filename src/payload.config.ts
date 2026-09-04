@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildConfig } from 'payload';
@@ -11,9 +12,36 @@ import sharp from 'sharp';
 import { Users } from './collections/Users';
 import { Tenants } from './collections/Tenants';
 import { Media } from './collections/Media';
+import { migrations } from './migrations';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
+
+const payloadSecret = process.env.PAYLOAD_SECRET;
+if (!payloadSecret) {
+  throw new Error(
+    'PAYLOAD_SECRET environment variable is missing. A secure 32+ character secret is required.',
+  );
+}
+
+// Route migration CLI operations through DATABASE_DIRECT_URL while retaining DATABASE_URI for Serverless runtime
+const isMigration =
+  process.env.IS_PAYLOAD_MIGRATION === 'true' ||
+  process.argv.some((arg) => arg.includes('migrate'));
+
+const dbConnectionString = isMigration
+  ? process.env.DATABASE_DIRECT_URL || process.env.DATABASE_URI || process.env.POSTGRES_URL || ''
+  : process.env.DATABASE_URI || process.env.POSTGRES_URL || '';
+
+// Load Supabase Root CA cert to strictly enforce rejectUnauthorized: true without MITM vulnerabilities
+const defaultCertPath = path.resolve(dirname, '../certs/supabase-root-ca.crt');
+const rootCert = fs.existsSync(defaultCertPath)
+  ? fs.readFileSync(defaultCertPath, 'utf8')
+  : undefined;
+
+const caCert = process.env.SUPABASE_CA_CERT
+  ? process.env.SUPABASE_CA_CERT.replace(/\\n/g, '\n')
+  : rootCert;
 
 export default buildConfig({
   admin: {
@@ -31,29 +59,25 @@ export default buildConfig({
   },
   collections: [Tenants, Users, Media],
   editor: lexicalEditor(),
-  secret: process.env.PAYLOAD_SECRET || 'empresarial-saas-secret-key-at-least-32-chars-long',
+  secret: payloadSecret,
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sharp: sharp as any,
+  sharp,
   db: postgresAdapter({
     pool: {
-      connectionString: process.env.DATABASE_URI || process.env.POSTGRES_URL || '',
-      max: 10, // Optimal for Serverless RSC with Supabase Transaction Pooler (port 6543)
+      connectionString: dbConnectionString,
+      max: isMigration ? 2 : 10, // Optimal for Serverless RSC (10) / Migration CLI (2)
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 15000,
-      ssl: process.env.SUPABASE_CA_CERT
-        ? {
-            rejectUnauthorized: true,
-            ca: process.env.SUPABASE_CA_CERT.replace(/\\n/g, '\n'),
-          }
-        : {
-            rejectUnauthorized: false,
-          },
+      ssl: {
+        rejectUnauthorized: true,
+        ...(caCert ? { ca: caCert } : {}),
+      },
     },
     push: false,
     migrationDir: path.resolve(dirname, 'migrations'),
+    prodMigrations: migrations,
   }),
   plugins: [
     multiTenantPlugin({

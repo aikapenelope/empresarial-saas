@@ -144,6 +144,7 @@ export interface Tenant {
 export interface User {
   id: number;
   name: string;
+  password?: string | null;
   role: 'super-admin' | 'tenant-admin' | 'supervisor' | 'cashier' | 'employee';
   tenants?:
     | {
@@ -167,7 +168,6 @@ export interface User {
         expiresAt: string;
       }[]
     | null;
-  password?: string | null;
   collection: 'users';
 }
 /**
@@ -293,6 +293,7 @@ export interface TenantsSelect<T extends boolean = true> {
  */
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
+  password?: T;
   role?: T;
   tenants?:
     | T

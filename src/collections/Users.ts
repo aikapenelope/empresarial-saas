@@ -29,6 +29,14 @@ export const Users: CollectionConfig = {
       required: true,
     },
     {
+      name: 'password',
+      type: 'text',
+      hidden: true,
+      access: {
+        update: ({ req: { user } }) => user?.role === 'super-admin',
+      },
+    },
+    {
       name: 'role',
       label: 'Rol en la Plataforma',
       type: 'select',
