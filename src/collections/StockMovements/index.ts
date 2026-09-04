@@ -193,6 +193,32 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
       }
     }
 
+    const purchaseInvoiceId = extractId(data.purchaseInvoice);
+    if (purchaseInvoiceId) {
+      if (type !== 'purchase_in') {
+        throw new Error(
+          'El campo "purchaseInvoice" solo puede asociarse a movimientos de tipo "purchase_in".',
+        );
+      }
+      const purchaseInvoice = await req.payload.findByID({
+        collection: 'purchase-invoices',
+        id: purchaseInvoiceId,
+        depth: 0,
+        req,
+        context: {
+          ...req.context,
+          skipInventoryRecalculation: true,
+          skipBalanceRecalculation: true,
+        },
+      });
+      const piTenant = extractId(purchaseInvoice?.tenant);
+      if (piTenant && String(effectiveTenant) !== String(piTenant)) {
+        throw new Error(
+          'Violación de multi-inquilino: La factura de compra asociada pertenece a otro inquilino.',
+        );
+      }
+    }
+
     // Check source warehouse availability for every stock-decreasing movement
     if (
       sourceId &&
@@ -361,6 +387,13 @@ export const StockMovements: CollectionConfig = {
       label: 'Factura / CxC Asociada',
       type: 'relationship',
       relationTo: 'invoices',
+      index: true,
+    },
+    {
+      name: 'purchaseInvoice',
+      label: 'Factura de Compra / CxP Asociada',
+      type: 'relationship',
+      relationTo: 'purchase-invoices',
       index: true,
     },
   ],

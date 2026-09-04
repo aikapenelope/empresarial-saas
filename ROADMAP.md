@@ -113,12 +113,12 @@ Cada sprint concluye con:
 ### 🏢 Sprint 3: Módulo Proveedores & Cuentas por Pagar (CxP)
 > **Objetivo:** Registro de compras a proveedores, control de deuda comercial y recepción atómica de inventario.
 
-- [ ] **Colección `Suppliers`:** Padrón de proveedores con condiciones de crédito y balance de deuda deudor.
-- [ ] **Colección `PurchaseInvoices`:** Facturas de compras con vencimiento y registro de recepción de mercancía.
-- [ ] **Colección `SupplierPayments`:** Comprobantes de egreso con asignación a facturas de compra.
-- [ ] **Hooks de Conciliación de Compras:** Actualización del balance del proveedor y creación automática de movimientos de inventario (`StockMovements`) al recepcionar compras.
-- [ ] **Migración DDL & Validación:** Migración `add_accounts_payable` aplicada y verificada.
-- **Entregable:** PR `feat/sprint-3-accounts-payable` mergeado a `main`.
+- [x] **Colección `Suppliers`:** Padrón de proveedores con condiciones de crédito y balance de deuda deudor.
+- [x] **Colección `PurchaseInvoices`:** Facturas de compras con vencimiento y registro de recepción de mercancía.
+- [x] **Colección `SupplierPayments`:** Comprobantes de egreso con asignación a facturas de compra.
+- [x] **Hooks de Conciliación de Compras:** Actualización del balance del proveedor y creación automática de movimientos de inventario (`StockMovements`) al recepcionar compras.
+- [x] **Migración DDL & Validación:** Migración `add_accounts_payable` (`20260904_221053_add_accounts_payable.ts`) aplicada y verificada en Supabase PostgreSQL.
+- **Estado:** ✅ **Sprint 3 Concluido al 100%** (Listo para PR y merge a `main`).
 
 ---
 
