@@ -28,6 +28,8 @@ import { PurchaseInvoices } from './collections/PurchaseInvoices';
 import { SupplierPayments } from './collections/SupplierPayments';
 import { CashRegisters } from './collections/CashRegisters';
 import { CashClosures } from './collections/CashClosures';
+import { IndustryTemplates } from './collections/IndustryTemplates';
+import { seedIndustryTemplateTask } from './jobs/seedIndustryTemplate';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 
@@ -87,7 +89,11 @@ export default buildConfig({
     SupplierPayments,
     CashRegisters,
     CashClosures,
+    IndustryTemplates,
   ],
+  jobs: {
+    tasks: [seedIndustryTemplateTask],
+  },
   editor: lexicalEditor(),
   secret: payloadSecret,
   typescript: {

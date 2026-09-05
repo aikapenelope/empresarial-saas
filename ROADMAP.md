@@ -137,10 +137,10 @@ Cada sprint concluye con:
 ### 🏭 Sprint 5: Motor de Plantillas Industriales & Onboarding Atómico
 > **Objetivo:** Wizard de inicialización por industria (Alimentos/Panadería, Farmacia/Retail, Mayorista B2B) que auto-puebla catálogos, recetas y almacenes en un clic.
 
-- [ ] **Colección `IndustryTemplates`:** Definiciones declarativas de industrias con sus categorías, productos base, fórmulas BOM y métodos de pago sugeridos.
-- [ ] **Seeder Atómico con Payload Jobs:** Carga de datos iniciales encolada para ejecución segura en entornos serverless sin sobrepasar el timeout de Next.js.
-- [ ] **Migración DDL & Validación:** Migración `add_industry_templates` aplicada y verificada.
-- **Entregable:** PR `feat/sprint-5-industry-templates` mergeado a `main`.
+- [x] **Colección `IndustryTemplates`:** Definiciones declarativas de industrias con sus categorías, productos base, fórmulas BOM y métodos de pago sugeridos.
+- [x] **Seeder Atómico con Payload Jobs:** Carga de datos iniciales encolada para ejecución segura en entornos serverless sin sobrepasar el timeout de Next.js (`seedIndustryTemplate` task y fallback síncrono).
+- [x] **Migración DDL & Validación:** Migración `add_industry_templates` (`20260904_225525_add_industry_templates.ts`) aplicada y verificada en Supabase PostgreSQL.
+- **Estado:** ✅ **Sprint 5 Concluido al 100%** (Listo para PR y merge a `main`).
 
 ---
 
