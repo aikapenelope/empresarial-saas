@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload';
 import { BUILTIN_TEMPLATES } from '../../utilities/industryTemplates/definitions';
-import { applyIndustryTemplateToTenant } from '../../utilities/industryTemplates/seeder';
+import { isValidTemplateDefinition } from '../../utilities/industryTemplates/validate';
 import { extractId } from '../../utilities/cashLedger';
 
 export const IndustryTemplates: CollectionConfig = {
@@ -88,13 +88,7 @@ export const IndustryTemplates: CollectionConfig = {
       name: 'templateData',
       label: 'Estructura Declarativa de Datos (JSON)',
       type: 'json',
-      validate: (val) => {
-        if (!val) return true;
-        if (typeof val !== 'object' || Array.isArray(val)) {
-          return 'templateData debe ser un objeto JSON válido.';
-        }
-        return true;
-      },
+      validate: (val) => (val == null ? true : isValidTemplateDefinition(val)),
     },
   ],
   endpoints: [
@@ -176,29 +170,40 @@ export const IndustryTemplates: CollectionConfig = {
         }
 
         try {
-          if (body.runAsync && req.payload.jobs) {
-            await req.payload.jobs.queue({
-              task: 'seedIndustryTemplate',
-              input: {
-                tenantId: typeof tenantId === 'number' ? tenantId : Number(tenantId),
-                templateSlug: String(slug),
-              },
-            });
-
-            return Response.json({
-              success: true,
-              queued: true,
-              message: `La inicialización de la plantilla '${slug}' ha sido encolada en segundo plano para el inquilino ${tenantId}.`,
-            });
-          }
-
-          const result = await applyIndustryTemplateToTenant({
-            tenantId,
-            templateSlug: String(slug),
-            req,
+          // El job se encola (auditoría/reintentos) y se ejecuta INMEDIATAMENTE en esta
+          // petición con runByID: en serverless no hay worker de fondo, así que dejarlo
+          // únicamente encolado haría que el onboarding nunca arranque.
+          const job = await req.payload.jobs.queue({
+            task: 'seedIndustryTemplate',
+            input: {
+              tenantId: typeof tenantId === 'number' ? tenantId : Number(tenantId),
+              templateSlug: String(slug),
+              userId: Number(req.user.id),
+            },
           });
 
-          return Response.json(result);
+          const run = await req.payload.jobs.runByID({ id: job.id, req });
+
+          const jobStatus = run?.jobStatus?.[String(job.id)]?.status;
+          if (jobStatus !== 'success') {
+            return Response.json(
+              {
+                success: false,
+                error:
+                  'La ejecución del onboarding falló. Consulte el job seedIndustryTemplate para el detalle del error.',
+                jobId: job.id,
+                jobStatus,
+              },
+              { status: 500 },
+            );
+          }
+
+          return Response.json({
+            success: true,
+            queued: true,
+            jobId: job.id,
+            message: `La inicialización de la plantilla '${slug}' fue procesada exitosamente para el inquilino ${tenantId}.`,
+          });
         } catch (error: unknown) {
           const errorMessage =
             error instanceof Error ? error.message : 'Error desconocido al aplicar la plantilla';

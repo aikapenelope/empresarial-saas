@@ -1503,6 +1503,7 @@ export interface TaskSeedIndustryTemplate {
   input: {
     tenantId: number;
     templateSlug: string;
+    userId: number;
   };
   output: {
     success: boolean;
