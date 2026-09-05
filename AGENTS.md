@@ -42,6 +42,24 @@
 - **Propagación Transaccional:**
   En hooks de colección (`beforeChange`, `afterChange`, `beforeDelete`), pasar SIEMPRE `req` a las operaciones de Local API (`payload.find`, `payload.update`) para que participen en la misma transacción atómica de base de datos.
 
+### 2.1 Organización Canónica del Código (convención del repo, Fase 3)
+Cada capa tiene una responsabilidad única. Si un cambio acopla dos o más dominios, es un **plugin**; si pertenece a un solo dominio, vive en su colección; si es negocio puro sin cableado de config, es una **utility**:
+
+| Capa | Ruta | Contiene | NO contiene |
+|---|---|---|---|
+| **Colecciones** | `src/collections/<Dominio>/index.ts` | `CollectionConfig` puro: schema, acceso, hooks propios del dominio | Acoplamientos hacia otras colecciones ni campos que inyecta un plugin |
+| **Plugins in-repo** | `src/plugins/<dominio>.ts` | `(options) => (config) => Config`: campos inyectados (mapeando la colección y haciendo spread), hooks compuestos (`[miHook, ...(existentes || [])]`), colecciones/endpoints que registra el dominio. Opción `enabled` por instalación | Lógica de negocio pesada (va en utilities) |
+| **Utilities** | `src/utilities/*.ts` | Lógica de negocio: ledgers con locks `FOR UPDATE`, idempotencia estructural, snapshots, helpers puros | Cableado del config de Payload ni UI |
+| **Server Actions** | `src/actions/*.ts` | Superficie de Next.js: entrada de usuario con Zod (`src/utilities/erpValidation.ts`), autorización (`src/utilities/erpAuth.ts`), transacciones (`withTransaction`) | — |
+| **UI (RSC/Client)** | `src/app/(app)/[tenant]/erp/*` + `src/components/erp/*` | Páginas y vistas. Consume la Local API en RSC y las Server Actions en cliente | — |
+| **Jobs** | `src/jobs/*.ts` | `TaskConfig` del Jobs Queue; el usuario que autorizó viaja en el input y se rehidrata | — |
+
+Reglas derivadas:
+1. El acoplamiento venta→inventario (`salesInventoryPlugin`) es la referencia del patrón; los sprints siguientes (precios, auditoría) lo replican (`pricingPlugin`, `auditPlugin`).
+2. Las Server Actions y las páginas RSC son superficie de Next.js, **no** del config de Payload: no son "pluggables".
+3. Los plugins in-repo se registran en `payload.config.ts` con opción `enabled` (base para módulos por plan). Prohibido revivir wrappers especulativos sin BD (el error de la fase abandonada, PRs #1–#6).
+4. El usuario que autoriza una operación viaja siempre en el input del job/acción y se revalida en cada intento (RBAC real con `overrideAccess: false` o verificación explícita).
+
 ---
 
 ## 3. Invariantes de Infraestructura (Supabase & Vercel Serverless)
