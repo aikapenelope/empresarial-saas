@@ -138,7 +138,13 @@ async function applyWithinTransaction({
       templateData?: IndustryTemplateDefinition;
     };
 
-    if (doc.templateData && typeof doc.templateData === 'object') {
+    // templateData vacío ({}) cuenta como ausente: permite overrides de metadatos
+    // de una plantilla builtin sin declarar estructura completa.
+    if (
+      doc.templateData &&
+      typeof doc.templateData === 'object' &&
+      Object.keys(doc.templateData).length > 0
+    ) {
       template = doc.templateData;
     }
   }

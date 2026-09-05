@@ -88,7 +88,7 @@ export const IndustryTemplates: CollectionConfig = {
       name: 'templateData',
       label: 'Estructura Declarativa de Datos (JSON)',
       type: 'json',
-      validate: (val) => isValidTemplateDefinition(val),
+      validate: (val) => (val == null ? true : isValidTemplateDefinition(val)),
     },
   ],
   endpoints: [
