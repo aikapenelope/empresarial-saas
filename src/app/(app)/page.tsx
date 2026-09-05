@@ -1,14 +1,25 @@
 import { getAllTenants } from '@/utilities/erpData';
 import { getLiveExchangeRates } from '@/utilities/exchangeRate';
 import { formatVES } from '@/components/erp/KpiCard';
-import { Sparkles, ShieldCheck, Cpu, Database } from 'lucide-react';
+import { Sparkles, ShieldCheck, Cpu, Database, LogIn } from 'lucide-react';
 import { HomeTenantList } from '@/components/erp/HomeTenantList';
+import Link from 'next/link';
+import { ErpAccessError } from '@/utilities/erpAuth';
 
 export default async function HomePage() {
-  const [tenants, liveRates] = await Promise.all([
-    getAllTenants(),
+  // Anti-enumeración: el listado de empresas exige sesión. Anónimos ven el hero
+  // con un CTA de inicio de sesión, nunca nombres ni slugs de inquilinos.
+  const [tenantListResult, liveRates] = await Promise.all([
+    getAllTenants()
+      .then((tenants) => ({ ok: true as const, tenants }))
+      .catch((error: unknown) => {
+        if (error instanceof ErpAccessError) return { ok: false as const };
+        throw error;
+      }),
     getLiveExchangeRates(),
   ]);
+
+  const tenants = tenantListResult.ok ? tenantListResult.tenants : null;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 sm:p-12 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
@@ -46,8 +57,18 @@ export default async function HomePage() {
           Gestión empresarial bimonetaria (USD/VES), control de inventario y fórmulas de producción BOM, cuentas por cobrar con cobranza directa por WhatsApp y arqueo ciego de cajas registradoras.
         </p>
 
-        {/* Empresas Registradas & Modal de Creación */}
-        <HomeTenantList tenants={tenants} />
+        {/* Empresas Registradas & Modal de Creación (requiere sesión) */}
+        {tenants ? (
+          <HomeTenantList tenants={tenants} />
+        ) : (
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-all"
+          >
+            <LogIn className="h-4 w-4" />
+            <span>Iniciar Sesión para ver sus Empresas</span>
+          </Link>
+        )}
       </div>
 
       {/* Feature Pills Footer */}

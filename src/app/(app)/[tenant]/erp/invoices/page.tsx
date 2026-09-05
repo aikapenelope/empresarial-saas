@@ -5,9 +5,12 @@ import {
   getInvoicesList,
   getCustomersWithDebt,
   getProductsCatalog,
+  getCashRegistersWithDetails,
 } from '@/utilities/erpData';
 import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { InvoicesView } from '@/components/erp/InvoicesView';
+import { ErpAccessError } from '@/utilities/erpAuth';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -15,25 +18,42 @@ interface PageProps {
 
 export default async function InvoicesPage({ params }: PageProps) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlug(tenantSlug);
+  let tenant: Awaited<ReturnType<typeof getTenantBySlug>> = null;
+  try {
+    tenant = await getTenantBySlug(tenantSlug);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   if (!tenant) {
     notFound();
   }
 
-  const [invoices, customers, products, effectiveRateData] = await Promise.all([
-    getInvoicesList(tenant.id),
-    getCustomersWithDebt(tenant.id),
-    getProductsCatalog(tenant.id),
-    resolveEffectiveRate(
-      tenant.currencyConfig
-        ? {
-            manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
-            autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
-          }
-        : undefined,
-    ),
-  ]);
+  let invoices, customers, products, registers, effectiveRateData;
+  try {
+    [invoices, customers, products, registers, effectiveRateData] = await Promise.all([
+      getInvoicesList(tenant.id),
+      getCustomersWithDebt(tenant.id),
+      getProductsCatalog(tenant.id),
+      getCashRegistersWithDetails(tenant.id),
+      resolveEffectiveRate(
+        tenant.currencyConfig
+          ? {
+              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+            }
+          : undefined,
+      ),
+    ]);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   const sanitizedCustomers = customers.map((c) => ({
     id: c.id,
@@ -58,6 +78,12 @@ export default async function InvoicesPage({ params }: PageProps) {
       customers={sanitizedCustomers}
       products={sanitizedProducts}
       effectiveRate={effectiveRateData.rate}
+      cashRegisters={registers.map((r) => ({
+        id: r.id,
+        name: r.name,
+        code: r.code,
+        currentStatus: r.currentStatus,
+      }))}
     />
   );
 }

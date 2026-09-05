@@ -23,7 +23,6 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug }: ProductM
   const [costUSD, setCostUSD] = useState(0);
   const [priceUSD, setPriceUSD] = useState(0);
   const [minStockAlert, setMinStockAlert] = useState(10);
-  const [currentStock, setCurrentStock] = useState(0);
 
   const handleGenerateSku = () => {
     const prefix = productType === 'raw_material' ? 'MP' : productType === 'manufactured' ? 'PT' : 'ART';
@@ -46,7 +45,6 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug }: ProductM
       costUSD,
       priceUSD,
       minStockAlert,
-      currentStock,
     });
 
     setLoading(false);
@@ -56,7 +54,6 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug }: ProductM
       setSku('');
       setCostUSD(0);
       setPriceUSD(0);
-      setCurrentStock(0);
       onClose();
     } else {
       setError(res.error || 'Error al guardar producto');
@@ -172,17 +169,6 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug }: ProductM
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/60">
-          <div>
-            <label className="block font-semibold text-slate-300 mb-1">Stock Inicial Actual</label>
-            <input
-              type="number"
-              min="0"
-              value={currentStock}
-              onChange={(e) => setCurrentStock(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
-            />
-          </div>
-
           <div>
             <label className="block font-semibold text-slate-300 mb-1">Alerta de Stock Mínimo</label>
             <input

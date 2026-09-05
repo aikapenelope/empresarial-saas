@@ -16,10 +16,13 @@ import {
   getDashboardMetrics,
   getCustomersWithDebt,
   getProductsCatalog,
+  getCashRegistersWithDetails,
 } from '@/utilities/erpData';
 import { KpiCard, formatUSD, formatVES } from '@/components/erp/KpiCard';
 import { Badge } from '@/components/erp/Badge';
 import { DashboardQuickActions } from '@/components/erp/DashboardQuickActions';
+import { ErpAccessError } from '@/utilities/erpAuth';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -27,17 +30,34 @@ interface PageProps {
 
 export default async function ErpDashboardPage({ params }: PageProps) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlug(tenantSlug);
+  let tenant: Awaited<ReturnType<typeof getTenantBySlug>> = null;
+  try {
+    tenant = await getTenantBySlug(tenantSlug);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   if (!tenant) {
     notFound();
   }
 
-  const [data, customers, products] = await Promise.all([
-    getDashboardMetrics(tenant),
-    getCustomersWithDebt(tenant.id),
-    getProductsCatalog(tenant.id),
-  ]);
+  let data, customers, products, registers;
+  try {
+    [data, customers, products, registers] = await Promise.all([
+      getDashboardMetrics(tenant),
+      getCustomersWithDebt(tenant.id),
+      getProductsCatalog(tenant.id),
+      getCashRegistersWithDetails(tenant.id),
+    ]);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   // Cálculos de porcentajes para barras de aging
   const totalAgingUSD =
@@ -87,6 +107,12 @@ export default async function ErpDashboardPage({ params }: PageProps) {
             customers={sanitizedCustomers}
             products={sanitizedProducts}
             rate={data.rates.effectiveRate}
+            cashRegisters={registers.map((r) => ({
+              id: r.id,
+              name: r.name,
+              code: r.code,
+              currentStatus: r.currentStatus,
+            }))}
           />
         </div>
       </div>
@@ -195,7 +221,9 @@ export default async function ErpDashboardPage({ params }: PageProps) {
           <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-semibold">
             <span className="text-slate-400">Total Vencido Acumulado:</span>
             <span className="font-mono text-white">
-              {formatUSD(data.financials.totalReceivablesUSD)}
+              {formatUSD(
+                data.financials.aging.thirtyOneToSixtyUSD + data.financials.aging.sixtyPlusUSD,
+              )}
             </span>
           </div>
         </div>

@@ -88,7 +88,19 @@ export const IndustryTemplates: CollectionConfig = {
       name: 'templateData',
       label: 'Estructura Declarativa de Datos (JSON)',
       type: 'json',
-      validate: (val) => (val == null ? true : isValidTemplateDefinition(val)),
+      validate: (val, options) => {
+        if (val != null) {
+          return isValidTemplateDefinition(val);
+        }
+        // Nullable SÓLO para overrides de metadatos de plantillas builtin: una
+        // plantilla personalizada (slug fuera del catálogo builtin) publicada sin
+        // estructura quedaría en el catálogo pero nunca podría aplicarse.
+        const slug = (options?.siblingData as { slug?: string } | undefined)?.slug;
+        if (slug && BUILTIN_TEMPLATES.some((b) => b.slug === slug)) {
+          return true;
+        }
+        return 'Las plantillas personalizadas requieren la estructura declarativa (templateData). Sólo los slugs de plantillas builtin pueden omitirla (override de metadatos).';
+      },
     },
   ],
   endpoints: [

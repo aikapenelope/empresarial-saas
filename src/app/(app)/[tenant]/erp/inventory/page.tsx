@@ -7,6 +7,8 @@ import {
   getWarehousesList,
 } from '@/utilities/erpData';
 import { InventoryView } from '@/components/erp/InventoryView';
+import { ErpAccessError } from '@/utilities/erpAuth';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -14,17 +16,33 @@ interface PageProps {
 
 export default async function InventoryPage({ params }: PageProps) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlug(tenantSlug);
+  let tenant: Awaited<ReturnType<typeof getTenantBySlug>> = null;
+  try {
+    tenant = await getTenantBySlug(tenantSlug);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   if (!tenant) {
     notFound();
   }
 
-  const [products, boms, warehouses] = await Promise.all([
-    getProductsCatalog(tenant.id),
-    getBillOfMaterialsList(tenant.id),
-    getWarehousesList(tenant.id),
-  ]);
+  let products, boms, warehouses;
+  try {
+    [products, boms, warehouses] = await Promise.all([
+      getProductsCatalog(tenant.id),
+      getBillOfMaterialsList(tenant.id),
+      getWarehousesList(tenant.id),
+    ]);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   let rawMaterialsCount = 0;
   let manufacturedCount = 0;

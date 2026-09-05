@@ -7,6 +7,8 @@ import {
   getCashClosuresList,
 } from '@/utilities/erpData';
 import { CashRegistersView } from '@/components/erp/CashRegistersView';
+import { ErpAccessError } from '@/utilities/erpAuth';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -14,17 +16,33 @@ interface PageProps {
 
 export default async function CashRegistersPage({ params }: PageProps) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlug(tenantSlug);
+  let tenant: Awaited<ReturnType<typeof getTenantBySlug>> = null;
+  try {
+    tenant = await getTenantBySlug(tenantSlug);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   if (!tenant) {
     notFound();
   }
 
-  const [registers, warehouses, closures] = await Promise.all([
-    getCashRegistersWithDetails(tenant.id),
-    getWarehousesList(tenant.id),
-    getCashClosuresList(tenant.id),
-  ]);
+  let registers, warehouses, closures;
+  try {
+    [registers, warehouses, closures] = await Promise.all([
+      getCashRegistersWithDetails(tenant.id),
+      getWarehousesList(tenant.id),
+      getCashClosuresList(tenant.id),
+    ]);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   const openCount = registers.filter((r) => r.currentStatus === 'open').length;
 

@@ -5,7 +5,9 @@ import {
   getAllTenants,
 } from '@/utilities/erpData';
 import { getLiveExchangeRates, resolveEffectiveRate } from '@/utilities/exchangeRate';
+import { requireErpTenantAccess, ErpAccessError } from '@/utilities/erpAuth';
 import { AppShell } from '@/components/erp/AppShell';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,10 +16,24 @@ interface LayoutProps {
 
 export default async function ErpLayout({ children, params }: LayoutProps) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlug(tenantSlug);
+
+  // Blindaje anti-enumeración: tanto el lookup del inquilino como el listado de
+  // empresas exigen sesión válida (getTenantBySlug/getAllTenants lo imponen).
+  let tenant: Awaited<ReturnType<typeof getTenantBySlug>> = null;
+  let availableTenants: Awaited<ReturnType<typeof getAllTenants>> = [];
+  try {
+    tenant = await getTenantBySlug(tenantSlug);
+    if (!tenant) {
+      availableTenants = await getAllTenants();
+    }
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   if (!tenant) {
-    const availableTenants = await getAllTenants();
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-slate-950 text-white">
         <div className="max-w-md w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-8 text-center space-y-4">
@@ -64,7 +80,18 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
     );
   }
 
-  const [availableTenants, liveRates, effectiveRateData] = await Promise.all([
+  // Puerta de autorización del ERP: sesión válida + pertenencia al inquilino
+  // (el control se re-aplica en cada consulta de la capa de datos).
+  try {
+    await requireErpTenantAccess(tenant.id);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
+
+  const [fetchedTenants, liveRates, effectiveRateData] = await Promise.all([
     getAllTenants(),
     getLiveExchangeRates(),
     resolveEffectiveRate(
@@ -76,6 +103,7 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
         : undefined,
     ),
   ]);
+  availableTenants = fetchedTenants;
 
   const rates = {
     bcv: liveRates.bcv,

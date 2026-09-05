@@ -33,6 +33,7 @@ export function CashClosureModal({
   const [physicalVES, setPhysicalVES] = useState<number>(0);
   const [physicalPOS, setPhysicalPOS] = useState<number>(0);
   const [physicalPagoMovil, setPhysicalPagoMovil] = useState<number>(0);
+  const [physicalTransfer, setPhysicalTransfer] = useState<number>(0);
   const [physicalZelle, setPhysicalZelle] = useState<number>(0);
   const [physicalBinance, setPhysicalBinance] = useState<number>(0);
   const [notes, setNotes] = useState('');
@@ -61,6 +62,7 @@ export function CashClosureModal({
       physicalVES,
       physicalPOS,
       physicalPagoMovil,
+      physicalTransfer,
       physicalZelle,
       physicalBinance,
       notes: notes || undefined,
@@ -73,6 +75,7 @@ export function CashClosureModal({
       setPhysicalVES(0);
       setPhysicalPOS(0);
       setPhysicalPagoMovil(0);
+      setPhysicalTransfer(0);
       setPhysicalZelle(0);
       setPhysicalBinance(0);
       setNotes('');
@@ -150,10 +153,10 @@ export function CashClosureModal({
         <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 space-y-3">
           <div className="flex items-center gap-1.5 text-slate-300 font-semibold uppercase text-[10px] tracking-wider">
             <CreditCard className="h-3.5 w-3.5 text-indigo-400" />
-            <span>Puntos de Venta & Pago Móvil (VES)</span>
+            <span>Canales Bancarios (VES)</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-medium text-slate-400 mb-1">Total Lote POS / Débito (Bs.)</label>
               <input
@@ -174,6 +177,18 @@ export function CashClosureModal({
                 step="0.01"
                 value={physicalPagoMovil}
                 onChange={(e) => setPhysicalPagoMovil(Number(e.target.value))}
+                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block font-medium text-slate-400 mb-1">Total Transferencias (Bs.)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={physicalTransfer}
+                onChange={(e) => setPhysicalTransfer(Number(e.target.value))}
                 className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
               />
             </div>
