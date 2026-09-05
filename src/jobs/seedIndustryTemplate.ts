@@ -1,5 +1,6 @@
 import type { TaskConfig } from 'payload';
 import { applyIndustryTemplateToTenant } from '../utilities/industryTemplates/seeder';
+import { getUserTenantIds } from '../utilities/inventoryLedger';
 
 /**
  * Worker de onboarding por plantilla. Los jobs se ejecutan en un contexto sin usuario,
@@ -38,6 +39,17 @@ export const seedIndustryTemplateTask: TaskConfig<'seedIndustryTemplate'> = {
       throw new Error(
         'El usuario solicitante no tiene privilegios de administrador para aplicar plantillas.',
       );
+    }
+
+    // Revalidación de pertenencia en CADA intento (incluidos reintentos): un
+    // tenant-admin que haya perdido acceso al inquilino desde la solicitud no puede provisionar.
+    if (initiatingUser.role !== 'super-admin') {
+      const userTenantIds = getUserTenantIds(initiatingUser).map(String);
+      if (!userTenantIds.includes(String(input.tenantId))) {
+        throw new Error(
+          'El usuario solicitante ya no tiene acceso al inquilino destino. Job cancelado.',
+        );
+      }
     }
 
     req.user = initiatingUser as typeof req.user;

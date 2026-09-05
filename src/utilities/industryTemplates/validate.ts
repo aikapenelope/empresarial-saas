@@ -231,8 +231,11 @@ export function validateTemplateDefinition(
     });
   }
 
-  checkArraySize(template.boms, 'boms', LIMITS.boms, errors);
-  if (template.boms !== undefined && Array.isArray(template.boms)) {
+  // boms es opcional (p. ej. retail puro sin producción): sólo se valida si fue provisto.
+  if (template.boms != null) {
+    checkArraySize(template.boms, 'boms', LIMITS.boms, errors);
+  }
+  if (Array.isArray(template.boms)) {
     template.boms.forEach((bom, i) => {
       const label = `boms[${i}]`;
       if (!isRecord(bom)) {
