@@ -1,0 +1,98 @@
+import React from 'react';
+import Link from 'next/link';
+import {
+  getTenantBySlug,
+  getAllTenants,
+} from '@/utilities/erpData';
+import { getLiveExchangeRates, resolveEffectiveRate } from '@/utilities/exchangeRate';
+import { AppShell } from '@/components/erp/AppShell';
+
+interface LayoutProps {
+  children: React.ReactNode;
+  params: Promise<{ tenant: string }>;
+}
+
+export default async function ErpLayout({ children, params }: LayoutProps) {
+  const { tenant: tenantSlug } = await params;
+  const tenant = await getTenantBySlug(tenantSlug);
+
+  if (!tenant) {
+    const availableTenants = await getAllTenants();
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-slate-950 text-white">
+        <div className="max-w-md w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-8 text-center space-y-4">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            !
+          </div>
+          <h2 className="text-xl font-bold">Empresa no encontrada</h2>
+          <p className="text-sm text-slate-400">
+            No existe ningún inquilino registrado con el identificador{' '}
+            <code className="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 font-mono text-xs">
+              {tenantSlug}
+            </code>
+            .
+          </p>
+
+          {availableTenants.length > 0 && (
+            <div className="pt-2 text-left space-y-2 border-t border-slate-800">
+              <p className="text-xs uppercase font-semibold text-slate-400">Empresas disponibles:</p>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {availableTenants.map((t) => (
+                  <Link
+                    key={t.id}
+                    href={`/${t.slug}/erp`}
+                    className="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-xs text-slate-200"
+                  >
+                    <span>{t.name}</span>
+                    <span className="text-[10px] text-indigo-400 font-mono">/{t.slug}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2">
+            <Link
+              href="/admin"
+              className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-all w-full"
+            >
+              Ir al Panel de Administración
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const [availableTenants, liveRates, effectiveRateData] = await Promise.all([
+    getAllTenants(),
+    getLiveExchangeRates(),
+    resolveEffectiveRate(
+      tenant.currencyConfig
+        ? {
+            manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+            autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+          }
+        : undefined,
+    ),
+  ]);
+
+  const rates = {
+    bcv: liveRates.bcv,
+    binance: liveRates.binance,
+    paralelo: liveRates.paralelo,
+    effectiveRate: effectiveRateData.rate,
+    source: effectiveRateData.source,
+    lastUpdated: liveRates.lastUpdated,
+  };
+
+  return (
+    <AppShell
+      currentTenant={tenant}
+      availableTenants={availableTenants}
+      rates={rates}
+    >
+      {children}
+    </AppShell>
+  );
+}

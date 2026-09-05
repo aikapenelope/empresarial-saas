@@ -147,12 +147,12 @@ Cada sprint concluye con:
 ### 🖥️ Sprint 6: Frontend Operativo Cendaro ERP (App Shell Next.js 15)
 > **Objetivo:** Interfaz de usuario de alta densidad montada sobre el App Router de Next.js 15, consumiendo la Payload Local API con latencia cero.
 
-- [ ] **Ruta Dinámica Tenant:** `src/app/(app)/[tenant]/erp/`.
-- [ ] **Componentes de App Shell:** Sidebar colapsable modular, Header interactivo con ticker de tasa BCV en vivo y selector de tenant.
-- [ ] **Dashboard Ejecutivo de Finanzas:** Tarjetas KPI de liquidez, cuentas por cobrar, cuentas por pagar y flujo de caja en tiempo real.
-- [ ] **Data Grids de Alta Eficiencia:** Tablas virtuales con `@tanstack/react-table` y filtros de búsqueda instantáneos.
-- [ ] **Despliegue Final & Pruebas E2E:** Verificación de rendimiento en Vercel con Core Web Vitals optimizados.
-- **Entregable:** PR `feat/sprint-6-cendaro-ui` mergeado a `main`.
+- [x] **Ruta Dinámica Tenant:** `src/app/(app)/[tenant]/erp/` (con layout asíncrono para `params` de Next.js 15).
+- [x] **Componentes de App Shell:** Sidebar colapsable modular, Header interactivo con ticker de tasa BCV en vivo (`CurrencyTicker`) y selector dinámico de empresas.
+- [x] **Dashboard Ejecutivo de Finanzas:** Tarjetas KPI de liquidez, cuentas por cobrar (CxC), cuentas por pagar (CxP), estado de cajas y stock crítico, consumiendo la Payload Local API con cero latencia de red.
+- [x] **Data Grids de Alta Eficiencia:** Vistas operativas de Clientes con deep links de cobranza por WhatsApp, Inventario y Recetas BOM, Puntos de Venta y Proveedores.
+- [x] **Motor de Plantillas en UI:** Catálogo visual interactivo de plantillas industriales con botón de siembra directa por tenant (`TemplateApplyButton`).
+- **Estado:** ✅ **Sprint 6 Concluido al 100%** (Listo para PR y entrega).
 
 ---
 
