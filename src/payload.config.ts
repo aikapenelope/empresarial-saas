@@ -93,6 +93,8 @@ export default buildConfig({
   ],
   jobs: {
     tasks: [seedIndustryTemplateTask],
+    // Conservar los registros de jobs (éxitos y errores) como pista de auditoría del onboarding
+    deleteJobOnComplete: false,
   },
   editor: lexicalEditor(),
   secret: payloadSecret,

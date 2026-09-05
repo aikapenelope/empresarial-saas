@@ -1,5 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { BUILTIN_TEMPLATES, type IndustryTemplateDefinition } from './definitions';
+import { validateTemplateDefinition } from './validate';
 import { extractId } from '../cashLedger';
 
 export interface ApplyTemplateOptions {
@@ -25,6 +26,15 @@ export interface ApplyTemplateResult {
  * Aplica una plantilla industrial completa a un inquilino de forma atómica e idempotente.
  * Siembra almacenes, categorías, cajas registradoras, productos (materias primas y terminados)
  * y recetas BOM respetando la integridad referencial y el aislamiento multi-tenant.
+ *
+ * Atomicidad: se abre UNA transacción de base de datos que cubre la validación del inquilino,
+ * la resolución de plantilla y todas las escrituras. Cualquier fallo hace rollback completo,
+ * evitando catálogos parcialmente sembrados. Si el `req` entrante ya trae una transacción
+ * (p. ej. invocado desde un endpoint transaccional), se reutiliza y no se gestiona aquí.
+ *
+ * Seguridad: todas las operaciones van con `overrideAccess: false` para que el control de
+ * acceso de las colecciones se evalúe contra el usuario adjunto al `req` (el solicitante
+ * original o el usuario rehidratado por el worker de jobs).
  */
 export async function applyIndustryTemplateToTenant({
   tenantId,
@@ -38,16 +48,56 @@ export async function applyIndustryTemplateToTenant({
 
   const numericTenantId = typeof normTenantId === 'number' ? normTenantId : Number(normTenantId);
 
+  const ownsTransaction = !req.transactionID;
+  const transactionID = ownsTransaction ? await req.payload.db.beginTransaction() : undefined;
+
+  const originalTransactionID = req.transactionID;
+  if (transactionID) {
+    req.transactionID = transactionID;
+  }
+
+  try {
+    const result = await applyWithinTransaction({
+      tenantId: numericTenantId,
+      templateSlug,
+      req,
+    });
+
+    if (transactionID) {
+      await req.payload.db.commitTransaction(transactionID);
+    }
+
+    return result;
+  } catch (error: unknown) {
+    if (transactionID) {
+      await req.payload.db.rollbackTransaction(transactionID);
+    }
+    throw error;
+  } finally {
+    req.transactionID = originalTransactionID;
+  }
+}
+
+async function applyWithinTransaction({
+  tenantId,
+  templateSlug,
+  req,
+}: {
+  tenantId: number;
+  templateSlug: string;
+  req: PayloadRequest;
+}): Promise<ApplyTemplateResult> {
   // 1. Validar existencia del Tenant
   const tenant = await req.payload.findByID({
     collection: 'tenants',
-    id: numericTenantId,
+    id: tenantId,
     depth: 0,
     req,
+    overrideAccess: false,
   });
 
   if (!tenant) {
-    throw new Error(`Inquilino con ID ${numericTenantId} no existe.`);
+    throw new Error(`Inquilino con ID ${tenantId} no existe.`);
   }
 
   // 2. Localizar plantilla (DB-First para permitir personalizaciones dinámicas en BD, fallback a BUILTIN_TEMPLATES)
@@ -64,6 +114,7 @@ export async function applyIndustryTemplateToTenant({
     limit: 1,
     depth: 0,
     req,
+    overrideAccess: false,
   });
 
   if (dbTemplate.docs.length > 0) {
@@ -89,6 +140,15 @@ export async function applyIndustryTemplateToTenant({
     throw new Error(`Plantilla industrial con slug '${templateSlug}' no encontrada o no está publicada.`);
   }
 
+  // 3. Validar el contrato declarativo ANTES de escribir nada (defensa en profundidad para
+  // JSON proveniente de BD que pudo evadir la validación del campo al crearse).
+  const validation = validateTemplateDefinition(template);
+  if (!validation.valid) {
+    throw new Error(
+      `Contrato de plantilla inválido: ${validation.errors.slice(0, 5).join(' ')}`,
+    );
+  }
+
   const warehouseMap: Record<string, number> = {};
   const categoryMap: Record<string, number> = {};
   const productMap: Record<string, number> = {};
@@ -105,19 +165,20 @@ export async function applyIndustryTemplateToTenant({
   const products = Array.isArray(template.products) ? template.products : [];
   const boms = Array.isArray(template.boms) ? template.boms : [];
 
-  // 3. Crear Almacenes
+  // 4. Crear Almacenes
   for (const wh of warehouses) {
     const existing = await req.payload.find({
       collection: 'warehouses',
       where: {
         and: [
-          { tenant: { equals: numericTenantId } },
+          { tenant: { equals: tenantId } },
           { code: { equals: wh.code } },
         ],
       },
       limit: 1,
       depth: 0,
       req,
+      overrideAccess: false,
     });
 
     if (existing.docs.length > 0) {
@@ -131,28 +192,30 @@ export async function applyIndustryTemplateToTenant({
           type: wh.type,
           isDefault: Boolean(wh.isDefault),
           isActive: true,
-          tenant: numericTenantId,
+          tenant: tenantId,
         },
         req,
+        overrideAccess: false,
       });
       warehouseMap[wh.code] = created.id;
       warehousesCreated++;
     }
   }
 
-  // 4. Crear Categorías
+  // 5. Crear Categorías
   for (const cat of categories) {
     const existing = await req.payload.find({
       collection: 'categories',
       where: {
         and: [
-          { tenant: { equals: numericTenantId } },
+          { tenant: { equals: tenantId } },
           { code: { equals: cat.code } },
         ],
       },
       limit: 1,
       depth: 0,
       req,
+      overrideAccess: false,
     });
 
     if (existing.docs.length > 0) {
@@ -165,16 +228,17 @@ export async function applyIndustryTemplateToTenant({
           code: cat.code,
           description: cat.description,
           isActive: true,
-          tenant: numericTenantId,
+          tenant: tenantId,
         },
         req,
+        overrideAccess: false,
       });
       categoryMap[cat.code] = created.id;
       categoriesCreated++;
     }
   }
 
-  // 5. Crear Cajas Registradoras
+  // 6. Crear Cajas Registradoras
   for (const cr of cashRegisters) {
     const targetWhId = warehouseMap[cr.warehouseCode];
     if (targetWhId) {
@@ -182,13 +246,14 @@ export async function applyIndustryTemplateToTenant({
         collection: 'cash-registers',
         where: {
           and: [
-            { tenant: { equals: numericTenantId } },
+            { tenant: { equals: tenantId } },
             { code: { equals: cr.code } },
           ],
         },
         limit: 1,
         depth: 0,
         req,
+        overrideAccess: false,
       });
 
       if (existing.docs.length === 0) {
@@ -198,18 +263,19 @@ export async function applyIndustryTemplateToTenant({
             name: cr.name,
             code: cr.code,
             warehouse: targetWhId,
-            tenant: numericTenantId,
+            tenant: tenantId,
             currentStatus: 'closed',
             active: true,
           },
           req,
+          overrideAccess: false,
         });
         cashRegistersCreated++;
       }
     }
   }
 
-  // 6. Crear Productos e Insumos
+  // 7. Crear Productos e Insumos
   for (const prod of products) {
     const catId = categoryMap[prod.categoryCode];
 
@@ -217,13 +283,14 @@ export async function applyIndustryTemplateToTenant({
       collection: 'products',
       where: {
         and: [
-          { tenant: { equals: numericTenantId } },
+          { tenant: { equals: tenantId } },
           { sku: { equals: prod.sku } },
         ],
       },
       limit: 1,
       depth: 0,
       req,
+      overrideAccess: false,
     });
 
     if (existing.docs.length > 0) {
@@ -242,16 +309,17 @@ export async function applyIndustryTemplateToTenant({
           minStockAlert: prod.minStockAlert ?? 0,
           taxRate: prod.taxRate ?? 'exempt',
           currentStock: 0,
-          tenant: numericTenantId,
+          tenant: tenantId,
         },
         req,
+        overrideAccess: false,
       });
       productMap[prod.sku] = created.id;
       productsCreated++;
     }
   }
 
-  // 7. Crear Recetas / Fórmulas BOM
+  // 8. Crear Recetas / Fórmulas BOM
   if (boms.length > 0) {
     for (const bom of boms) {
       const finishedId = productMap[bom.finishedProductSku];
@@ -280,13 +348,14 @@ export async function applyIndustryTemplateToTenant({
         collection: 'bill-of-materials',
         where: {
           and: [
-            { tenant: { equals: numericTenantId } },
+            { tenant: { equals: tenantId } },
             { product: { equals: finishedId } },
           ],
         },
         limit: 1,
         depth: 0,
         req,
+        overrideAccess: false,
       });
 
       if (existing.docs.length === 0) {
@@ -301,9 +370,10 @@ export async function applyIndustryTemplateToTenant({
             indirectCostsUSD: bom.indirectCostsUSD ?? 0,
             instructions: bom.instructions,
             isActive: true,
-            tenant: numericTenantId,
+            tenant: tenantId,
           },
           req,
+          overrideAccess: false,
         });
         bomsCreated++;
       }
