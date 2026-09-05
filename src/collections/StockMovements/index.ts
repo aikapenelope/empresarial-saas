@@ -56,7 +56,8 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
   } else if (
     type === 'purchase_in' ||
     type === 'production_output' ||
-    type === 'adjustment_positive'
+    type === 'adjustment_positive' ||
+    type === 'sale_return'
   ) {
     if (!targetId) {
       throw new Error(`El tipo de movimiento "${type}" requiere especificar un almacén de destino.`);
@@ -180,6 +181,11 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
 
     const invoiceId = extractId(data.invoice);
     if (invoiceId) {
+      if (type !== 'sale_out' && type !== 'sale_return') {
+        throw new Error(
+          'El campo "invoice" solo puede asociarse a movimientos de tipo "sale_out" o "sale_return".',
+        );
+      }
       const invoice = await req.payload.findByID({
         collection: 'invoices',
         id: invoiceId,
@@ -314,6 +320,7 @@ export const StockMovements: CollectionConfig = {
       options: [
         { label: 'Entrada por Compra', value: 'purchase_in' },
         { label: 'Salida por Venta / Despacho', value: 'sale_out' },
+        { label: 'Devolución de Venta (Reingreso)', value: 'sale_return' },
         { label: 'Consumo de Insumos (Producción)', value: 'production_consume' },
         { label: 'Salida de Producto Fabricado (Producción)', value: 'production_output' },
         { label: 'Transferencia entre Almacenes', value: 'transfer' },

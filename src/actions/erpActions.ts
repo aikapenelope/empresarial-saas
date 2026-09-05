@@ -183,6 +183,7 @@ export async function createProductAction(input: CreateProductInput) {
 // 3. FACTURACIÓN & VENTAS (INVOICES)
 // ==========================================
 export interface InvoiceItemInput {
+  productId?: number;
   sku?: string;
   description: string;
   quantity: number;
@@ -203,6 +204,7 @@ export interface CreateInvoiceInput {
     | 'zelle'
     | 'binance';
   cashRegisterId?: number;
+  warehouseId?: number;
   items: InvoiceItemInput[];
   notes?: string;
 }
@@ -274,6 +276,7 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
         const totalItem = it.quantity * it.unitPriceUSD;
         subtotalUSD += totalItem;
         return {
+          product: it.productId || undefined,
           sku: it.sku || undefined,
           description: it.description,
           quantity: it.quantity,
@@ -315,6 +318,7 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
           dueDate: dueDate.toISOString(),
           paymentTerms: parsed.paymentTerms,
           status: 'issued',
+          warehouse: parsed.warehouseId || undefined,
           exchangeRateSnapshot: rate,
           items: formattedItems,
           totalUSD,

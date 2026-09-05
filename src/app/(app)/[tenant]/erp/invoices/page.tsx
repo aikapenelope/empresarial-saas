@@ -6,6 +6,7 @@ import {
   getCustomersWithDebt,
   getProductsCatalog,
   getCashRegistersWithDetails,
+  getWarehousesList,
 } from '@/utilities/erpData';
 import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { InvoicesView } from '@/components/erp/InvoicesView';
@@ -32,13 +33,14 @@ export default async function InvoicesPage({ params }: PageProps) {
     notFound();
   }
 
-  let invoices, customers, products, registers, effectiveRateData;
+  let invoices, customers, products, registers, warehouses, effectiveRateData;
   try {
-    [invoices, customers, products, registers, effectiveRateData] = await Promise.all([
+    [invoices, customers, products, registers, warehouses, effectiveRateData] = await Promise.all([
       getInvoicesList(tenant.id),
       getCustomersWithDebt(tenant.id),
       getProductsCatalog(tenant.id),
       getCashRegistersWithDetails(tenant.id),
+      getWarehousesList(tenant.id),
       resolveEffectiveRate(
         tenant.currencyConfig
           ? {
@@ -83,6 +85,12 @@ export default async function InvoicesPage({ params }: PageProps) {
         name: r.name,
         code: r.code,
         currentStatus: r.currentStatus,
+      }))}
+      warehouses={warehouses.map((w) => ({
+        id: w.id,
+        name: w.name,
+        code: w.code,
+        isDefault: w.isDefault,
       }))}
     />
   );

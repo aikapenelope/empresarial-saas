@@ -17,6 +17,7 @@ import {
   getCustomersWithDebt,
   getProductsCatalog,
   getCashRegistersWithDetails,
+  getWarehousesList,
 } from '@/utilities/erpData';
 import { KpiCard, formatUSD, formatVES } from '@/components/erp/KpiCard';
 import { Badge } from '@/components/erp/Badge';
@@ -44,13 +45,14 @@ export default async function ErpDashboardPage({ params }: PageProps) {
     notFound();
   }
 
-  let data, customers, products, registers;
+  let data, customers, products, registers, warehouses;
   try {
-    [data, customers, products, registers] = await Promise.all([
+    [data, customers, products, registers, warehouses] = await Promise.all([
       getDashboardMetrics(tenant),
       getCustomersWithDebt(tenant.id),
       getProductsCatalog(tenant.id),
       getCashRegistersWithDetails(tenant.id),
+      getWarehousesList(tenant.id),
     ]);
   } catch (error: unknown) {
     if (error instanceof ErpAccessError) {
@@ -112,6 +114,12 @@ export default async function ErpDashboardPage({ params }: PageProps) {
               name: r.name,
               code: r.code,
               currentStatus: r.currentStatus,
+            }))}
+            warehouses={warehouses.map((w) => ({
+              id: w.id,
+              name: w.name,
+              code: w.code,
+              isDefault: w.isDefault,
             }))}
           />
         </div>

@@ -26,6 +26,7 @@ interface InvoicesViewProps {
   products: Array<{ id: number; name: string; sku: string; priceUSD: number; unitOfMeasure: string }>;
   effectiveRate: number;
   cashRegisters: Array<{ id: number; name: string; code: string; currentStatus: string }>;
+  warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
 }
 
 export function InvoicesView({
@@ -36,6 +37,7 @@ export function InvoicesView({
   products,
   effectiveRate,
   cashRegisters,
+  warehouses,
 }: InvoicesViewProps) {
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -383,6 +385,7 @@ export function InvoicesView({
         products={products}
         rate={effectiveRate}
         cashRegisters={cashRegisters}
+        warehouses={warehouses}
       />
 
       {/* Modal Cobro */}

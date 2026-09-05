@@ -13,6 +13,7 @@ interface DashboardQuickActionsProps {
   products: Array<{ id: number; name: string; sku: string; priceUSD: number; unitOfMeasure: string }>;
   rate: number;
   cashRegisters: Array<{ id: number; name: string; code: string; currentStatus: string }>;
+  warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
 }
 
 export function DashboardQuickActions({
@@ -22,6 +23,7 @@ export function DashboardQuickActions({
   products,
   rate,
   cashRegisters,
+  warehouses,
 }: DashboardQuickActionsProps) {
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
@@ -64,6 +66,7 @@ export function DashboardQuickActions({
         products={products}
         rate={rate}
         cashRegisters={cashRegisters}
+        warehouses={warehouses}
       />
 
       <PaymentModal

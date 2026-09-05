@@ -38,6 +38,7 @@ export const createProductSchema = z.object({
 });
 
 export const invoiceItemSchema = z.object({
+  productId: idLike.optional(),
   sku: z.string().trim().max(100).optional(),
   description: z.string().trim().min(1, 'Cada línea requiere descripción.').max(500),
   quantity: z.number().positive('La cantidad debe ser mayor a 0.').finite().max(1_000_000),
@@ -55,6 +56,8 @@ export const createInvoiceSchema = z
       .enum(['cash_usd', 'cash_ves', 'pos_ves', 'pago_movil', 'transfer_ves', 'zelle', 'binance'])
       .optional(),
     cashRegisterId: idLike.optional(),
+    // Almacén de despacho: de dónde sale el inventario de esta venta
+    warehouseId: idLike.optional(),
     items: z.array(invoiceItemSchema).min(1, 'La factura requiere al menos una línea.').max(200),
     notes: z.string().trim().max(1000).optional(),
   })

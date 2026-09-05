@@ -36,3 +36,6 @@ pnpm-debug.log*
 .vercel
 
 .env*
+
+# Proyecto ajeno ubicado dentro de la carpeta de trabajo (no es parte de empresarial)
+/storellink

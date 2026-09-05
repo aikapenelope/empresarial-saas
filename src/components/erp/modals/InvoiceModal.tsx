@@ -15,6 +15,7 @@ interface InvoiceModalProps {
   products: Array<{ id: number; name: string; sku: string; priceUSD: number; unitOfMeasure: string }>;
   rate: number;
   cashRegisters?: Array<{ id: number; name: string; code: string; currentStatus: string }>;
+  warehouses?: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
 }
 
 export function InvoiceModal({
@@ -26,6 +27,7 @@ export function InvoiceModal({
   products,
   rate,
   cashRegisters = [],
+  warehouses = [],
 }: InvoiceModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,13 +38,17 @@ export function InvoiceModal({
     'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance'
   >('cash_usd');
   const [cashRegisterId, setCashRegisterId] = useState<number | undefined>(undefined);
+  const [warehouseId, setWarehouseId] = useState<number | undefined>(
+    warehouses.find((w) => w.isDefault)?.id ?? warehouses[0]?.id,
+  );
   const [notes, setNotes] = useState('');
 
   // Sólo las cajas con turno ABIERTO pueden asociar el recibo al arqueo del turno.
   const openRegisters = cashRegisters.filter((cr) => cr.currentStatus === 'open');
 
-  const [items, setItems] = useState<Array<{ sku: string; description: string; quantity: number; unitPriceUSD: number }>>([
+  const [items, setItems] = useState<Array<{ productId?: number; sku: string; description: string; quantity: number; unitPriceUSD: number }>>([
     {
+      productId: products[0]?.id,
       sku: products[0]?.sku || '',
       description: products[0]?.name || 'Artículo de Venta',
       quantity: 1,
@@ -55,6 +61,7 @@ export function InvoiceModal({
     setItems([
       ...items,
       {
+        productId: defaultProd?.id,
         sku: defaultProd?.sku || '',
         description: defaultProd?.name || 'Artículo',
         quantity: 1,
@@ -73,6 +80,7 @@ export function InvoiceModal({
     if (!prod) return;
     const newItems = [...items];
     newItems[index] = {
+      productId: prod.id,
       sku: prod.sku,
       description: prod.name,
       quantity: newItems[index].quantity,
@@ -114,6 +122,7 @@ export function InvoiceModal({
       paymentTerms,
       cashMethod: paymentTerms === 'cash' ? cashMethod : undefined,
       cashRegisterId: paymentTerms === 'cash' ? cashRegisterId : undefined,
+      warehouseId,
       items,
       notes,
     });
@@ -172,6 +181,29 @@ export function InvoiceModal({
             </select>
           </div>
         </div>
+
+        {/* Almacén de despacho: de dónde sale el inventario de esta venta */}
+        {warehouses.length > 0 && (
+          <div>
+            <label className="block font-semibold text-slate-300 mb-1">
+              Almacén de Despacho (Inventario)
+            </label>
+            <select
+              value={warehouseId ?? ''}
+              onChange={(e) =>
+                setWarehouseId(e.target.value ? Number(e.target.value) : undefined)
+              }
+              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+            >
+              <option value="">-- Por defecto del inquilino --</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} ({w.code}){w.isDefault ? ' ★' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Captura del recibo para ventas de contado: el dinero entra al turno de caja */}
         {paymentTerms === 'cash' && (
