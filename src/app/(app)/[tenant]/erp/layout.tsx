@@ -5,7 +5,9 @@ import {
   getAllTenants,
 } from '@/utilities/erpData';
 import { getLiveExchangeRates, resolveEffectiveRate } from '@/utilities/exchangeRate';
+import { requireErpTenantAccess, ErpAccessError } from '@/utilities/erpAuth';
 import { AppShell } from '@/components/erp/AppShell';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -62,6 +64,17 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
         </div>
       </main>
     );
+  }
+
+  // Puerta de autorización del ERP: sesión válida + pertenencia al inquilino
+  // (el control se re-aplica en cada consulta de la capa de datos).
+  try {
+    await requireErpTenantAccess(tenant.id);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
   }
 
   const [availableTenants, liveRates, effectiveRateData] = await Promise.all([

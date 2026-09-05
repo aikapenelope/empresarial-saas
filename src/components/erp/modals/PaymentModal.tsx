@@ -41,22 +41,29 @@ export function PaymentModal({
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Reiniciar SIEMPRE la selección cuando el modal se abre o cambian los defaults:
+  // una apertura "abono general" debe limpiar la factura de una sesión anterior,
+  // y una apertura con factura específica debe fijar cliente + saldo. Incluye la
+  // transición a undefined y la limpieza tras un envío exitoso.
   useEffect(() => {
-    if (defaultCustomerId) {
-      setCustomerId(defaultCustomerId);
-    }
-  }, [defaultCustomerId]);
+    if (!isOpen) return;
 
-  useEffect(() => {
-    if (defaultInvoiceId) {
-      setInvoiceId(defaultInvoiceId);
-      const inv = invoices.find((i) => i.id === defaultInvoiceId);
-      if (inv) {
-        setAmountUSD(Number(inv.balanceUSD) || 10);
-        setCustomerId(inv.customerId);
-      }
+    setError(null);
+    setReferenceNumber('');
+    setNotes('');
+    setAmountUSD(10);
+
+    const inv = defaultInvoiceId ? invoices.find((i) => i.id === defaultInvoiceId) : undefined;
+    setInvoiceId(inv ? inv.id : undefined);
+    setCustomerId(
+      defaultCustomerId ?? inv?.customerId ?? customers[0]?.id ?? 0,
+    );
+
+    if (inv) {
+      setAmountUSD(Number(inv.balanceUSD) || 10);
     }
-  }, [defaultInvoiceId, invoices]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, defaultCustomerId, defaultInvoiceId]);
 
   // Filtrar facturas con saldo del cliente seleccionado
   const customerInvoices = invoices.filter((inv) => inv.customerId === customerId && inv.balanceUSD > 0);
@@ -95,6 +102,8 @@ export function PaymentModal({
       setAmountUSD(10);
       setReferenceNumber('');
       setNotes('');
+      setInvoiceId(undefined);
+      setCustomerId(customers[0]?.id ?? 0);
       onClose();
     } else {
       setError(res.error || 'Error al procesar cobro');

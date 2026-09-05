@@ -6,6 +6,8 @@ import { getTenantBySlug, getIndustryTemplatesCatalog } from '@/utilities/erpDat
 import { BUILTIN_TEMPLATES } from '@/utilities/industryTemplates/definitions';
 import { Badge } from '@/components/erp/Badge';
 import { TemplateApplyButton } from '@/components/erp/TemplateApplyButton';
+import { ErpAccessError, requireErpTenantAccess } from '@/utilities/erpAuth';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -17,6 +19,15 @@ export default async function TemplatesPage({ params }: PageProps) {
 
   if (!tenant) {
     notFound();
+  }
+
+  try {
+    await requireErpTenantAccess(tenant.id);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
   }
 
   const dbTemplates = await getIndustryTemplatesCatalog();

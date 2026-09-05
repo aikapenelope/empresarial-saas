@@ -1,9 +1,9 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
-import { getPayload } from 'payload';
-import config from '@payload-config';
-import { getTenantBySlug } from '@/utilities/erpData';
+import { getTenantBySlug, getSuppliersPageData } from '@/utilities/erpData';
 import { resolveEffectiveRate } from '@/utilities/exchangeRate';
+import { ErpAccessError } from '@/utilities/erpAuth';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { SuppliersView } from '@/components/erp/SuppliersView';
 import type { Supplier, PurchaseInvoice } from '@/payload-types';
 
@@ -19,41 +19,31 @@ export default async function SuppliersPage({ params }: PageProps) {
     notFound();
   }
 
-  const payload = await getPayload({ config });
+  let suppliers: Supplier[];
+  let purchaseInvoices: PurchaseInvoice[];
+  let effectiveRate: number;
 
-  const [suppliersRes, purchaseInvoicesRes, rateData] = await Promise.all([
-    payload.find({
-      collection: 'suppliers',
-      where: { tenant: { equals: tenant.id } },
-      limit: 100,
-      depth: 0,
-      sort: '-currentDebtUSD',
-    }),
-    payload.find({
-      collection: 'purchase-invoices',
-      where: {
-        and: [
-          { tenant: { equals: tenant.id } },
-          { status: { not_equals: 'paid' } },
-        ],
-      },
-      limit: 50,
-      depth: 1,
-      sort: 'dueDate',
-    }),
-    resolveEffectiveRate(
-      tenant.currencyConfig
-        ? {
-            manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
-            autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
-          }
-        : undefined,
-    ),
-  ]);
-
-  const effectiveRate = rateData.rate;
-  const suppliers = suppliersRes.docs as Supplier[];
-  const purchaseInvoices = purchaseInvoicesRes.docs as PurchaseInvoice[];
+  try {
+    const [{ suppliers: fetchedSuppliers, openPurchaseInvoices }, rateData] = await Promise.all([
+      getSuppliersPageData(tenant.id),
+      resolveEffectiveRate(
+        tenant.currencyConfig
+          ? {
+              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+            }
+          : undefined,
+      ),
+    ]);
+    suppliers = fetchedSuppliers;
+    purchaseInvoices = openPurchaseInvoices;
+    effectiveRate = rateData.rate;
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   let totalPayablesUSD = 0;
   for (const pinv of purchaseInvoices) {

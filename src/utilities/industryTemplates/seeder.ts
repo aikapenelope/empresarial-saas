@@ -1,7 +1,9 @@
 import type { PayloadRequest } from 'payload';
+import { sql } from '@payloadcms/db-postgres';
 import { BUILTIN_TEMPLATES, type IndustryTemplateDefinition } from './definitions';
 import { validateTemplateDefinition } from './validate';
 import { extractId } from '../cashLedger';
+import { getActiveDb } from '../inventoryLedger';
 
 export interface ApplyTemplateOptions {
   tenantId: string | number;
@@ -87,6 +89,15 @@ async function applyWithinTransaction({
   templateSlug: string;
   req: PayloadRequest;
 }): Promise<ApplyTemplateResult> {
+  // Serialización anti-carrera: dos aplicaciones concurrentes de la misma plantilla al
+  // mismo inquilino esperan aquí (lock transaccional liberado en commit/rollback), de
+  // modo que el check-then-create del segundo ve los registros del primero y reutiliza
+  // en lugar de duplicar catálogos.
+  const db = getActiveDb(req);
+  await db.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`industry-template:${templateSlug}:${tenantId}`}))`,
+  );
+
   // 1. Validar existencia del Tenant
   const tenant = await req.payload.findByID({
     collection: 'tenants',

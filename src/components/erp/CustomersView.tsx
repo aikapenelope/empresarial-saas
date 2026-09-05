@@ -28,6 +28,7 @@ interface CustomersViewProps {
   totalDebtVES: number;
   overdueDebtUSD: number;
   debtorsCount: number;
+  overdueDebtorsCount: number;
   effectiveRate: number;
 }
 
@@ -39,6 +40,7 @@ export function CustomersView({
   totalDebtVES,
   overdueDebtUSD,
   debtorsCount,
+  overdueDebtorsCount,
   effectiveRate,
 }: CustomersViewProps) {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -132,7 +134,9 @@ export function CustomersView({
           <p className="text-[11px] uppercase font-semibold text-slate-400">Cartera Vencida</p>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-xl font-bold text-rose-400">{formatUSD(overdueDebtUSD)}</span>
-            <span className="text-xs text-slate-400">({debtorsCount} deudores)</span>
+            <span className="text-xs text-slate-400">
+              ({overdueDebtorsCount} con deuda vencida)
+            </span>
           </div>
         </div>
 

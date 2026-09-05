@@ -30,6 +30,9 @@ export function InvoiceModal({
 
   const [customerId, setCustomerId] = useState<number>(customers[0]?.id || 0);
   const [paymentTerms, setPaymentTerms] = useState<'cash' | 'credit'>('cash');
+  const [cashMethod, setCashMethod] = useState<
+    'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance'
+  >('cash_usd');
   const [notes, setNotes] = useState('');
 
   const [items, setItems] = useState<Array<{ sku: string; description: string; quantity: number; unitPriceUSD: number }>>([
@@ -103,6 +106,7 @@ export function InvoiceModal({
       tenantSlug,
       customerId,
       paymentTerms,
+      cashMethod: paymentTerms === 'cash' ? cashMethod : undefined,
       items,
       notes,
     });
@@ -161,6 +165,45 @@ export function InvoiceModal({
             </select>
           </div>
         </div>
+
+        {/* Captura del recibo para ventas de contado: el dinero entra al turno de caja */}
+        {paymentTerms === 'cash' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-slate-300 mb-1">
+                Método de Cobro Inmediato *
+              </label>
+              <select
+                value={cashMethod}
+                onChange={(e) =>
+                  setCashMethod(
+                    e.target.value as
+                      | 'cash_usd'
+                      | 'cash_ves'
+                      | 'pos_ves'
+                      | 'pago_movil'
+                      | 'transfer_ves'
+                      | 'zelle'
+                      | 'binance',
+                  )
+                }
+                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="cash_usd">Efectivo USD ($)</option>
+                <option value="cash_ves">Efectivo Bolívares (Bs.)</option>
+                <option value="pos_ves">Punto de Venta / Tarjeta (VES)</option>
+                <option value="pago_movil">Pago Móvil (VES)</option>
+                <option value="transfer_ves">Transferencia Bancaria (VES)</option>
+                <option value="zelle">Zelle ($ USD)</option>
+                <option value="binance">Binance Pay (USDT)</option>
+              </select>
+            </div>
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-300 self-center">
+              La venta de contado genera automáticamente el recibo (RC) imputado a la
+              factura, de modo que el efectivo entra a los totales del turno de caja.
+            </div>
+          </div>
+        )}
 
         {/* Líneas de Artículos */}
         <div className="space-y-2 border-t border-slate-800/80 pt-3">

@@ -7,6 +7,8 @@ import {
   getCashClosuresList,
 } from '@/utilities/erpData';
 import { CashRegistersView } from '@/components/erp/CashRegistersView';
+import { ErpAccessError } from '@/utilities/erpAuth';
+import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -20,11 +22,19 @@ export default async function CashRegistersPage({ params }: PageProps) {
     notFound();
   }
 
-  const [registers, warehouses, closures] = await Promise.all([
-    getCashRegistersWithDetails(tenant.id),
-    getWarehousesList(tenant.id),
-    getCashClosuresList(tenant.id),
-  ]);
+  let registers, warehouses, closures;
+  try {
+    [registers, warehouses, closures] = await Promise.all([
+      getCashRegistersWithDetails(tenant.id),
+      getWarehousesList(tenant.id),
+      getCashClosuresList(tenant.id),
+    ]);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   const openCount = registers.filter((r) => r.currentStatus === 'open').length;
 
