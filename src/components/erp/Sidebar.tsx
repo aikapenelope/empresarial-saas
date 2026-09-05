@@ -11,6 +11,8 @@ import {
   Truck,
   Layers,
   Sparkles,
+  Receipt,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/utilities/cn';
 
@@ -32,6 +34,11 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
           href: `/${tenantSlug}/erp`,
           icon: LayoutDashboard,
           exact: true,
+        },
+        {
+          name: 'Facturación & Ventas',
+          href: `/${tenantSlug}/erp/invoices`,
+          icon: Receipt,
         },
         {
           name: 'Clientes & Cartera CxC',
@@ -77,6 +84,11 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
           name: 'Plantillas Industriales',
           href: `/${tenantSlug}/erp/templates`,
           icon: Layers,
+        },
+        {
+          name: 'Ajustes de Empresa',
+          href: `/${tenantSlug}/erp/settings`,
+          icon: Settings,
         },
       ],
     },

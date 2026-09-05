@@ -7,14 +7,19 @@ import {
   Wallet,
   AlertTriangle,
   Users,
-  Package,
   ArrowRight,
   MessageCircle,
   ShieldAlert,
 } from 'lucide-react';
-import { getTenantBySlug, getDashboardMetrics } from '@/utilities/erpData';
+import {
+  getTenantBySlug,
+  getDashboardMetrics,
+  getCustomersWithDebt,
+  getProductsCatalog,
+} from '@/utilities/erpData';
 import { KpiCard, formatUSD, formatVES } from '@/components/erp/KpiCard';
 import { Badge } from '@/components/erp/Badge';
+import { DashboardQuickActions } from '@/components/erp/DashboardQuickActions';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -28,7 +33,11 @@ export default async function ErpDashboardPage({ params }: PageProps) {
     notFound();
   }
 
-  const data = await getDashboardMetrics(tenant);
+  const [data, customers, products] = await Promise.all([
+    getDashboardMetrics(tenant),
+    getCustomersWithDebt(tenant.id),
+    getProductsCatalog(tenant.id),
+  ]);
 
   // Cálculos de porcentajes para barras de aging
   const totalAgingUSD =
@@ -39,6 +48,21 @@ export default async function ErpDashboardPage({ params }: PageProps) {
   const pct0to30 = totalAgingUSD > 0 ? (data.financials.aging.zeroToThirtyUSD / totalAgingUSD) * 100 : 0;
   const pct31to60 = totalAgingUSD > 0 ? (data.financials.aging.thirtyOneToSixtyUSD / totalAgingUSD) * 100 : 0;
   const pct60plus = totalAgingUSD > 0 ? (data.financials.aging.sixtyPlusUSD / totalAgingUSD) * 100 : 0;
+
+  const sanitizedCustomers = customers.map((c) => ({
+    id: c.id,
+    name: c.name,
+    taxId: c.taxId,
+    currentDebtUSD: c.currentDebtUSD,
+  }));
+
+  const sanitizedProducts = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    priceUSD: Number(p.priceUSD) || 0,
+    unitOfMeasure: p.unitOfMeasure,
+  }));
 
   return (
     <div className="space-y-6">
@@ -57,20 +81,13 @@ export default async function ErpDashboardPage({ params }: PageProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            href={`/${tenantSlug}/erp/customers`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-white hover:bg-slate-700 transition-colors"
-          >
-            <Users className="h-3.5 w-3.5 text-indigo-400" />
-            <span>Cobranzas</span>
-          </Link>
-          <Link
-            href={`/${tenantSlug}/erp/inventory`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors shadow-sm shadow-indigo-500/20"
-          >
-            <Package className="h-3.5 w-3.5" />
-            <span>Inventario</span>
-          </Link>
+          <DashboardQuickActions
+            tenantId={tenant.id}
+            tenantSlug={tenantSlug}
+            customers={sanitizedCustomers}
+            products={sanitizedProducts}
+            rate={data.rates.effectiveRate}
+          />
         </div>
       </div>
 

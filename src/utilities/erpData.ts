@@ -9,6 +9,8 @@ import type {
   CashRegister,
   BillOfMaterial,
   IndustryTemplate,
+  Warehouse,
+  CashClosure,
 } from '@/payload-types';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
 
@@ -287,4 +289,40 @@ export async function getIndustryTemplatesCatalog(): Promise<IndustryTemplate[]>
     sort: 'name',
   });
   return result.docs as IndustryTemplate[];
+}
+
+export async function getInvoicesList(tenantId: number): Promise<Invoice[]> {
+  const payload = await getPayload({ config });
+  const result = await payload.find({
+    collection: 'invoices',
+    where: { tenant: { equals: tenantId } },
+    limit: 100,
+    depth: 1,
+    sort: '-createdAt',
+  });
+  return result.docs as Invoice[];
+}
+
+export async function getWarehousesList(tenantId: number): Promise<Warehouse[]> {
+  const payload = await getPayload({ config });
+  const result = await payload.find({
+    collection: 'warehouses',
+    where: { tenant: { equals: tenantId } },
+    limit: 50,
+    depth: 0,
+    sort: 'name',
+  });
+  return result.docs as Warehouse[];
+}
+
+export async function getCashClosuresList(tenantId: number): Promise<CashClosure[]> {
+  const payload = await getPayload({ config });
+  const result = await payload.find({
+    collection: 'cash-closures',
+    where: { tenant: { equals: tenantId } },
+    limit: 50,
+    depth: 1,
+    sort: '-createdAt',
+  });
+  return result.docs as CashClosure[];
 }

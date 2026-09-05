@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Building2, ChevronDown, Settings, Menu, X, ExternalLink } from 'lucide-react';
+import { Building2, ChevronDown, Settings, Menu, X } from 'lucide-react';
 import type { Tenant } from '@/payload-types';
 import { CurrencyTicker } from './CurrencyTicker';
 
@@ -102,15 +102,14 @@ export function Header({
         <CurrencyTicker rates={rates} />
       </div>
 
-      {/* Right Side: Quick Links & Admin */}
+      {/* Right Side: Quick Links & Settings */}
       <div className="flex items-center gap-2">
         <Link
-          href="/admin"
+          href={`/${currentTenant.slug}/erp/settings`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-700 hover:bg-slate-900 hover:text-white"
         >
           <Settings className="h-3.5 w-3.5 text-slate-400" />
-          <span className="hidden md:inline">Panel Admin</span>
-          <ExternalLink className="h-3 w-3 text-slate-400" />
+          <span className="hidden md:inline">Ajustes</span>
         </Link>
       </div>
     </header>

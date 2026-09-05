@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { getAllTenants } from '@/utilities/erpData';
 import { getLiveExchangeRates } from '@/utilities/exchangeRate';
 import { formatVES } from '@/components/erp/KpiCard';
-import { Sparkles, Building2, ArrowRight, ShieldCheck, Cpu, Database } from 'lucide-react';
+import { Sparkles, ShieldCheck, Cpu, Database } from 'lucide-react';
+import { HomeTenantList } from '@/components/erp/HomeTenantList';
 
 export default async function HomePage() {
   const [tenants, liveRates] = await Promise.all([
@@ -46,51 +46,8 @@ export default async function HomePage() {
           Gestión empresarial bimonetaria (USD/VES), control de inventario y fórmulas de producción BOM, cuentas por cobrar con cobranza directa por WhatsApp y arqueo ciego de cajas registradoras.
         </p>
 
-        {/* Empresas Registradas */}
-        {tenants.length > 0 ? (
-          <div className="pt-6 space-y-3">
-            <p className="text-xs uppercase font-semibold text-slate-400 tracking-wider">
-              Selecciona tu empresa para ingresar al ERP:
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              {tenants.map((t) => (
-                <Link
-                  key={t.id}
-                  href={`/${t.slug}/erp`}
-                  className="group flex items-center gap-3 px-5 py-3 rounded-xl border border-slate-800 bg-slate-900/80 hover:border-indigo-500/40 hover:bg-slate-900 text-white font-semibold transition-all shadow-lg hover:shadow-indigo-500/10"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                    <Building2 className="h-4 w-4" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-bold">{t.name}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">/{t.slug}/erp</div>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all ml-1" />
-                </Link>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="pt-4">
-            <Link
-              href="/admin/collections/tenants/create"
-              className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-600/25"
-            >
-              Crear Primera Empresa en el Panel
-            </Link>
-          </div>
-        )}
-
-        <div className="pt-4 flex items-center justify-center gap-4">
-          <Link
-            href="/admin"
-            className="text-xs font-semibold text-slate-400 hover:text-white transition-colors flex items-center gap-1.5"
-          >
-            <span>Acceder al Panel Técnico de Payload</span>
-            <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
+        {/* Empresas Registradas & Modal de Creación */}
+        <HomeTenantList tenants={tenants} />
       </div>
 
       {/* Feature Pills Footer */}

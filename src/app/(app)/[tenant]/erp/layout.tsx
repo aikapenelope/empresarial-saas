@@ -53,10 +53,10 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
 
           <div className="pt-2">
             <Link
-              href="/admin"
+              href="/"
               className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-all w-full"
             >
-              Ir al Panel de Administración
+              Volver al Selector de Empresas
             </Link>
           </div>
         </div>
