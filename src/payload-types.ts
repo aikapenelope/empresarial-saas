@@ -263,25 +263,21 @@ export interface Invoice {
   tenant?: (number | null) | Tenant;
   invoiceNumber: string;
   customer: number | Customer;
-  /**
-   * De dónde sale el inventario de esta factura. Si se omite, se usa el almacén por defecto del inquilino. Solo se aplica al publicar la descarga (Kardex inmutable).
-   */
-  warehouse?: (number | null) | Warehouse;
   issueDate: string;
   dueDate: string;
   paymentTerms: 'cash' | 'credit';
   status: 'draft' | 'issued' | 'partially_paid' | 'paid' | 'voided';
   exchangeRateSnapshot: number;
   items: {
-    /**
-     * Vínculo al catálogo. Las líneas con producto descargan inventario al publicarse (Kardex); las de texto libre sin producto no afectan existencias.
-     */
-    product?: (number | null) | Product;
     sku?: string | null;
     description: string;
     quantity: number;
     unitPriceUSD: number;
     totalUSD?: number | null;
+    /**
+     * Vínculo al catálogo. Las líneas con producto descargan inventario al publicarse (Kardex); las de texto libre sin producto no afectan existencias.
+     */
+    product?: (number | null) | Product;
     id?: string | null;
   }[];
   totalUSD: number;
@@ -289,22 +285,10 @@ export interface Invoice {
   balanceUSD: number;
   balanceVES: number;
   notes?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "warehouses".
- */
-export interface Warehouse {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  code: string;
-  type: 'main' | 'raw_materials' | 'work_in_progress' | 'scrap' | 'retail';
-  location?: string | null;
-  isDefault?: boolean | null;
-  isActive?: boolean | null;
+  /**
+   * De dónde sale el inventario de esta factura. Si se omite, se usa el almacén por defecto del inquilino. Solo se aplica al publicar la descarga (Kardex inmutable).
+   */
+  warehouse?: (number | null) | Warehouse;
   updatedAt: string;
   createdAt: string;
 }
@@ -345,6 +329,22 @@ export interface Category {
   code: string;
   description?: string | null;
   parentCategory?: (number | null) | Category;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "warehouses".
+ */
+export interface Warehouse {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  code: string;
+  type: 'main' | 'raw_materials' | 'work_in_progress' | 'scrap' | 'retail';
+  location?: string | null;
+  isDefault?: boolean | null;
   isActive?: boolean | null;
   updatedAt: string;
   createdAt: string;
@@ -491,13 +491,13 @@ export interface StockMovement {
   movementType:
     | 'purchase_in'
     | 'sale_out'
-    | 'sale_return'
     | 'production_consume'
     | 'production_output'
     | 'transfer'
     | 'adjustment_positive'
     | 'adjustment_negative'
-    | 'scrap';
+    | 'scrap'
+    | 'sale_return';
   product: number | Product;
   sourceWarehouse?: (number | null) | Warehouse;
   targetWarehouse?: (number | null) | Warehouse;
@@ -1018,7 +1018,6 @@ export interface InvoicesSelect<T extends boolean = true> {
   tenant?: T;
   invoiceNumber?: T;
   customer?: T;
-  warehouse?: T;
   issueDate?: T;
   dueDate?: T;
   paymentTerms?: T;
@@ -1027,12 +1026,12 @@ export interface InvoicesSelect<T extends boolean = true> {
   items?:
     | T
     | {
-        product?: T;
         sku?: T;
         description?: T;
         quantity?: T;
         unitPriceUSD?: T;
         totalUSD?: T;
+        product?: T;
         id?: T;
       };
   totalUSD?: T;
@@ -1040,6 +1039,7 @@ export interface InvoicesSelect<T extends boolean = true> {
   balanceUSD?: T;
   balanceVES?: T;
   notes?: T;
+  warehouse?: T;
   updatedAt?: T;
   createdAt?: T;
 }

@@ -1,21 +1,14 @@
 import type {
   CollectionAfterChangeHook,
   CollectionAfterDeleteHook,
-  CollectionBeforeDeleteHook,
   CollectionBeforeValidateHook,
   CollectionConfig,
 } from 'payload';
-import { sql } from '@payloadcms/db-postgres';
 import {
   extractId,
   getInvoicePaidAmount,
   recalculateCustomerBalance,
 } from '../../utilities/financeLedger';
-import { getActiveDb } from '../../utilities/inventoryLedger';
-import {
-  applySaleStockDeduction,
-  revertSaleFromInventory,
-} from '../../utilities/salesLedger';
 
 const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
   data,
@@ -182,41 +175,7 @@ const afterChangeInvoice: CollectionAfterChangeHook = async ({
     await recalculateCustomerBalance(previousCustomerId, req);
   }
 
-  // ─── Kardex: publicación y reversión de inventario (Sprint 7) ───
-  // Compuesto con el recálculo de balances; la idempotencia estructural del
-  // salesLedger (lock FOR UPDATE + consulta de movimientos existentes) evita
-  // dobles descargas en updates que re-disparan este hook.
-  const previousStatus = previousDoc?.status;
-  const currentStatus = doc.status;
-
-  if (previousStatus !== 'voided' && currentStatus === 'voided') {
-    await revertSaleFromInventory(doc.id, req);
-  } else if (
-    previousStatus === 'voided' &&
-    currentStatus !== 'voided'
-  ) {
-    await applySaleStockDeduction(doc.id, req);
-  } else if (!previousStatus && currentStatus !== 'voided' && currentStatus !== 'draft') {
-    await applySaleStockDeduction(doc.id, req);
-  }
-
   return doc;
-};
-
-const beforeDeleteInvoice: CollectionBeforeDeleteHook = async ({ id, req }) => {
-  // El Kardex es inmutable y referencia la factura: si ya hay descargas publicadas,
-  // la factura NO puede eliminarse (rompería el ledger). La vía correcta es anular
-  // (status voided), lo que revierte el inventario con movimientos `sale_return`.
-  const db = getActiveDb(req);
-  const movementsRes = await db.execute(
-    sql`SELECT id FROM stock_movements WHERE invoice_id = ${id} LIMIT 1`,
-  );
-  if (movementsRes.rows && movementsRes.rows.length > 0) {
-    throw new Error(
-      'No se puede eliminar una factura con movimientos de inventario publicados (Kardex inmutable). Anúlela con status "voided" para revertir el inventario.',
-    );
-  }
-  return true;
 };
 
 const afterDeleteInvoice: CollectionAfterDeleteHook = async ({ doc, req }) => {
@@ -250,7 +209,6 @@ export const Invoices: CollectionConfig = {
   },
   hooks: {
     beforeValidate: [beforeValidateInvoice],
-    beforeDelete: [beforeDeleteInvoice],
     afterChange: [afterChangeInvoice],
     afterDelete: [afterDeleteInvoice],
   },
@@ -269,17 +227,6 @@ export const Invoices: CollectionConfig = {
       relationTo: 'customers',
       required: true,
       index: true,
-    },
-    {
-      name: 'warehouse',
-      label: 'Almacén de Despacho (Salida de Inventario)',
-      type: 'relationship',
-      relationTo: 'warehouses',
-      index: true,
-      admin: {
-        description:
-          'De dónde sale el inventario de esta factura. Si se omite, se usa el almacén por defecto del inquilino. Solo se aplica al publicar la descarga (Kardex inmutable).',
-      },
     },
     {
       name: 'issueDate',
@@ -344,17 +291,6 @@ export const Invoices: CollectionConfig = {
       required: true,
       minRows: 1,
       fields: [
-        {
-          name: 'product',
-          label: 'Producto de Catálogo',
-          type: 'relationship',
-          relationTo: 'products',
-          index: true,
-          admin: {
-            description:
-              'Vínculo al catálogo. Las líneas con producto descargan inventario al publicarse (Kardex); las de texto libre sin producto no afectan existencias.',
-          },
-        },
         {
           name: 'sku',
           label: 'Código / SKU',

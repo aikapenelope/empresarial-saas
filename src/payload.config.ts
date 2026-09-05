@@ -29,6 +29,7 @@ import { SupplierPayments } from './collections/SupplierPayments';
 import { CashRegisters } from './collections/CashRegisters';
 import { CashClosures } from './collections/CashClosures';
 import { IndustryTemplates } from './collections/IndustryTemplates';
+import { salesInventoryPlugin } from './plugins/salesInventory';
 import { seedIndustryTemplateTask } from './jobs/seedIndustryTemplate';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
@@ -132,6 +133,9 @@ export default buildConfig({
       : undefined,
   }),
   plugins: [
+    // Sprint 7: acoplamiento venta→inventario (campos + hooks compuestos) empaquetado
+    // como plugin canónico de la constitución ((options) => (config) => Config).
+    salesInventoryPlugin({ enabled: true }),
     multiTenantPlugin({
       collections: {
         media: {},
