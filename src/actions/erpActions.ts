@@ -3,6 +3,7 @@
 import { getPayload, type Payload, type PayloadRequest } from 'payload';
 import config from '@payload-config';
 import { revalidatePath } from 'next/cache';
+import { sql } from '@payloadcms/db-postgres';
 import { ZodError } from 'zod';
 import type { User } from '@/payload-types';
 import { resolveEffectiveRate } from '@/utilities/exchangeRate';
@@ -11,6 +12,7 @@ import {
   requireErpTenantAccess,
   requireSuperAdmin,
 } from '@/utilities/erpAuth';
+import { getActiveDb } from '@/utilities/inventoryLedger';
 import {
   cashClosureSchema,
   createCashRegisterSchema,
@@ -61,6 +63,9 @@ async function withTransaction<T>(
     throw error;
   }
 }
+
+/** Roles con permiso de crear/actualizar catálogos y operaciones restringidas (RBAC de colecciones). */
+const ERP_OPERATOR_ROLES: Array<User['role']> = ['super-admin', 'tenant-admin', 'supervisor'];
 
 /** Traduce un error interno a un mensaje seguro para el cliente, registrando el detalle. */
 function toSafeActionError(error: unknown, fallback: string): string {
@@ -145,7 +150,7 @@ export interface CreateProductInput {
 export async function createProductAction(input: CreateProductInput) {
   try {
     const parsed = createProductSchema.parse(input);
-    await requireErpTenantAccess(parsed.tenantId);
+    await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
     const payload = await getPayload({ config });
 
     // El stock inicial no se acepta aquí: `currentStock` es inmutable y sólo el Kardex
@@ -202,17 +207,29 @@ export interface CreateInvoiceInput {
   notes?: string;
 }
 
+/**
+ * Numeración consecutiva por inquilino y tipo de documento. Toma un advisory lock
+ * transaccional (liberado en commit/rollback) para que dos escrituras concurrentes
+ * no elijan el mismo número; debe llamarse SIEMPRE dentro de la transacción del
+ * llamador (req requerido). Los índices únicos compuestos (tenant, número) sirven
+ * de red de seguridad en base de datos.
+ */
 async function nextDocumentNumber(
   payload: Payload,
   collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures',
   tenantId: number,
   prefix: string,
-  req?: PayloadRequest,
+  req: PayloadRequest,
 ): Promise<string> {
+  const db = getActiveDb(req);
+  await db.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`docnum:${collection}:${tenantId}`}))`,
+  );
+
   const count = await payload.count({
     collection,
     where: { tenant: { equals: tenantId } },
-    ...(req ? { req } : {}),
+    req,
   });
   return `${prefix}-${String(count.totalDocs + 1).padStart(5, '0')}`;
 }
@@ -276,6 +293,10 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
         issueDate.getTime() + (isCash ? 0 : (customer.creditDays || 0) * 24 * 60 * 60 * 1000),
       );
 
+      // La factura de contado nace PENDIENTE (issued, con saldo): es el recibo
+      // automático quien la liquida vía su allocation (el hook de CustomerPayments
+      // aplica el pago y flipea el estado a paid). Crearla ya pagada y con saldo
+      // cero haría que applyPaymentAllocations rechazara la imputación y revirtiera todo.
       const invoiceNumber = await nextDocumentNumber(
         payload,
         'invoices',
@@ -293,64 +314,89 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
           issueDate: issueDate.toISOString(),
           dueDate: dueDate.toISOString(),
           paymentTerms: parsed.paymentTerms,
-          status: isCash ? 'paid' : 'issued',
+          status: 'issued',
           exchangeRateSnapshot: rate,
           items: formattedItems,
           totalUSD,
           totalVES,
-          balanceUSD: isCash ? 0 : totalUSD,
-          balanceVES: isCash ? 0 : totalVES,
+          balanceUSD: totalUSD,
+          balanceVES: totalVES,
           notes: parsed.notes || undefined,
         },
         req,
       });
 
+      if (!isCash) {
+        return invDoc;
+      }
+
       // Venta de contado: capturar el recibo en el ledger de cobranzas en la misma
       // transacción, de modo que el dinero entre en los totales del turno de caja.
-      if (isCash && parsed.cashMethod) {
-        const isUSDMethod =
-          parsed.cashMethod === 'cash_usd' ||
-          parsed.cashMethod === 'zelle' ||
-          parsed.cashMethod === 'binance';
+      // Si se indicó caja registradora, debe estar abierta y pertenecer al inquilino.
+      if (!parsed.cashMethod) {
+        return invDoc;
+      }
 
-        const paymentNumber = await nextDocumentNumber(
-          payload,
-          'customer-payments',
-          parsed.tenantId,
-          'RC',
-          req,
-        );
-
-        await payload.create({
-          collection: 'customer-payments',
-          data: {
-            tenant: parsed.tenantId,
-            paymentNumber,
-            customer: parsed.customerId,
-            paymentDate: new Date().toISOString(),
-            status: 'confirmed',
-            cashRegister: parsed.cashRegisterId || undefined,
-            methods: [
-              {
-                method: parsed.cashMethod,
-                currency: isUSDMethod ? 'USD' : 'VES',
-                amount: isUSDMethod ? totalUSD : totalVES,
-                exchangeRate: rate,
-                amountUSD: totalUSD,
-              },
-            ],
-            totalUSD,
-            allocations: [
-              {
-                invoice: invDoc.id,
-                allocatedAmountUSD: totalUSD,
-              },
-            ],
-            notes: `Cobro automático de la venta de contado ${invoiceNumber}`,
-          },
+      if (parsed.cashRegisterId) {
+        const register = await payload.findByID({
+          collection: 'cash-registers',
+          id: parsed.cashRegisterId,
+          depth: 0,
           req,
         });
+
+        if (!register || Number(register.tenant) !== Number(parsed.tenantId)) {
+          throw new Error('La caja registradora indicada no pertenece a este inquilino.');
+        }
+        if (!register.active || register.currentStatus !== 'open') {
+          throw new Error(
+            'La caja registradora indicada no tiene un turno abierto. Seleccione una caja abierta o continúe sin turno.',
+          );
+        }
       }
+
+      const isUSDMethod =
+        parsed.cashMethod === 'cash_usd' ||
+        parsed.cashMethod === 'zelle' ||
+        parsed.cashMethod === 'binance';
+
+      const paymentNumber = await nextDocumentNumber(
+        payload,
+        'customer-payments',
+        parsed.tenantId,
+        'RC',
+        req,
+      );
+
+      await payload.create({
+        collection: 'customer-payments',
+        data: {
+          tenant: parsed.tenantId,
+          paymentNumber,
+          customer: parsed.customerId,
+          paymentDate: new Date().toISOString(),
+          status: 'confirmed',
+          cashRegister: parsed.cashRegisterId || undefined,
+          methods: [
+            {
+              method: parsed.cashMethod,
+              currency: isUSDMethod ? 'USD' : 'VES',
+              amount: isUSDMethod ? totalUSD : totalVES,
+              exchangeRate: rate,
+              amountUSD: totalUSD,
+            },
+          ],
+          totalUSD,
+          allocations: [
+            {
+              invoice: invDoc.id,
+              allocatedAmountUSD: totalUSD,
+            },
+          ],
+          notes: `Cobro automático de la venta de contado ${invoiceNumber}`,
+        },
+        req,
+      });
 
       return invDoc;
     });
@@ -542,7 +588,7 @@ export interface CreateCashRegisterInput {
 export async function createCashRegisterAction(input: CreateCashRegisterInput) {
   try {
     const parsed = createCashRegisterSchema.parse(input);
-    await requireErpTenantAccess(parsed.tenantId);
+    await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
     const payload = await getPayload({ config });
 
     const doc = await payload.create({
@@ -658,7 +704,7 @@ export interface ExecuteProductionInput {
 export async function executeProductionOrderAction(input: ExecuteProductionInput) {
   try {
     const parsed = executeProductionSchema.parse(input);
-    const user = await requireErpTenantAccess(parsed.tenantId);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
@@ -733,7 +779,7 @@ export interface CreateSupplierInput {
 export async function createSupplierAction(input: CreateSupplierInput) {
   try {
     const parsed = createSupplierSchema.parse(input);
-    await requireErpTenantAccess(parsed.tenantId);
+    await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
     const payload = await getPayload({ config });
 
     const doc = await payload.create({
@@ -777,7 +823,7 @@ export interface UpdateTenantSettingsInput {
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
   try {
     const parsed = updateTenantSettingsSchema.parse(input);
-    await requireErpTenantAccess(parsed.tenantId);
+    await requireErpTenantAccess(parsed.tenantId, ['super-admin', 'tenant-admin']);
     const payload = await getPayload({ config });
 
     const doc = await payload.update({

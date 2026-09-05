@@ -39,13 +39,23 @@ export async function getErpUser(): Promise<User | null> {
 /**
  * Verifica que exista sesión y que el usuario tenga acceso operativo al inquilino:
  * super-admin tiene acceso global; cualquier otro rol debe pertenecer al inquilino
- * vía su array `tenants` (blindado en el JWT). Lanza ErpAccessError en caso contrario.
+ * vía su array `tenants` (blindado en el JWT). Opcionalmente exige un conjunto de
+ * roles (p. ej. operaciones restringidas a super-admin/tenant-admin/supervisor,
+ * replicando el RBAC de las colecciones que el Local API saltaría). Lanza
+ * ErpAccessError en caso contrario.
  */
-export async function requireErpTenantAccess(tenantId: number | string): Promise<User> {
+export async function requireErpTenantAccess(
+  tenantId: number | string,
+  allowedRoles?: Array<User['role']>,
+): Promise<User> {
   const user = await getErpUser();
 
   if (!user) {
     throw new ErpAccessError(401, 'No autenticado: inicie sesión para acceder al ERP.');
+  }
+
+  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    throw new ErpAccessError(403, 'Prohibido: su rol no permite esta operación.');
   }
 
   if (user.role !== 'super-admin') {
@@ -71,6 +81,17 @@ export async function requireSuperAdmin(): Promise<User> {
 
   if (user.role !== 'super-admin') {
     throw new ErpAccessError(403, 'Prohibido: se requieren privilegios de super-administrador.');
+  }
+
+  return user;
+}
+
+/** Exige sesión válida (cualquier rol) sin verificar pertenencia a un inquilino. */
+export async function requireErpUser(): Promise<User> {
+  const user = await getErpUser();
+
+  if (!user) {
+    throw new ErpAccessError(401, 'No autenticado: inicie sesión para continuar.');
   }
 
   return user;

@@ -16,6 +16,7 @@ import {
   getDashboardMetrics,
   getCustomersWithDebt,
   getProductsCatalog,
+  getCashRegistersWithDetails,
 } from '@/utilities/erpData';
 import { KpiCard, formatUSD, formatVES } from '@/components/erp/KpiCard';
 import { Badge } from '@/components/erp/Badge';
@@ -29,18 +30,27 @@ interface PageProps {
 
 export default async function ErpDashboardPage({ params }: PageProps) {
   const { tenant: tenantSlug } = await params;
-  const tenant = await getTenantBySlug(tenantSlug);
+  let tenant: Awaited<ReturnType<typeof getTenantBySlug>> = null;
+  try {
+    tenant = await getTenantBySlug(tenantSlug);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
+  }
 
   if (!tenant) {
     notFound();
   }
 
-  let data, customers, products;
+  let data, customers, products, registers;
   try {
-    [data, customers, products] = await Promise.all([
+    [data, customers, products, registers] = await Promise.all([
       getDashboardMetrics(tenant),
       getCustomersWithDebt(tenant.id),
       getProductsCatalog(tenant.id),
+      getCashRegistersWithDetails(tenant.id),
     ]);
   } catch (error: unknown) {
     if (error instanceof ErpAccessError) {
@@ -97,6 +107,12 @@ export default async function ErpDashboardPage({ params }: PageProps) {
             customers={sanitizedCustomers}
             products={sanitizedProducts}
             rate={data.rates.effectiveRate}
+            cashRegisters={registers.map((r) => ({
+              id: r.id,
+              name: r.name,
+              code: r.code,
+              currentStatus: r.currentStatus,
+            }))}
           />
         </div>
       </div>

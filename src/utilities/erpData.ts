@@ -15,7 +15,7 @@ import type {
   User,
 } from '@/payload-types';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
-import { ErpAccessError, requireErpTenantAccess, getErpUser } from './erpAuth';
+import { ErpAccessError, requireErpTenantAccess, getErpUser, requireErpUser } from './erpAuth';
 
 export interface DashboardMetrics {
   tenant: Tenant;
@@ -53,9 +53,13 @@ export interface DashboardMetrics {
 }
 
 // Estados que computan deuda viva: los borradores y anulados NO obligan.
-const OPEN_INVOICE_STATUSES = ['issued', 'partially_paid'] as const;
+// CADA colección tiene su vocabulario: ventas usan `issued`; compras usan `received`.
+const OPEN_SALE_INVOICE_STATUSES = ['issued', 'partially_paid'] as const;
+const OPEN_PURCHASE_INVOICE_STATUSES = ['received', 'partially_paid'] as const;
 
 export async function getTenantBySlug(slug: string): Promise<Tenant | null> {
+  // Blindaje anti-enumeración: sin sesión no se revela ni la existencia de inquilinos.
+  await requireErpUser();
   const payload = await getPayload({ config });
   const result = await payload.find({
     collection: 'tenants',
@@ -67,9 +71,34 @@ export async function getTenantBySlug(slug: string): Promise<Tenant | null> {
 }
 
 export async function getAllTenants(): Promise<Tenant[]> {
+  // Sin sesión no hay listado de empresas. Con sesión, cada usuario ve únicamente
+  // los inquilinos a los que pertenece (super-admin ve todos).
+  const user = await requireErpUser();
   const payload = await getPayload({ config });
+
+  if (user.role === 'super-admin') {
+    const result = await payload.find({
+      collection: 'tenants',
+      pagination: false,
+      depth: 0,
+      sort: 'name',
+    });
+    return result.docs as Tenant[];
+  }
+
+  const userTenantIds = (
+    (user as unknown as { tenants?: Array<{ tenant: number | { id: number } }> })?.tenants || []
+  )
+    .map((t) => (typeof t.tenant === 'object' && t.tenant !== null ? t.tenant.id : t.tenant))
+    .filter(Boolean);
+
+  if (userTenantIds.length === 0) {
+    return [];
+  }
+
   const result = await payload.find({
     collection: 'tenants',
+    where: { id: { in: userTenantIds } },
     pagination: false,
     depth: 0,
     sort: 'name',
@@ -161,7 +190,7 @@ export async function getDashboardMetrics(tenant: Tenant): Promise<DashboardMetr
       where: {
         and: [
           { tenant: { equals: tenantId } },
-          { status: { in: [...OPEN_INVOICE_STATUSES] } },
+          { status: { in: [...OPEN_SALE_INVOICE_STATUSES] } },
         ],
       },
       depth: 0,
@@ -172,7 +201,7 @@ export async function getDashboardMetrics(tenant: Tenant): Promise<DashboardMetr
       where: {
         and: [
           { tenant: { equals: tenantId } },
-          { status: { in: [...OPEN_INVOICE_STATUSES] } },
+          { status: { in: [...OPEN_PURCHASE_INVOICE_STATUSES] } },
         ],
       },
       depth: 0,
@@ -425,7 +454,7 @@ export async function getSuppliersPageData(
       where: {
         and: [
           { tenant: { equals: tenantId } },
-          { status: { in: [...OPEN_INVOICE_STATUSES] } },
+          { status: { in: [...OPEN_PURCHASE_INVOICE_STATUSES] } },
         ],
       },
       depth: 1,

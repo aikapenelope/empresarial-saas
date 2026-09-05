@@ -154,6 +154,11 @@ async function applyWithinTransaction({
   }
 
   if (!template) {
+    if (dbTemplate.docs.length > 0) {
+      throw new Error(
+        `La plantilla '${templateSlug}' está publicada pero no define estructura (templateData) y no corresponde a ninguna plantilla builtin.`,
+      );
+    }
     throw new Error(`Plantilla industrial con slug '${templateSlug}' no encontrada o no está publicada.`);
   }
 
