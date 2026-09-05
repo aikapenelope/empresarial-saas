@@ -50,40 +50,43 @@ export async function applyIndustryTemplateToTenant({
     throw new Error(`Inquilino con ID ${numericTenantId} no existe.`);
   }
 
-  // 2. Localizar plantilla (en memoria o base de datos)
-  let template: IndustryTemplateDefinition | undefined = BUILTIN_TEMPLATES.find(
-    (t) => t.slug === templateSlug,
-  );
+  // 2. Localizar plantilla (DB-First para permitir personalizaciones dinámicas en BD, fallback a BUILTIN_TEMPLATES)
+  let template: IndustryTemplateDefinition | undefined;
 
-  if (!template) {
-    const dbTemplate = await req.payload.find({
-      collection: 'industry-templates',
-      where: {
-        slug: { equals: templateSlug },
-      },
-      limit: 1,
-      depth: 0,
-      req,
-    });
+  const dbTemplate = await req.payload.find({
+    collection: 'industry-templates',
+    where: {
+      and: [
+        { slug: { equals: templateSlug } },
+        { isPublished: { equals: true } },
+      ],
+    },
+    limit: 1,
+    depth: 0,
+    req,
+  });
 
-    if (dbTemplate.docs.length > 0) {
-      const doc = dbTemplate.docs[0] as unknown as {
-        name: string;
-        slug: string;
-        description: string;
-        industryType: 'food_production' | 'retail_health' | 'wholesale' | 'services';
-        icon: string;
-        templateData?: IndustryTemplateDefinition;
-      };
+  if (dbTemplate.docs.length > 0) {
+    const doc = dbTemplate.docs[0] as unknown as {
+      name: string;
+      slug: string;
+      description: string;
+      industryType: 'food_production' | 'retail_health' | 'wholesale' | 'services';
+      icon: string;
+      templateData?: IndustryTemplateDefinition;
+    };
 
-      if (doc.templateData) {
-        template = doc.templateData;
-      }
+    if (doc.templateData && typeof doc.templateData === 'object') {
+      template = doc.templateData;
     }
   }
 
   if (!template) {
-    throw new Error(`Plantilla industrial con slug '${templateSlug}' no encontrada.`);
+    template = BUILTIN_TEMPLATES.find((t) => t.slug === templateSlug);
+  }
+
+  if (!template) {
+    throw new Error(`Plantilla industrial con slug '${templateSlug}' no encontrada o no está publicada.`);
   }
 
   const warehouseMap: Record<string, number> = {};
@@ -96,8 +99,14 @@ export async function applyIndustryTemplateToTenant({
   let productsCreated = 0;
   let bomsCreated = 0;
 
+  const warehouses = Array.isArray(template.warehouses) ? template.warehouses : [];
+  const categories = Array.isArray(template.categories) ? template.categories : [];
+  const cashRegisters = Array.isArray(template.cashRegisters) ? template.cashRegisters : [];
+  const products = Array.isArray(template.products) ? template.products : [];
+  const boms = Array.isArray(template.boms) ? template.boms : [];
+
   // 3. Crear Almacenes
-  for (const wh of template.warehouses) {
+  for (const wh of warehouses) {
     const existing = await req.payload.find({
       collection: 'warehouses',
       where: {
@@ -132,7 +141,7 @@ export async function applyIndustryTemplateToTenant({
   }
 
   // 4. Crear Categorías
-  for (const cat of template.categories) {
+  for (const cat of categories) {
     const existing = await req.payload.find({
       collection: 'categories',
       where: {
@@ -166,7 +175,7 @@ export async function applyIndustryTemplateToTenant({
   }
 
   // 5. Crear Cajas Registradoras
-  for (const cr of template.cashRegisters) {
+  for (const cr of cashRegisters) {
     const targetWhId = warehouseMap[cr.warehouseCode];
     if (targetWhId) {
       const existing = await req.payload.find({
@@ -201,7 +210,7 @@ export async function applyIndustryTemplateToTenant({
   }
 
   // 6. Crear Productos e Insumos
-  for (const prod of template.products) {
+  for (const prod of products) {
     const catId = categoryMap[prod.categoryCode];
 
     const existing = await req.payload.find({
@@ -243,12 +252,13 @@ export async function applyIndustryTemplateToTenant({
   }
 
   // 7. Crear Recetas / Fórmulas BOM
-  if (Array.isArray(template.boms)) {
-    for (const bom of template.boms) {
+  if (boms.length > 0) {
+    for (const bom of boms) {
       const finishedId = productMap[bom.finishedProductSku];
       if (!finishedId) continue;
 
-      const items = bom.items
+      const rawItems = Array.isArray(bom.items) ? bom.items : [];
+      const items = rawItems
         .map((item) => {
           const rawId = productMap[item.rawMaterialSku];
           if (!rawId) return null;

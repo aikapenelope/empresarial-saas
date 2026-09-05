@@ -88,6 +88,13 @@ export const IndustryTemplates: CollectionConfig = {
       name: 'templateData',
       label: 'Estructura Declarativa de Datos (JSON)',
       type: 'json',
+      validate: (val) => {
+        if (!val) return true;
+        if (typeof val !== 'object' || Array.isArray(val)) {
+          return 'templateData debe ser un objeto JSON válido.';
+        }
+        return true;
+      },
     },
   ],
   endpoints: [
@@ -104,7 +111,7 @@ export const IndustryTemplates: CollectionConfig = {
           where: {
             isPublished: { equals: true },
           },
-          limit: 100,
+          pagination: false,
           depth: 0,
           req,
         });
@@ -144,8 +151,15 @@ export const IndustryTemplates: CollectionConfig = {
           return Response.json({ error: 'El parámetro tenantId es requerido.' }, { status: 400 });
         }
 
-        // Validar autorización del usuario sobre el tenant
-        if (req.user.role !== 'super-admin') {
+        // Validar autorización RBAC: Sólo super-admin o tenant-admin pueden aprovisionar catálogos
+        if (req.user.role !== 'super-admin' && req.user.role !== 'tenant-admin') {
+          return Response.json(
+            { error: 'Prohibido: Se requieren privilegios de administrador para aplicar plantillas.' },
+            { status: 403 },
+          );
+        }
+
+        if (req.user.role === 'tenant-admin') {
           const userTenants = (
             (req.user as unknown as { tenants?: Array<{ tenant: number | { id: number } }> })
               ?.tenants || []

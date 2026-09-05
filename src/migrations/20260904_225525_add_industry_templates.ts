@@ -82,21 +82,20 @@ export async function up({ db }: MigrateUpArgs): Promise<void> {
 
 export async function down({ db }: MigrateDownArgs): Promise<void> {
   await db.execute(sql`
-   ALTER TABLE "industry_templates_default_payment_methods" DISABLE ROW LEVEL SECURITY;
+   ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT IF EXISTS "payload_locked_documents_rels_industry_templates_fk";
+  DROP INDEX IF EXISTS "payload_locked_documents_rels_industry_templates_id_idx";
+  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN IF EXISTS "industry_templates_id";
+  ALTER TABLE "industry_templates_default_payment_methods" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "industry_templates" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "payload_jobs_log" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "payload_jobs" DISABLE ROW LEVEL SECURITY;
-  DROP TABLE "industry_templates_default_payment_methods" CASCADE;
-  DROP TABLE "industry_templates" CASCADE;
-  DROP TABLE "payload_jobs_log" CASCADE;
-  DROP TABLE "payload_jobs" CASCADE;
-  ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_industry_templates_fk";
-  
-  DROP INDEX "payload_locked_documents_rels_industry_templates_id_idx";
-  ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "industry_templates_id";
-  DROP TYPE "public"."enum_industry_templates_default_payment_methods";
-  DROP TYPE "public"."enum_industry_templates_industry_type";
-  DROP TYPE "public"."enum_payload_jobs_log_task_slug";
-  DROP TYPE "public"."enum_payload_jobs_log_state";
-  DROP TYPE "public"."enum_payload_jobs_task_slug";`)
+  DROP TABLE IF EXISTS "industry_templates_default_payment_methods" CASCADE;
+  DROP TABLE IF EXISTS "industry_templates" CASCADE;
+  DROP TABLE IF EXISTS "payload_jobs_log" CASCADE;
+  DROP TABLE IF EXISTS "payload_jobs" CASCADE;
+  DROP TYPE IF EXISTS "public"."enum_industry_templates_default_payment_methods";
+  DROP TYPE IF EXISTS "public"."enum_industry_templates_industry_type";
+  DROP TYPE IF EXISTS "public"."enum_payload_jobs_log_task_slug";
+  DROP TYPE IF EXISTS "public"."enum_payload_jobs_log_state";
+  DROP TYPE IF EXISTS "public"."enum_payload_jobs_task_slug";`)
 }
