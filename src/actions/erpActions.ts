@@ -377,10 +377,14 @@ async function nextDocumentNumber(
   );
 
   const { table, column } = DOC_NUMBER_TABLES[collection];
+  // Solo se consideran identificadores con el formato generado por el sistema
+  // (`prefijo-<solo dígitos>`): valores manuales o históricos con otro formato
+  // se ignoran en la secuencia y no pueden romper el CAST del sufijo.
   const maxRes = await db.execute(
     sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(${sql.raw(column)}, '^.*-', '') AS integer)), 0) AS max_num
         FROM ${sql.raw(table)}
-        WHERE tenant_id = ${tenantId}`,
+        WHERE tenant_id = ${tenantId}
+          AND ${sql.raw(column)} ~ ('^' || ${prefix} || '-[0-9]+$')`,
   );
   const maxNum = Number(maxRes.rows?.[0]?.max_num) || 0;
 
@@ -1439,6 +1443,9 @@ export async function receivePurchaseGoodsAction(input: ReceivePurchaseGoodsInpu
 
       if (!invoice || Number(invoice.tenant) !== Number(parsed.tenantId)) {
         throw new Error('La factura de compra no pertenece a este inquilino.');
+      }
+      if (invoice.status === 'voided') {
+        throw new Error('No se puede recepcionar una factura de compra anulada.');
       }
       if (invoice.receptionStatus === 'received') {
         throw new Error('La mercancía de esta compra ya fue recepcionada.');

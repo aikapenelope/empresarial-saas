@@ -12,7 +12,13 @@ interface PurchaseInvoiceModalProps {
   tenantId: number;
   tenantSlug: string;
   suppliers: Array<{ id: number; name: string; taxId: string }>;
-  products: Array<{ id: number; name: string; sku: string; costUSD: number }>;
+  products: Array<{
+    id: number;
+    name: string;
+    sku: string;
+    costUSD: number;
+    productType: string | null;
+  }>;
   warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
   rate: number;
 }
@@ -214,6 +220,7 @@ export function PurchaseInvoiceModal({
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
+                        {p.productType === 'service' ? ' (Servicio — sin inventario)' : ''}
                       </option>
                     ))}
                   </select>

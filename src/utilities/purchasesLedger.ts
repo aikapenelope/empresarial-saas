@@ -1,5 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
+import type { Product } from '@/payload-types';
 
 export interface SupplierRecalculateBalanceResult {
   currentDebtUSD: number;
@@ -524,11 +525,14 @@ export async function postPurchaseReceptionMovements(
 
   // Row lock on purchase invoice
   const lockedRes = await db.execute(
-    sql`SELECT id, tenant_id, invoice_number, reception_status, reception_warehouse_id FROM purchase_invoices WHERE id = ${invoiceId} FOR UPDATE`,
+    sql`SELECT id, tenant_id, invoice_number, reception_status, reception_warehouse_id, status FROM purchase_invoices WHERE id = ${invoiceId} FOR UPDATE`,
   );
   const lockedInv = lockedRes.rows?.[0];
   if (!lockedInv) {
     throw new Error(`La factura de compra ID ${invoiceId} no existe.`);
+  }
+  if (lockedInv.status === 'voided') {
+    return 0; // Una compra anulada nunca ingresa mercancía al kardex
   }
 
   // Idempotency check: verify whether stock movements have already been posted for this purchase invoice
@@ -568,6 +572,25 @@ export async function postPurchaseReceptionMovements(
     const productId = extractId(item.product);
     // Only physical inventory items with product link produce stock movements
     if (!productId) continue;
+
+    // Los servicios (y cualquier tipo no físico) comprados se quedan como línea
+    // monetaria: NO generan movimiento de kardex ni recalculo de costo ponderado.
+    // Con depth 1 el producto llega poblado; si llega sin poblar se consulta.
+    const productDoc =
+      item.product && typeof item.product === 'object'
+        ? (item.product as Product)
+        : await req.payload.findByID({
+            collection: 'products',
+            id: productId as number,
+            depth: 0,
+            req,
+            context: {
+              ...req.context,
+              skipBalanceRecalculation: true,
+              skipInventoryRecalculation: true,
+            },
+          });
+    if (productDoc.productType === 'service') continue;
 
     const qty = Number(item.quantity) || 0;
     if (qty <= 0) continue;

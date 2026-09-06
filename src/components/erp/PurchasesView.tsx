@@ -24,7 +24,7 @@ interface PurchasesViewProps {
   tenantSlug: string;
   data: PurchasesPageData;
   effectiveRate: number;
-  products: Array<{ id: number; name: string; sku: string; costUSD: number }>;
+  products: Array<{ id: number; name: string; sku: string; costUSD: number; productType: string | null }>;
   warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
 }
 

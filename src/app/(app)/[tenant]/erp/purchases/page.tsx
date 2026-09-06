@@ -68,6 +68,7 @@ export default async function PurchasesPage({ params }: PageProps) {
         name: p.name,
         sku: p.sku,
         costUSD: Number(p.costUSD) || 0,
+        productType: p.productType,
       }))}
       warehouses={warehouses.map((w) => ({
         id: w.id,
