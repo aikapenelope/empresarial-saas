@@ -12,7 +12,13 @@ interface QuoteModalProps {
   tenantId: number;
   tenantSlug: string;
   customers: Array<{ id: number; name: string; taxId: string }>;
-  products: Array<{ id: number; name: string; sku: string; priceUSD: number }>;
+  products: Array<{
+    id: number;
+    name: string;
+    sku: string;
+    priceUSD: number;
+    priceTiers?: Array<{ tier: string; priceUSD: number }> | null;
+  }>;
   rate: number;
 }
 

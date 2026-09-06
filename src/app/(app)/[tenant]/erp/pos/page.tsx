@@ -102,12 +102,14 @@ export default async function POSPage({ params }: PageProps) {
           sku: p.sku,
           priceUSD: Number(p.priceUSD) || 0,
           unitOfMeasure: p.unitOfMeasure,
+          priceTiers: p.priceTiers,
         }))}
         customers={customers.map((c) => ({
           id: c.id,
           name: c.name,
           taxId: c.taxId,
           currentDebtUSD: c.currentDebtUSD,
+          priceTier: c.priceTier,
         }))}
         registers={registers.map((r) => ({
           id: r.id,

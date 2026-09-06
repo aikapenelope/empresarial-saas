@@ -86,6 +86,7 @@ export interface Config {
     'cash-closures': CashClosure;
     'industry-templates': IndustryTemplate;
     quotes: Quote;
+    'price-history': PriceHistory;
     exports: Export;
     imports: Import;
     'payload-kv': PayloadKv;
@@ -115,6 +116,7 @@ export interface Config {
     'cash-closures': CashClosuresSelect<false> | CashClosuresSelect<true>;
     'industry-templates': IndustryTemplatesSelect<false> | IndustryTemplatesSelect<true>;
     quotes: QuotesSelect<false> | QuotesSelect<true>;
+    'price-history': PriceHistorySelect<false> | PriceHistorySelect<true>;
     exports: ExportsSelect<false> | ExportsSelect<true>;
     imports: ImportsSelect<false> | ImportsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
@@ -191,7 +193,7 @@ export interface User {
   id: number;
   name: string;
   password?: string | null;
-  role: 'super-admin' | 'tenant-admin' | 'supervisor' | 'cashier' | 'employee';
+  role: 'super-admin' | 'tenant-admin' | 'supervisor' | 'vendor' | 'cashier' | 'employee';
   tenants?:
     | {
         tenant: number | Tenant;
@@ -248,6 +250,18 @@ export interface Customer {
   phone: string;
   email?: string | null;
   address?: string | null;
+  /**
+   * Define qué lista de precios del catálogo aplica por defecto a este cliente.
+   */
+  priceTier?: ('retail' | 'wholesale' | 'vendor' | 'promo') | null;
+  /**
+   * Representante comercial responsable de esta cuenta.
+   */
+  assignedVendor?: (number | null) | User;
+  /**
+   * Porcentaje sobre facturas pagadas de este cliente, derivado para el vendedor asignado.
+   */
+  commissionPct?: number | null;
   status: 'lead' | 'first_time' | 'recurring' | 'vip' | 'inactive';
   creditAllowed?: boolean | null;
   creditLimitUSD?: number | null;
@@ -271,6 +285,10 @@ export interface Invoice {
   tenant?: (number | null) | Tenant;
   invoiceNumber: string;
   customer: number | Customer;
+  /**
+   * Usuario que emitió la factura. Base del cálculo de comisiones.
+   */
+  createdBy?: (number | null) | User;
   issueDate: string;
   dueDate: string;
   paymentTerms: 'cash' | 'credit';
@@ -323,6 +341,16 @@ export interface Product {
   description?: string | null;
   image?: (number | null) | Media;
   isActive?: boolean | null;
+  /**
+   * El precio base (retail) es el campo "Precio Base de Venta". Agrega aquí los tiers alternativos; los documentos seleccionan el tier según el cliente.
+   */
+  priceTiers?:
+    | {
+        tier: 'wholesale' | 'vendor' | 'promo';
+        priceUSD: number;
+        id?: string | null;
+      }[]
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -733,6 +761,25 @@ export interface Quote {
   createdAt: string;
 }
 /**
+ * Bitácora inmutable de cambios de precio (escrita por el pricingPlugin).
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "price-history".
+ */
+export interface PriceHistory {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  product: number | Product;
+  oldPriceUSD: number;
+  newPriceUSD: number;
+  exchangeRateSnapshot: number;
+  newPriceVES: number;
+  trigger: 'manual' | 'rate_change';
+  changedBy?: (number | null) | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "exports".
  */
@@ -997,6 +1044,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'quotes';
         value: number | Quote;
+      } | null)
+    | ({
+        relationTo: 'price-history';
+        value: number | PriceHistory;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1120,6 +1171,9 @@ export interface CustomersSelect<T extends boolean = true> {
   phone?: T;
   email?: T;
   address?: T;
+  priceTier?: T;
+  assignedVendor?: T;
+  commissionPct?: T;
   status?: T;
   creditAllowed?: T;
   creditLimitUSD?: T;
@@ -1142,6 +1196,7 @@ export interface InvoicesSelect<T extends boolean = true> {
   tenant?: T;
   invoiceNumber?: T;
   customer?: T;
+  createdBy?: T;
   issueDate?: T;
   dueDate?: T;
   paymentTerms?: T;
@@ -1254,6 +1309,13 @@ export interface ProductsSelect<T extends boolean = true> {
   description?: T;
   image?: T;
   isActive?: T;
+  priceTiers?:
+    | T
+    | {
+        tier?: T;
+        priceUSD?: T;
+        id?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1581,6 +1643,22 @@ export interface QuotesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "price-history_select".
+ */
+export interface PriceHistorySelect<T extends boolean = true> {
+  tenant?: T;
+  product?: T;
+  oldPriceUSD?: T;
+  newPriceUSD?: T;
+  exchangeRateSnapshot?: T;
+  newPriceVES?: T;
+  trigger?: T;
+  changedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "exports_select".
  */
 export interface ExportsSelect<T extends boolean = true> {
@@ -1763,6 +1841,7 @@ export interface TaskCreateCollectionExport {
       | 'cash-closures'
       | 'industry-templates'
       | 'quotes'
+      | 'price-history'
       | 'exports'
       | 'imports';
     drafts?: ('yes' | 'no') | null;

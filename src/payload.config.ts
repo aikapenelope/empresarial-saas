@@ -32,6 +32,7 @@ import { CashClosures } from './collections/CashClosures';
 import { IndustryTemplates } from './collections/IndustryTemplates';
 import { Quotes } from './collections/Quotes';
 import { salesInventoryPlugin } from './plugins/salesInventory';
+import { pricingPlugin } from './plugins/pricing';
 import { seedIndustryTemplateTask } from './jobs/seedIndustryTemplate';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
@@ -139,6 +140,7 @@ export default buildConfig({
     // Sprint 7: acoplamiento venta→inventario (campos + hooks compuestos) empaquetado
     // como plugin canónico de la constitución ((options) => (config) => Config).
     salesInventoryPlugin({ enabled: true }),
+    pricingPlugin({ enabled: true }),
     multiTenantPlugin({
       collections: {
         media: {},
@@ -157,6 +159,7 @@ export default buildConfig({
         'cash-registers': {},
         'cash-closures': {},
         quotes: {},
+        'price-history': {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),
       tenantsArrayField: {

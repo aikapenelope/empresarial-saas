@@ -179,6 +179,7 @@ export async function ensureWalkInCustomerAction(input: EnsureWalkInCustomerInpu
         taxId: 'V-00000000',
         phone: '58-0000000000',
         status: 'recurring',
+        priceTier: 'retail',
         creditAllowed: false,
         creditLimitUSD: 0,
         creditDays: 0,
