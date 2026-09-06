@@ -1820,8 +1820,8 @@ export interface UpdateCustomerInput {
   name: string;
   taxId: string;
   phone: string;
-  email?: string;
-  address?: string;
+  email?: string | null;
+  address?: string | null;
   status?: 'lead' | 'first_time' | 'recurring' | 'vip' | 'inactive';
   creditAllowed?: boolean;
   creditLimitUSD?: number;
@@ -1832,8 +1832,20 @@ export interface UpdateCustomerInput {
 export async function updateCustomerAction(input: UpdateCustomerInput) {
   try {
     const parsed = updateCustomerSchema.parse(input);
-    await requireErpTenantAccess(parsed.tenantId);
+    const user = await requireErpTenantAccess(parsed.tenantId);
     const payload = await getPayload({ config });
+
+    // Aislamiento multi-inquilino: el ID viene del cliente, se revalida.
+    const existing = await payload.findByID({
+      collection: 'customers',
+      id: parsed.customerId,
+      depth: 0,
+      user,
+      overrideAccess: false,
+    });
+    if (!existing || Number(existing.tenant) !== Number(parsed.tenantId)) {
+      return { success: false, error: 'El cliente no pertenece a este inquilino.' };
+    }
 
     const doc = await payload.update({
       collection: 'customers',
@@ -1842,14 +1854,17 @@ export async function updateCustomerAction(input: UpdateCustomerInput) {
         name: parsed.name,
         taxId: parsed.taxId,
         phone: parsed.phone,
-        email: parsed.email || undefined,
-        address: parsed.address || undefined,
+        // null limpia el valor; undefined (campo ausente) no lo modifica.
+        email: parsed.email,
+        address: parsed.address,
         status: parsed.status || 'first_time',
         creditAllowed: parsed.creditAllowed ?? false,
         creditLimitUSD: parsed.creditLimitUSD ?? 0,
         creditDays: parsed.creditDays ?? 0,
         ...(parsed.priceTier ? { priceTier: parsed.priceTier } : {}),
       },
+      user,
+      overrideAccess: false,
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/customers`);
@@ -1879,11 +1894,25 @@ export interface UpdateProductInput {
 export async function updateProductAction(input: UpdateProductInput) {
   try {
     const parsed = updateProductSchema.parse(input);
-    await requireErpTenantAccess(parsed.tenantId);
+    const user = await requireErpTenantAccess(parsed.tenantId);
     const payload = await getPayload({ config });
+
+    // Aislamiento multi-inquilino: el ID viene del cliente, se revalida.
+    const existing = await payload.findByID({
+      collection: 'products',
+      id: parsed.productId,
+      depth: 0,
+      user,
+      overrideAccess: false,
+    });
+    if (!existing || Number(existing.tenant) !== Number(parsed.tenantId)) {
+      return { success: false, error: 'El producto no pertenece a este inquilino.' };
+    }
 
     // El cambio de priceUSD escribe price-history automáticamente (pricingPlugin).
     // priceTiers: si llega undefined no se toca; si llega, reemplaza completo.
+    // taxRate: si el input lo omite se PRESERVA el vigente (nunca resetear a
+    // exempt durante ediciones no relacionadas).
     const doc = await payload.update({
       collection: 'products',
       id: parsed.productId,
@@ -1894,10 +1923,12 @@ export async function updateProductAction(input: UpdateProductInput) {
         unitOfMeasure: parsed.unitOfMeasure,
         costUSD: parsed.costUSD,
         priceUSD: parsed.priceUSD,
-        taxRate: parsed.taxRate || 'exempt',
+        ...(parsed.taxRate !== undefined ? { taxRate: parsed.taxRate } : {}),
         minStockAlert: parsed.minStockAlert ?? 0,
         ...(parsed.priceTiers !== undefined ? { priceTiers: parsed.priceTiers } : {}),
       },
+      user,
+      overrideAccess: false,
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
@@ -1921,20 +1952,22 @@ export interface UpdateQuoteInput {
     quantity: number;
     unitPriceUSD: number;
   }>;
-  validUntil?: string;
-  notes?: string;
+  validUntil?: string | null;
+  notes?: string | null;
 }
 
 export async function updateQuoteAction(input: UpdateQuoteInput) {
   try {
     const parsed = updateQuoteSchema.parse(input);
-    await requireErpTenantAccess(parsed.tenantId);
+    const user = await requireErpTenantAccess(parsed.tenantId);
     const payload = await getPayload({ config });
 
     const quote = await payload.findByID({
       collection: 'quotes',
       id: parsed.quoteId,
       depth: 0,
+      user,
+      overrideAccess: false,
     });
 
     if (!quote || Number(quote.tenant) !== Number(parsed.tenantId)) {
@@ -1945,6 +1978,35 @@ export async function updateQuoteAction(input: UpdateQuoteInput) {
         success: false,
         error: 'Solo las cotizaciones en borrador o enviadas pueden editarse.',
       };
+    }
+
+    // Aislamiento multi-inquilino de las referencias: el cliente y cada
+    // producto de línea deben pertenecer al inquilino autorizado.
+    const customer = await payload.findByID({
+      collection: 'customers',
+      id: parsed.customerId,
+      depth: 0,
+      user,
+      overrideAccess: false,
+    });
+    if (!customer || Number(customer.tenant) !== Number(parsed.tenantId)) {
+      return { success: false, error: 'El cliente indicado no pertenece a este inquilino.' };
+    }
+    for (const it of parsed.items) {
+      if (!it.productId) continue;
+      const product = await payload.findByID({
+        collection: 'products',
+        id: it.productId,
+        depth: 0,
+        user,
+        overrideAccess: false,
+      });
+      if (!product || Number(product.tenant) !== Number(parsed.tenantId)) {
+        return {
+          success: false,
+          error: `Un producto de las líneas no pertenece a este inquilino (${it.sku || it.productId}).`,
+        };
+      }
     }
 
     const doc = await payload.update({
@@ -1959,9 +2021,12 @@ export async function updateQuoteAction(input: UpdateQuoteInput) {
           quantity: it.quantity,
           unitPriceUSD: it.unitPriceUSD,
         })),
-        validUntil: parsed.validUntil || undefined,
-        notes: parsed.notes || undefined,
+        // null limpia el valor; undefined (campo ausente) no lo modifica.
+        validUntil: parsed.validUntil,
+        notes: parsed.notes,
       },
+      user,
+      overrideAccess: false,
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);

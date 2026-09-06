@@ -4,7 +4,6 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   MessageCircle,
-  Printer,
   Receipt,
   Wallet,
 } from 'lucide-react';
@@ -15,6 +14,7 @@ import {
 import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
+import { PrintButton } from '@/components/erp/PrintButton';
 import { formatUSD, formatVES } from '@/components/erp/KpiCard';
 import { Badge } from '@/components/erp/Badge';
 import type { Invoice, CustomerPayment } from '@/payload-types';
@@ -99,14 +99,7 @@ export default async function CustomerDetailPage({ params }: PageProps) {
               <span>Cobranza WhatsApp</span>
             </a>
           )}
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            <span>Imprimir Estado de Cuenta</span>
-          </button>
+          <PrintButton label="Imprimir Estado de Cuenta" />
         </div>
       </div>
 

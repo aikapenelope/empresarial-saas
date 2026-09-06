@@ -162,7 +162,10 @@ export function QuotesView({
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {(q.status === 'draft' || q.status === 'sent') && (
                             <button
-                              onClick={() => setEditingQuote(q)}
+                              onClick={() => {
+                                setEditingQuote(q);
+                                setIsQuoteModalOpen(true);
+                              }}
                               className="text-slate-400 hover:text-white text-[11px] font-semibold px-2 py-1"
                             >
                               Editar

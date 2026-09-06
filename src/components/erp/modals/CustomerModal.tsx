@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { createCustomerAction, updateCustomerAction } from '@/actions/erpActions';
 import { Loader2 } from 'lucide-react';
@@ -46,6 +46,35 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
     (initial?.priceTier as 'retail') || 'retail',
   );
 
+  // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
+  // cambia el registro seleccionado. Con initial null (modo creación) restaura
+  // los defaults para que un "Nuevo" no herede valores de una edición previa.
+  useEffect(() => {
+    if (initial) {
+      setName(initial.name || '');
+      setTaxId(initial.taxId || '');
+      setPhone(initial.phone || '');
+      setEmail(initial.email || '');
+      setAddress(initial.address || '');
+      setStatus((initial.status as 'recurring') || 'first_time');
+      setCreditAllowed(Boolean(initial.creditAllowed));
+      setCreditLimitUSD(Number(initial.creditLimitUSD) || 0);
+      setCreditDays(Number(initial.creditDays) || 15);
+      setPriceTier((initial.priceTier as 'retail') || 'retail');
+    } else {
+      setName('');
+      setTaxId('');
+      setPhone('');
+      setEmail('');
+      setAddress('');
+      setStatus('first_time');
+      setCreditAllowed(false);
+      setCreditLimitUSD(0);
+      setCreditDays(15);
+      setPriceTier('retail');
+    }
+  }, [initial, isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -59,8 +88,9 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
           name,
           taxId,
           phone,
-          email: email || undefined,
-          address: address || undefined,
+          // Edición: vaciar el campo envía null (limpia); no undefined.
+          email: email.trim() === '' ? null : email,
+          address: address.trim() === '' ? null : address,
           status,
           creditAllowed,
           creditLimitUSD,

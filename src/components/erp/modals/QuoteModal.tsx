@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { createQuoteAction, updateQuoteAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from '../KpiCard';
@@ -78,6 +78,49 @@ export function QuoteModal({
         ],
   );
 
+  // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
+  // cambia la cotización seleccionada. Con initial null (modo creación)
+  // restaura los defaults para que un "Nueva Cotización" no herede valores.
+  useEffect(() => {
+    if (initial) {
+      setCustomerId(initial.customerId || customers[0]?.id || 0);
+      setValidUntil(initial.validUntil ? initial.validUntil.slice(0, 10) : '');
+      setNotes(initial.notes || '');
+      setItems(
+        initial.items?.length
+          ? initial.items.map((it) => ({
+              productId: it.productId,
+              sku: it.sku || '',
+              description: it.description,
+              quantity: it.quantity,
+              unitPriceUSD: it.unitPriceUSD,
+            }))
+          : [
+              {
+                productId: products[0]?.id,
+                sku: products[0]?.sku || '',
+                description: products[0]?.name || 'Concepto Cotizado',
+                quantity: 1,
+                unitPriceUSD: products[0]?.priceUSD || 0,
+              },
+            ],
+      );
+    } else {
+      setCustomerId(customers[0]?.id || 0);
+      setValidUntil('');
+      setNotes('');
+      setItems([
+        {
+          productId: products[0]?.id,
+          sku: products[0]?.sku || '',
+          description: products[0]?.name || 'Concepto Cotizado',
+          quantity: 1,
+          unitPriceUSD: products[0]?.priceUSD || 0,
+        },
+      ]);
+    }
+  }, [initial, isOpen]);
+
   const handleAddItem = () => {
     const prod = products[0];
     setItems([
@@ -144,8 +187,9 @@ export function QuoteModal({
           quoteId: initial!.id,
           customerId,
           items,
-          validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
-          notes: notes || undefined,
+          // Edición: vaciar el campo envía null (limpia); no undefined.
+          validUntil: validUntil ? new Date(validUntil).toISOString() : null,
+          notes: notes.trim() === '' ? null : notes,
         })
       : await createQuoteAction({
           tenantId,

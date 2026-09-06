@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { createProductAction, updateProductAction } from '@/actions/erpActions';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
@@ -19,6 +19,7 @@ interface ProductModalProps {
     unitOfMeasure?: string | null;
     costUSD?: number | null;
     priceUSD?: number | null;
+    taxRate?: string | null;
     minStockAlert?: number | null;
     priceTiers?: Array<{ tier: string; priceUSD: number }> | null;
   } | null;
@@ -41,6 +42,9 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
   );
   const [costUSD, setCostUSD] = useState(Number(initial?.costUSD) || 0);
   const [priceUSD, setPriceUSD] = useState(Number(initial?.priceUSD) || 0);
+  const [taxRate, setTaxRate] = useState<'exempt' | 'general' | 'reduced'>(
+    (initial?.taxRate as 'general') || 'exempt',
+  );
   const [minStockAlert, setMinStockAlert] = useState(Number(initial?.minStockAlert) || 0);
   const [tiers, setTiers] = useState<Array<{ tier: (typeof TIER_OPTIONS)[number]; priceUSD: number }>>(
     (initial?.priceTiers || []).map((t) => ({
@@ -48,6 +52,38 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
       priceUSD: Number(t.priceUSD) || 0,
     })),
   );
+
+  // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
+  // cambia el registro seleccionado. Con initial null (modo creación) restaura
+  // los defaults para que un "Nuevo" no herede valores de una edición previa.
+  useEffect(() => {
+    if (initial) {
+      setName(initial.name || '');
+      setSku(initial.sku || '');
+      setProductType((initial.productType as 'standard') || 'standard');
+      setUnitOfMeasure((initial.unitOfMeasure as 'unit') || 'unit');
+      setCostUSD(Number(initial.costUSD) || 0);
+      setPriceUSD(Number(initial.priceUSD) || 0);
+      setTaxRate((initial.taxRate as 'general') || 'exempt');
+      setMinStockAlert(Number(initial.minStockAlert) || 0);
+      setTiers(
+        (initial.priceTiers || []).map((t) => ({
+          tier: (t.tier as (typeof TIER_OPTIONS)[number]) || 'wholesale',
+          priceUSD: Number(t.priceUSD) || 0,
+        })),
+      );
+    } else {
+      setName('');
+      setSku('');
+      setProductType('standard');
+      setUnitOfMeasure('unit');
+      setCostUSD(0);
+      setPriceUSD(0);
+      setTaxRate('exempt');
+      setMinStockAlert(0);
+      setTiers([]);
+    }
+  }, [initial, isOpen]);
 
   const handleGenerateSku = () => {
     const prefix = productType === 'raw_material' ? 'MP' : productType === 'manufactured' ? 'PT' : 'ART';
@@ -71,6 +107,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
           unitOfMeasure,
           costUSD,
           priceUSD,
+          taxRate,
           minStockAlert,
           priceTiers: tiers,
         })
@@ -83,6 +120,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
           unitOfMeasure,
           costUSD,
           priceUSD,
+          taxRate,
           minStockAlert,
         });
 
@@ -207,6 +245,19 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
               className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono font-bold text-emerald-400"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block font-semibold text-slate-300 mb-1">Tratamiento Fiscal (IVA)</label>
+          <select
+            value={taxRate}
+            onChange={(e) => setTaxRate(e.target.value as 'exempt')}
+            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+          >
+            <option value="exempt">Exento</option>
+            <option value="general">Alícuota General (16%)</option>
+            <option value="reduced">Alícuota Reducida (8%)</option>
+          </select>
         </div>
 
         {/* Tiers de precio alternativos (el retail es el precio base) */}
