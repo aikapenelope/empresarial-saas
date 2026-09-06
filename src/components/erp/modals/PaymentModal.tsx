@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useTransition } from 'react';
 import { Modal } from './Modal';
-import { createPaymentAction } from '@/actions/erpActions';
+import { toast } from 'sonner';
+import { createPaymentAction, uploadReceiptAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from '../KpiCard';
 import { Loader2 } from 'lucide-react';
 
@@ -39,6 +40,7 @@ export function PaymentModal({
     'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance'
   >('cash_usd');
   const [referenceNumber, setReferenceNumber] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [notes, setNotes] = useState('');
 
   // Reiniciar SIEMPRE la selección cuando el modal se abre o cambian los defaults:
@@ -51,6 +53,7 @@ export function PaymentModal({
     setError(null);
     setReferenceNumber('');
     setNotes('');
+    setReceiptFile(null);
     setAmountUSD(10);
 
     const inv = defaultInvoiceId ? invoices.find((i) => i.id === defaultInvoiceId) : undefined;
@@ -85,6 +88,19 @@ export function PaymentModal({
     setError(null);
 
     startTransition(async () => {
+      let receiptMediaId: number | undefined;
+      if (receiptFile) {
+        const fd = new FormData();
+        fd.append('file', receiptFile);
+        fd.append('tenantId', String(tenantId));
+        const upload = await uploadReceiptAction(fd);
+        if (!upload.success) {
+          setError(upload.error || 'Error al subir el comprobante.');
+          return;
+        }
+        receiptMediaId = upload.mediaId;
+      }
+
       const res = await createPaymentAction({
         tenantId,
         tenantSlug,
@@ -92,11 +108,14 @@ export function PaymentModal({
         invoiceId: invoiceId ? Number(invoiceId) : undefined,
         amountUSD,
         method,
+        receiptMediaId,
         referenceNumber: referenceNumber || undefined,
         notes: notes || undefined,
       });
 
       if (res.success) {
+        toast.success('Cobro registrado correctamente.');
+        setReceiptFile(null);
         setAmountUSD(10);
         setReferenceNumber('');
         setNotes('');
@@ -244,6 +263,22 @@ export function PaymentModal({
             placeholder="Ej. Ref #849202 o Últimos 4 dígitos de tarjeta"
             className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
           />
+        </div>
+
+        {/* Comprobante adjunto */}
+        <div>
+          <label className="block font-semibold text-slate-300 mb-1">
+            Comprobante Digital (opcional, imagen o PDF ≤ 8 MB)
+          </label>
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-indigo-600 file:text-white text-[11px]"
+          />
+          {receiptFile && (
+            <p className="text-[10px] text-slate-500 mt-1">Adjunto: {receiptFile.name}</p>
+          )}
         </div>
 
         {/* Notas */}

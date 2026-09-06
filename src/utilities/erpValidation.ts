@@ -98,8 +98,20 @@ export const createPaymentSchema = z.object({
     'zelle',
     'binance',
   ]),
+  receiptMediaId: idLike.optional(),
   referenceNumber: z.string().trim().max(200).optional(),
   notes: z.string().trim().max(1000).optional(),
+});
+
+const INVITABLE_ROLES = ['vendor', 'cashier', 'employee', 'supervisor'] as const;
+
+export const inviteUserSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  email: z.string().trim().email('Email inválido.').max(200),
+  name: z.string().trim().min(2, 'El nombre es requerido.').max(200),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.').max(128),
+  role: z.enum(['super-admin', 'tenant-admin', ...INVITABLE_ROLES]),
 });
 
 export const createCashRegisterSchema = z.object({

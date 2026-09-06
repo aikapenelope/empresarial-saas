@@ -68,7 +68,6 @@ export default async function CustomerDetailPage({ params }: PageProps) {
   const { customer, invoices, payments } = detail;
   const debtUSD = Number(customer.currentDebtUSD) || 0;
   const overdueUSD = Number(customer.overdueDebtUSD) || 0;
-  const waPhone = (customer.phone || '').replace(/[^0-9]/g, '');
 
   return (
     <div className="space-y-6">

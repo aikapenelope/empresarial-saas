@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from 'react';
 import { Modal } from './Modal';
+import { toast } from 'sonner';
 import { createSaleReturnAction } from '@/actions/erpActions';
 import { Loader2, Undo2 } from 'lucide-react';
 
@@ -55,6 +56,7 @@ export function ReturnModal({ isOpen, onClose, tenantId, tenantSlug, invoice }: 
       });
 
       if (res.success) {
+        toast.success('Devolución registrada y mercancía reingresada al Kardex.');
         onClose();
       } else {
         setError(res.error || 'Error al registrar la devolución');

@@ -10,6 +10,7 @@ import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import {
   ErpAccessError,
   requireErpTenantAccess,
+  requireErpUser,
   requireSuperAdmin,
 } from '@/utilities/erpAuth';
 import { getActiveDb } from '@/utilities/inventoryLedger';
@@ -31,6 +32,7 @@ import {
   ensureWalkInCustomerSchema,
   executeProductionSchema,
   firstZodMessage,
+  inviteUserSchema,
   importStockSchema,
   receivePurchaseGoodsSchema,
   completeInventoryCountSchema,
@@ -1012,6 +1014,7 @@ export interface CreatePaymentInput {
   tenantSlug: string;
   customerId: number;
   invoiceId?: number;
+  receiptMediaId?: number;
   amountUSD: number;
   method: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance';
   referenceNumber?: string;
@@ -1147,6 +1150,7 @@ export async function createPaymentAction(input: CreatePaymentInput) {
               exchangeRate: rate,
               amountUSD,
               reference: parsed.referenceNumber || undefined,
+              ...(parsed.receiptMediaId ? { receipt: parsed.receiptMediaId } : {}),
             },
           ],
           totalUSD: amountUSD,
@@ -2037,7 +2041,111 @@ export async function updateQuoteAction(input: UpdateQuoteInput) {
   }
 }
 
+export interface InviteUserInput {
+  tenantId: number;
+  tenantSlug: string;
+  email: string;
+  name: string;
+  password: string;
+  role: 'super-admin' | 'tenant-admin' | 'vendor' | 'cashier' | 'employee' | 'supervisor';
+}
+
+/**
+ * Invita un usuario al inquilino (Sprint 17). RBAC estricto:
+ *  - tenant-admin: solo puede crear usuarios para SU inquilino y solo con roles
+ *    operativos (vendor/cashier/employee/supervisor) — nunca escalables a admin.
+ *  - super-admin: cualquier rol, cualquier inquilino del que sea miembro (o el indicado).
+ */
+export async function inviteUserAction(input: InviteUserInput) {
+  try {
+    const parsed = inviteUserSchema.parse(input);
+    const actor = await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    if (actor.role !== 'super-admin') {
+      if (parsed.role === 'super-admin' || parsed.role === 'tenant-admin') {
+        throw new Error(
+          'Prohibido: solo un super-administrador puede crear cuentas administrativas.',
+        );
+      }
+    }
+
+    const doc = await payload.create({
+      collection: 'users',
+      data: {
+        email: parsed.email,
+        name: parsed.name,
+        password: parsed.password,
+        role: parsed.role,
+        tenants: [{ tenant: parsed.tenantId }],
+      },
+      user: actor,
+      overrideAccess: false,
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/settings`);
+
+    return { success: true, data: { id: doc.id, email: doc.email } };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo invitar al usuario.') };
+  }
+}
+
+/**
+ * Sube el comprobante digital de un cobro a la colección media (Sprint 17).
+ * Firma FormData: Next.js serializa File en Server Actions nativamente.
+ * Devuelve el id de media para adjuntarlo a methods[0].receipt.
+ */
+export async function uploadReceiptAction(formData: FormData): Promise<{
+  success: boolean;
+  mediaId?: number;
+  error?: string;
+}> {
+  try {
+    const actor = await requireErpUser();
+    const payload = await getPayload({ config });
+
+    const file = formData.get('file');
+    const tenantId = Number(formData.get('tenantId'));
+    if (!(file instanceof File)) {
+      return { success: false, error: 'Archivo requerido.' };
+    }
+    if (!tenantId) {
+      return { success: false, error: 'Inquilino requerido.' };
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      return { success: false, error: 'El comprobante no puede superar 8 MB.' };
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    const doc = await payload.create({
+      collection: 'media',
+      data: {
+        tenant: tenantId,
+        alt: `Comprobante de pago — ${file.name}`,
+      },
+      file: {
+        data: buffer,
+        mimetype: file.type || 'application/octet-stream',
+        name: file.name,
+        size: file.size,
+      },
+      user: actor,
+      overrideAccess: true,
+    });
+
+    return { success: true, mediaId: doc.id };
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) return { success: false, error: error.message };
+    console.error('[uploadReceipt]', error);
+    return { success: false, error: 'No se pudo subir el comprobante.' };
+  }
+}
+
 // ==========================================
+// 5. CAJAS REGISTRADORAS & ARQUEOS CIEGOS
+// ==========================================// ==========================================
 // 5. CAJAS REGISTRADORAS & ARQUEOS CIEGOS
 // ==========================================// ==========================================
 // 5. CAJAS REGISTRADORAS & ARQUEOS CIEGOS

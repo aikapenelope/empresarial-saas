@@ -14,7 +14,8 @@ export const Users: CollectionConfig = {
   },
   access: {
     read: ({ req: { user } }) => Boolean(user),
-    create: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
+    create: ({ req: { user } }) =>
+      Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
     update: ({ req: { user } }) => {
       if (user?.role === 'super-admin') return true;
       return { id: { equals: user?.id } };
