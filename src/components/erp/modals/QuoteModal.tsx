@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal } from './Modal';
-import { createQuoteAction } from '@/actions/erpActions';
+import { createQuoteAction, updateQuoteAction } from '@/actions/erpActions';
+import { effectivePriceForTier } from '@/utilities/priceTiers';
 import { formatUSD, formatVES } from '../KpiCard';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 
@@ -11,7 +12,15 @@ interface QuoteModalProps {
   onClose: () => void;
   tenantId: number;
   tenantSlug: string;
-  customers: Array<{ id: number; name: string; taxId: string }>;
+  customers: Array<{ id: number; name: string; taxId: string; priceTier?: string | null }>;
+  /** Si se pasa, el modal opera en modo edición sobre esa cotización (draft/sent). */
+  initial?: {
+    id: number;
+    customerId: number;
+    items: Array<{ productId?: number; sku?: string; description: string; quantity: number; unitPriceUSD: number }>;
+    validUntil?: string | null;
+    notes?: string | null;
+  } | null;
   products: Array<{
     id: number;
     name: string;
@@ -38,23 +47,120 @@ export function QuoteModal({
   customers,
   products,
   rate,
+  initial,
 }: QuoteModalProps) {
+  const isEdit = Boolean(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [customerId, setCustomerId] = useState<number>(customers[0]?.id || 0);
-  const [validUntil, setValidUntil] = useState<string>('');
-  const [notes, setNotes] = useState('');
+  // Tier del cliente seleccionado con la MISMA utilidad que InvoiceModal y
+  // POSView: líneas nuevas/seleccionadas parten del precio efectivo del tier
+  // (fallback retail), no del priceUSD base.
+  const tierFor = (id: number) => customers.find((c) => c.id === id)?.priceTier || 'retail';
+  const initialTier = tierFor(initial?.customerId || customers[0]?.id || 0);
 
-  const [items, setItems] = useState<QuoteLine[]>([
-    {
-      productId: products[0]?.id,
-      sku: products[0]?.sku || '',
-      description: products[0]?.name || 'Concepto Cotizado',
-      quantity: 1,
-      unitPriceUSD: products[0]?.priceUSD || 0,
-    },
-  ]);
+  const [customerId, setCustomerId] = useState<number>(initial?.customerId || customers[0]?.id || 0);
+  const [validUntil, setValidUntil] = useState<string>(
+    initial?.validUntil ? initial.validUntil.slice(0, 10) : '',
+  );
+  const [notes, setNotes] = useState(initial?.notes || '');
+
+  const customerTier = tierFor(customerId);
+  const priceFor = (product: {
+    priceUSD?: number | null;
+    priceTiers?: Array<{ tier: string; priceUSD?: number | null }> | null;
+  }) => effectivePriceForTier(product, customerTier);
+
+  // Tier vigente en el último render/carga: sirve para distinguir líneas
+  // auto-precidas de las editadas manualmente al cambiar de cliente.
+  const prevTierRef = useRef<string>(initialTier);
+
+  const [items, setItems] = useState<QuoteLine[]>(
+    initial?.items?.length
+      ? initial.items.map((it) => ({
+          productId: it.productId,
+          sku: it.sku || '',
+          description: it.description,
+          quantity: it.quantity,
+          unitPriceUSD: it.unitPriceUSD,
+        }))
+      : [
+          {
+            productId: products[0]?.id,
+            sku: products[0]?.sku || '',
+            description: products[0]?.name || 'Concepto Cotizado',
+            quantity: 1,
+            unitPriceUSD: products[0] ? effectivePriceForTier(products[0], initialTier) : 0,
+          },
+        ],
+  );
+
+  // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
+  // cambia la cotización seleccionada. Con initial null (modo creación)
+  // restaura los defaults para que un "Nueva Cotización" no herede valores.
+  useEffect(() => {
+    if (initial) {
+      setCustomerId(initial.customerId || customers[0]?.id || 0);
+      setValidUntil(initial.validUntil ? initial.validUntil.slice(0, 10) : '');
+      setNotes(initial.notes || '');
+      setItems(
+        initial.items?.length
+          ? initial.items.map((it) => ({
+              productId: it.productId,
+              sku: it.sku || '',
+              description: it.description,
+              quantity: it.quantity,
+              unitPriceUSD: it.unitPriceUSD,
+            }))
+          : [
+              {
+                productId: products[0]?.id,
+                sku: products[0]?.sku || '',
+                description: products[0]?.name || 'Concepto Cotizado',
+                quantity: 1,
+                unitPriceUSD: products[0]?.priceUSD || 0,
+              },
+            ],
+      );
+    } else {
+      const defaultCustomerId = customers[0]?.id || 0;
+      setCustomerId(defaultCustomerId);
+      setValidUntil('');
+      setNotes('');
+      setItems([
+        {
+          productId: products[0]?.id,
+          sku: products[0]?.sku || '',
+          description: products[0]?.name || 'Concepto Cotizado',
+          quantity: 1,
+          unitPriceUSD: products[0] ? effectivePriceForTier(products[0], tierFor(defaultCustomerId)) : 0,
+        },
+      ]);
+    }
+    prevTierRef.current = tierFor(initial?.customerId || customers[0]?.id || 0);
+  }, [initial, isOpen]);
+
+  // Cambio de cliente: sólo se re-precian las líneas cuyo precio sigue siendo
+  // el efectivo del tier ANTERIOR (auto-gestionadas). Las editadas manualmente
+  // (precio distinto al efectivo previo) se conservan intactas.
+  useEffect(() => {
+    const prevTier = prevTierRef.current;
+    if (prevTier === customerTier) return;
+    prevTierRef.current = customerTier;
+    setItems((current) =>
+      current.map((line) => {
+        if (!line.productId) return line;
+        const prod = products.find((p) => p.id === line.productId);
+        if (!prod) return line;
+        const prevPrice = effectivePriceForTier(prod, prevTier);
+        const nextPrice = effectivePriceForTier(prod, customerTier);
+        if (Math.abs(line.unitPriceUSD - prevPrice) < 0.005 && Math.abs(nextPrice - prevPrice) > 0.005) {
+          return { ...line, unitPriceUSD: nextPrice };
+        }
+        return line;
+      }),
+    );
+  }, [customerId, customerTier, products]);
 
   const handleAddItem = () => {
     const prod = products[0];
@@ -65,7 +171,7 @@ export function QuoteModal({
         sku: prod?.sku || '',
         description: prod?.name || 'Concepto',
         quantity: 1,
-        unitPriceUSD: prod?.priceUSD || 0,
+        unitPriceUSD: prod ? priceFor(prod) : 0,
       },
     ]);
   };
@@ -84,7 +190,7 @@ export function QuoteModal({
       productId: prod.id,
       sku: prod.sku,
       description: prod.name,
-      unitPriceUSD: prod.priceUSD,
+      unitPriceUSD: priceFor(prod),
     };
     setItems(newItems);
   };
@@ -115,20 +221,33 @@ export function QuoteModal({
     setLoading(true);
     setError(null);
 
-    const res = await createQuoteAction({
-      tenantId,
-      tenantSlug,
-      customerId,
-      items,
-      validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
-      notes: notes || undefined,
-    });
+    const res = isEdit
+      ? await updateQuoteAction({
+          tenantId,
+          tenantSlug,
+          quoteId: initial!.id,
+          customerId,
+          items,
+          // Edición: vaciar el campo envía null (limpia); no undefined.
+          validUntil: validUntil ? new Date(validUntil).toISOString() : null,
+          notes: notes.trim() === '' ? null : notes,
+        })
+      : await createQuoteAction({
+          tenantId,
+          tenantSlug,
+          customerId,
+          items,
+          validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
+          notes: notes || undefined,
+        });
 
     setLoading(false);
 
     if (res.success) {
-      setNotes('');
-      setValidUntil('');
+      if (!isEdit) {
+        setNotes('');
+        setValidUntil('');
+      }
       onClose();
     } else {
       setError(res.error || 'Error al crear la cotización');
@@ -139,7 +258,7 @@ export function QuoteModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Nueva Cotización"
+      title={isEdit ? 'Editar Cotización' : 'Nueva Cotización'}
       description="Cotiza sin facturar: al aceptarla, se convierte en factura con un clic manteniendo las líneas."
       maxWidth="2xl"
     >
@@ -297,7 +416,7 @@ export function QuoteModal({
             className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            <span>Crear Cotización</span>
+            <span>{isEdit ? 'Guardar Cambios' : 'Crear Cotización'}</span>
           </button>
         </div>
       </form>

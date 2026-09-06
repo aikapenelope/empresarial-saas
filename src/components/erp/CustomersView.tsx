@@ -44,6 +44,22 @@ export function CustomersView({
   effectiveRate,
 }: CustomersViewProps) {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<
+    | {
+        id: number;
+        name: string;
+        taxId: string;
+        phone: string;
+        email?: string | null;
+        address?: string | null;
+        status?: string | null;
+        creditAllowed?: boolean | null;
+        creditLimitUSD?: number | null;
+        creditDays?: number | null;
+        priceTier?: string | null;
+      }
+    | undefined
+  >(undefined);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | undefined>(undefined);
 
@@ -227,7 +243,12 @@ export function CustomersView({
                   return (
                     <tr key={c.id} className="hover:bg-slate-800/30 transition-colors">
                       <td className="p-3">
-                        <div className="font-semibold text-white">{c.name}</div>
+                        <Link
+                          href={`/${tenantSlug}/erp/customers/${c.id}`}
+                          className="font-semibold text-white hover:text-indigo-300"
+                        >
+                          {c.name}
+                        </Link>
                         <div className="text-[11px] text-slate-400">{c.phone || c.email || 'Sin contacto'}</div>
                       </td>
                       <td className="p-3 font-mono text-slate-300">{c.taxId}</td>
@@ -278,6 +299,27 @@ export function CustomersView({
                               <span>WhatsApp</span>
                             </a>
                           )}
+                          <button
+                            onClick={() => {
+                              setEditingCustomer({
+                                id: c.id,
+                                name: c.name,
+                                taxId: c.taxId,
+                                phone: c.phone || '',
+                                email: c.email,
+                                address: c.address,
+                                status: c.status,
+                                creditAllowed: c.creditAllowed,
+                                creditLimitUSD: c.creditLimitUSD,
+                                creditDays: c.creditDays,
+                                priceTier: c.priceTier,
+                              });
+                              setIsCustomerModalOpen(true);
+                            }}
+                            className="text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold px-2 py-1"
+                          >
+                            Editar
+                          </button>
                           {debt <= 0 && (
                             <span className="text-[11px] text-slate-400 font-medium">Al día</span>
                           )}
@@ -295,9 +337,13 @@ export function CustomersView({
       {/* Modal Nuevo Cliente */}
       <CustomerModal
         isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
+        onClose={() => {
+          setIsCustomerModalOpen(false);
+          setEditingCustomer(undefined);
+        }}
         tenantId={tenantId}
         tenantSlug={tenantSlug}
+        initial={editingCustomer}
       />
 
       {/* Modal Cobro */}

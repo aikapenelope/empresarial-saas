@@ -7,6 +7,7 @@ import type {
   Plugin,
 } from 'payload';
 import { resolveEffectiveRate } from '../utilities/exchangeRate';
+import { extractId } from '../utilities/inventoryLedger';
 
 /**
  * ─── Pricing Plugin (Sprint 11) ─────────────────────────────────────────────
@@ -72,7 +73,26 @@ const priceHistoryHook: CollectionBeforeChangeHook = async ({
     return data;
   }
 
-  const { rate } = await resolveEffectiveRate();
+  // La tasa efectiva respeta la configuración de moneda del inquilino del
+  // producto (tasa manual / auto-sync), no la global por defecto.
+  let tenantRateConfig: { manualExchangeRate?: number; autoSyncRate?: boolean } | undefined;
+  const tenantId = extractId(originalDoc.tenant);
+  if (tenantId) {
+    const tenantDoc = await req.payload.findByID({
+      collection: 'tenants',
+      id: tenantId as number,
+      depth: 0,
+      req,
+    });
+    tenantRateConfig = tenantDoc?.currencyConfig
+      ? {
+          manualExchangeRate: tenantDoc.currencyConfig.manualExchangeRate ?? undefined,
+          autoSyncRate: tenantDoc.currencyConfig.autoSyncRate ?? undefined,
+        }
+      : undefined;
+  }
+
+  const { rate } = await resolveEffectiveRate(tenantRateConfig);
 
   await req.payload.create({
     collection: 'price-history',

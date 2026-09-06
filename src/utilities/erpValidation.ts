@@ -8,14 +8,29 @@ import { z } from 'zod';
 const positiveMoney = z.number().min(0, 'El monto no puede ser negativo.').finite();
 const idLike = z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]).transform(Number);
 
+/**
+ * Campos opcionales limpiables: en edición, vaciar un campo se representa con
+ * `null` (borra el valor almacenado) — distinto de `undefined`, que significa
+ * "no modificar". Un string vacío del formulario se normaliza a null.
+ */
+const clearableText = (max: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().trim().max(max).nullable().optional(),
+  );
+const clearableEmail = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+  z.string().trim().email('Email inválido.').max(200).nullable().optional(),
+);
+
 export const createCustomerSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),
   name: z.string().trim().min(2, 'El nombre del cliente es requerido.').max(300),
   taxId: z.string().trim().min(3, 'El RIF/Cédula es requerido.').max(50),
   phone: z.string().trim().min(5, 'El teléfono es requerido.').max(50),
-  email: z.string().trim().email('Email inválido.').max(200).optional(),
-  address: z.string().trim().max(500).optional(),
+  email: clearableEmail,
+  address: clearableText(500),
   status: z.enum(['lead', 'first_time', 'recurring', 'vip', 'inactive']).optional(),
   creditAllowed: z.boolean().optional(),
   creditLimitUSD: positiveMoney.optional(),
@@ -118,6 +133,27 @@ export const openCashShiftSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+export const updateCustomerSchema = createCustomerSchema.extend({
+  customerId: idLike,
+  // Edición: '' / null borran el valor; undefined (ausente) no lo modifica.
+  email: clearableEmail,
+  address: clearableText(500),
+  priceTier: z.enum(['retail', 'wholesale', 'vendor', 'promo']).optional(),
+});
+
+export const updateProductSchema = createProductSchema.extend({
+  productId: idLike,
+  priceTiers: z
+    .array(
+      z.object({
+        tier: z.enum(['wholesale', 'vendor', 'promo']),
+        priceUSD: positiveMoney,
+      }),
+    )
+    .max(3, 'Máximo 3 tiers alternativos (el retail es el precio base).')
+    .optional(),
+});
+
 export const quoteItemSchema = z.object({
   productId: idLike.optional(),
   sku: z.string().trim().max(100).optional(),
@@ -131,8 +167,11 @@ export const createQuoteSchema = z.object({
   tenantSlug: z.string().min(1).max(120),
   customerId: idLike,
   items: z.array(quoteItemSchema).min(1, 'La cotización requiere al menos una línea.').max(200),
-  validUntil: z.string().datetime({ offset: true }).optional(),
-  notes: z.string().trim().max(2000).optional(),
+  validUntil: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().datetime({ offset: true }).nullable().optional(),
+  ),
+  notes: clearableText(2000),
 });
 
 export const updateQuoteStatusSchema = z.object({
@@ -140,6 +179,16 @@ export const updateQuoteStatusSchema = z.object({
   tenantSlug: z.string().min(1).max(120),
   quoteId: idLike,
   status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'expired']),
+});
+
+export const updateQuoteSchema = createQuoteSchema.extend({
+  quoteId: idLike,
+  // Edición: '' / null borran validUntil/notes; undefined no los modifica.
+  validUntil: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().datetime({ offset: true }).nullable().optional(),
+  ),
+  notes: clearableText(2000),
 });
 
 export const convertQuoteSchema = z.object({

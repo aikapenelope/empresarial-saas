@@ -846,3 +846,67 @@ export async function getKardexEntries(
     page: res.page || 1,
   };
 }
+
+export interface CustomerDetailData {
+  customer: Customer;
+  invoices: Invoice[];
+  payments: CustomerPayment[];
+}
+
+export async function getCustomerDetail(
+  tenantId: number,
+  customerId: number,
+): Promise<CustomerDetailData> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const customer = (await payload.findByID({
+    collection: 'customers',
+    id: customerId,
+    depth: 0,
+    user,
+    overrideAccess: false,
+  })) as Customer;
+
+  if (!customer || Number(customer.tenant) !== Number(tenantId)) {
+    throw new Error('Cliente no encontrado en este inquilino.');
+  }
+
+  const [invoicesRes, paymentsRes] = await Promise.all([
+    payload.find({
+      collection: 'invoices',
+      where: {
+        and: [
+          { tenant: { equals: tenantId } },
+          { customer: { equals: customerId } },
+          { status: { not_equals: 'draft' } },
+        ],
+      },
+      depth: 0,
+      sort: '-createdAt',
+      limit: 100,
+      user,
+      overrideAccess: false,
+    }),
+    payload.find({
+      collection: 'customer-payments',
+      where: {
+        and: [
+          { tenant: { equals: tenantId } },
+          { customer: { equals: customerId } },
+        ],
+      },
+      depth: 0,
+      sort: '-createdAt',
+      limit: 100,
+      user,
+      overrideAccess: false,
+    }),
+  ]);
+
+  return {
+    customer,
+    invoices: invoicesRes.docs as Invoice[],
+    payments: paymentsRes.docs as CustomerPayment[],
+  };
+}

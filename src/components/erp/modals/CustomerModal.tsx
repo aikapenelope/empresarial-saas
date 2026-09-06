@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
-import { createCustomerAction } from '@/actions/erpActions';
+import { createCustomerAction, updateCustomerAction } from '@/actions/erpActions';
 import { Loader2 } from 'lucide-react';
 
 interface CustomerModalProps {
@@ -10,51 +10,119 @@ interface CustomerModalProps {
   onClose: () => void;
   tenantId: number;
   tenantSlug: string;
+  /** Si se pasa, el modal opera en modo edición sobre ese cliente. */
+  initial?: {
+    id: number;
+    name: string;
+    taxId: string;
+    phone: string;
+    email?: string | null;
+    address?: string | null;
+    status?: string | null;
+    creditAllowed?: boolean | null;
+    creditLimitUSD?: number | null;
+    creditDays?: number | null;
+    priceTier?: string | null;
+  } | null;
 }
 
-export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug }: CustomerModalProps) {
+export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }: CustomerModalProps) {
+  const isEdit = Boolean(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [name, setName] = useState('');
-  const [taxId, setTaxId] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [address, setAddress] = useState('');
-  const [status, setStatus] = useState<'first_time' | 'recurring' | 'vip' | 'lead'>('first_time');
-  const [creditAllowed, setCreditAllowed] = useState(false);
-  const [creditLimitUSD, setCreditLimitUSD] = useState(0);
-  const [creditDays, setCreditDays] = useState(15);
+  const [name, setName] = useState(initial?.name || '');
+  const [taxId, setTaxId] = useState(initial?.taxId || '');
+  const [phone, setPhone] = useState(initial?.phone || '');
+  const [email, setEmail] = useState(initial?.email || '');
+  const [address, setAddress] = useState(initial?.address || '');
+  const [status, setStatus] = useState<'first_time' | 'recurring' | 'vip' | 'lead'>(
+    (initial?.status as 'recurring') || 'first_time',
+  );
+  const [creditAllowed, setCreditAllowed] = useState(Boolean(initial?.creditAllowed));
+  const [creditLimitUSD, setCreditLimitUSD] = useState(Number(initial?.creditLimitUSD) || 0);
+  const [creditDays, setCreditDays] = useState(initial?.creditDays == null ? 15 : Number(initial.creditDays));
+  const [priceTier, setPriceTier] = useState<'retail' | 'wholesale' | 'vendor' | 'promo'>(
+    (initial?.priceTier as 'retail') || 'retail',
+  );
+
+  // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
+  // cambia el registro seleccionado. Con initial null (modo creación) restaura
+  // los defaults para que un "Nuevo" no herede valores de una edición previa.
+  useEffect(() => {
+    if (initial) {
+      setName(initial.name || '');
+      setTaxId(initial.taxId || '');
+      setPhone(initial.phone || '');
+      setEmail(initial.email || '');
+      setAddress(initial.address || '');
+      setStatus((initial.status as 'recurring') || 'first_time');
+      setCreditAllowed(Boolean(initial.creditAllowed));
+      setCreditLimitUSD(Number(initial.creditLimitUSD) || 0);
+      setCreditDays(initial.creditDays == null ? 15 : Number(initial.creditDays));
+      setPriceTier((initial.priceTier as 'retail') || 'retail');
+    } else {
+      setName('');
+      setTaxId('');
+      setPhone('');
+      setEmail('');
+      setAddress('');
+      setStatus('first_time');
+      setCreditAllowed(false);
+      setCreditLimitUSD(0);
+      setCreditDays(15);
+      setPriceTier('retail');
+    }
+  }, [initial, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    const res = await createCustomerAction({
-      tenantId,
-      tenantSlug,
-      name,
-      taxId,
-      phone,
-      email,
-      address,
-      status,
-      creditAllowed,
-      creditLimitUSD,
-      creditDays,
-    });
+    const res = isEdit
+      ? await updateCustomerAction({
+          tenantId,
+          tenantSlug,
+          customerId: initial!.id,
+          name,
+          taxId,
+          phone,
+          // Edición: vaciar el campo envía null (limpia); no undefined.
+          email: email.trim() === '' ? null : email,
+          address: address.trim() === '' ? null : address,
+          status,
+          creditAllowed,
+          creditLimitUSD,
+          creditDays,
+          priceTier,
+        })
+      : await createCustomerAction({
+          tenantId,
+          tenantSlug,
+          name,
+          taxId,
+          phone,
+          email,
+          address,
+          status,
+          creditAllowed,
+          creditLimitUSD,
+          creditDays,
+        });
 
     setLoading(false);
 
     if (res.success) {
-      // Reset
-      setName('');
-      setTaxId('');
-      setPhone('');
-      setEmail('');
-      setAddress('');
-      setCreditAllowed(false);
+      if (!isEdit) {
+        // Reset solo en creación
+        setName('');
+        setTaxId('');
+        setPhone('');
+        setEmail('');
+        setAddress('');
+        setCreditAllowed(false);
+      }
       onClose();
     } else {
       setError(res.error || 'Error al guardar cliente');
@@ -65,8 +133,12 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug }: Custome
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Nuevo Cliente CRM"
-      description="Registra un cliente en el padrón del inquilino con condiciones comerciales y WhatsApp de cobranza."
+      title={isEdit ? `Editar Cliente — ${initial!.name}` : 'Nuevo Cliente CRM'}
+      description={
+        isEdit
+          ? 'Actualiza los datos comerciales, condiciones de crédito y tier de precios del cliente.'
+          : 'Registra un cliente en el padrón del inquilino con condiciones comerciales y WhatsApp de cobranza.'
+      }
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -167,6 +239,22 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug }: Custome
           </div>
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block font-semibold text-slate-300 mb-1">Tier de Precio</label>
+            <select
+              value={priceTier}
+              onChange={(e) => setPriceTier(e.target.value as 'retail')}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+            >
+              <option value="retail">Retail (detal)</option>
+              <option value="wholesale">Wholesale (mayorista)</option>
+              <option value="vendor">Vendor (vendedor)</option>
+              <option value="promo">Promo (promoción)</option>
+            </select>
+          </div>
+        </div>
+
         {creditAllowed && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/60 animate-in fade-in">
             <div>
@@ -207,7 +295,7 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug }: Custome
             className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            <span>Registrar Cliente</span>
+            <span>{isEdit ? 'Guardar Cambios' : 'Registrar Cliente'}</span>
           </button>
         </div>
       </form>
