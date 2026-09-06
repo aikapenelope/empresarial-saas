@@ -324,12 +324,78 @@ Cada sprint concluye con:
 
 ---
 
-### ✅ Criterios de Cierre de la Fase 4
+### ✅ Criterios de Cierre de la Fase 4 (S13–S17 completados; Sprint 18 queda como cierre transversal)
 1. Ninguna operación de negocio requiere el admin de Payload: todo se ve, se corrige y se anula desde el ERP.
 2. Cada documento tiene detalle imprimible con su trazabilidad (líneas, cuotas, pagos, kardex, auditoría).
 3. El ciclo de egreso (compra → recepción → pago) opera completo desde la UI.
 4. Cada rol ve solo su operación en la navegación y las listas paginan sin truncar agregados.
 5. Flujos críticos cubiertos por E2E y Core Web Vitals medidos en verde.
+
+---
+
+# 🚀 Fase 5: Features Restantes de Cendaro (Sprints 19–22)
+
+> **Objetivo:** Cubrir los módulos de Cendaro aún ausentes (excl. MercadoLibre y WhatsApp) integrándolos con las invariantes del proyecto: kardex inmutable como única vía de stock, bimonetario con snapshot de tasa, numeración `nextDocumentNumber` + índices únicos, aislamiento multi-tenant y patrones canónicos de Payload 3.x (Local API con `overrideAccess: false` + `user`, `req` propagado, flags `req.context`, plugins en currying, campos `join` nativos y Jobs Queue con `schedule`/`autoRun`).
+>
+> **Sprint 18 (paginación, E2E, CWV)** se mantiene como cierre no funcional y puede ejecutarse en paralelo o al final de esta fase.
+
+---
+
+### 📦 Sprint 19: Pedidos de Venta (Orders)
+> **Objetivo:** El eslabón entre cotización y factura de Cendaro: pedido confirmado pendiente de despacho, con ciclo `draft → confirmed → invoiced | canceled`.
+
+- [ ] **Colección `orders`** (`src/collections/Orders/index.ts`): `order_number` vía `nextDocumentNumber` (agregar a `DOC_NUMBER_TABLES` + índice único compuesto `(tenant_id, order_number)` en migración), `customer` (con snapshot de `priceTier` y nombre), `items[]` (product, sku, description, quantity, unitPriceUSD con precio efectivo por tier al crear, discount opcional), totales bimonetarios + `exchangeRateSnapshot`, `status` (`draft|confirmed|invoiced|canceled` — finales inmutables), `notes`, `issuedInvoice` (relación nullable), campo `join` inverso `orders` en `Customers` (patrón `join` nativo de Payload, `on: 'customer'`).
+- [ ] **Server Actions** (`erpActions.ts` + schemas en `erpValidation.ts`): `createOrderAction`, `updateOrderAction` (solo `draft`), `confirmOrderAction`, `cancelOrderAction`, `issueInvoiceFromOrderAction` — este último reutiliza `createInvoiceCore` dentro de la misma transacción, marca `issuedInvoice` y `status: invoiced`, y **bloquea doble facturación** (chequeo del estado bajo `withTransaction`).
+- [ ] **Invariante kardex intacta:** el pedido NO genera movimientos; el stock se descarga exclusivamente con la factura emitida (el plugin `salesInventoryPlugin` no se modifica). Regla documentada en el header de la colección.
+- [ ] **RBAC:** `ERP_OPERATOR_ROLES` en todas las acciones; anulación restringida a admin (espejo de `voidInvoiceAction`).
+- [ ] **UI:** `OrdersView` (lista con KPIs: abiertos, por facturar, facturados del mes) + `OrderModal` (tiers vía `effectivePriceForTier`, misma convención que `QuoteModal`) + `orders/[id]` imprimible + botones "Facturar" / "Cancelar" en confirmados. Rutas en Sidebar por rol + ⌘K.
+- **Entregable:** PR `feat/sprint-19-orders`.
+
+---
+
+### 🚚 Sprint 20: Remisiones / Notas de Entrega (Delivery Notes)
+> **Objetivo:** Documento de entrega imprimible emitido desde pedidos confirmados, sin duplicar la facturación.
+
+- [ ] **Colección `delivery-notes`** (`src/collections/DeliveryNotes/index.ts`): `note_number` (numeración propia + índice único), `order` (obligatoria) + `invoice` (nullable, se llena si luego se factura), `items[]` con cantidades despachadas vs facturadas por línea, totales bimonetarios, `status` (`issued|voided`), snapshot de tasa. Campo `join` inverso en `orders`.
+- [ ] **Server Actions:** `issueDeliveryNoteAction` (solo pedidos `confirmed`; remisiones parciales por línea con validación `despachado + esta ≤ cantidad`), `voidDeliveryNoteAction` (admin). Transaccional con `req` propagado.
+- [ ] **Invariante kardex:** la remisión es documento logístico SIN efecto en stock — el inventario se descarga con la factura (documentado en la colección). Una remisión posterior a facturación solo referencia, nunca descarga.
+- [ ] **UI:** `DeliveryNotesView` + detalle imprimible (mismo CSS `print-area` de facturas) + botón "Emitir Remisión" en pedidos confirmados + en el detalle del pedido, lista de remisiones emitidas.
+- [ ] **Consistencia pedido↔factura↔remisión:** el detalle del pedido muestra las tres piezas con estados (crosstab simple en `getOrderDetail`).
+- **Entregable:** PR `feat/sprint-20-delivery-notes`.
+
+---
+
+### 💳 Sprint 21: Cartera con Antigüedad (CxC) + Página de Tasas
+> **Objetivo:** La vista de cobranza de Cendaro: cartera envejecida por cliente, y la pantalla dedicada de tasas.
+
+- [ ] **Utility `arAging.ts`** (`src/utilities/arAging.ts`): función pura `computeAgingBuckets(invoices, asOf)` → buckets `0–30 / 31–60 / 61–90 / 90+` días desde `dueDate` sobre saldos abiertos (reutiliza `OPEN_INVOICE_STATUSES`), agregado por cliente y por vendedor (`assignedVendor`), bimonetario. Sin colección nueva: los datos ya existen.
+- [ ] **`getAccountsReceivableData`** en `erpData.ts` (paginado server-side, `overrideAccess: false`) + **`AccountsReceivableView`**: KPIs (total CxC, vencido 90+, clientes con vencido), tabla por cliente con buckets, drilldown al detalle del cliente, filtro por vendedor. Ruta `erp/receivables`.
+- [ ] **`RatesView`** (`erp/rates`): tasas en vivo (BCV/Binance/paralelo de `getLiveExchangeRates`), configuración de tasa manual del inquilino (reutiliza `updateTenantSettingsAction`), e historial de snapshots (últimos N cambios de precio de `price-history` + facturas recientes) para trazabilidad de la tasa aplicada.
+- [ ] **Acceso:** ambas vistas con el guard estándar; cartera visible para admin/supervisor/vendor (el vendor solo su cartera).
+- **Entregable:** PR `feat/sprint-21-receivables-rates`.
+
+---
+
+### 🔔 Sprint 22: Centro de Alertas + Auditoría Global
+> **Objetivo:** El tablero proactivo de Cendaro: alertas evaluadas por Jobs Queue y la vista global de auditoría.
+
+- [ ] **Colección `alerts`** (`src/collections/Alerts/index.ts`): `type` (`low_stock|inventory_diff|rate_change|overdue_invoice|vendor_under_target`), `severity`, `message`, referencias polimórficas ligeras (`refCollection`/`refId`), `acknowledgedAt/By`, `resolvedAt`, índice único parcial `(tenant, type, refId)` para idempotencia.
+- [ ] **TaskConfig `evaluateAlerts`** en `src/jobs/evaluateAlerts.ts` con **schedule cron (cada 15 min) + `autoRun`** según el patrón oficial del Jobs Queue de Payload (`jobs.tasks[].schedule` + `jobs.autoRun`): evalúa por inquilino — stock bajo (`minStockAlert` vs `currentStock`), conteos cíclicos pendientes con diferencia, facturas vencidas sin saldar, variación de tasa > umbral vs último snapshot, vendedor bajo meta del mes. Idempotente: upsert por clave única, resuelve alertas que dejaron de aplicar.
+- [ ] **`AlertsView`** (`erp/alerts`): agrupadas por tipo con severidad, acciones "Reconocer" / "Resolver" (Server Actions), badge con contador de no reconocidas en `Sidebar`/`Header` (consultado en el layout RSC, cero latencia).
+- [ ] **`AuditView` global** (`erp/audit`): query paginada server-side sobre `audit-log` existente con filtros por colección, actor, operación y fechas + enlaces al documento afectado. Solo `super-admin`/`tenant-admin`.
+- **Entregable:** PR `feat/sprint-22-alerts-audit`.
+
+---
+
+### 🧭 Alcance a decidir (fuera de Fase 5)
+- **Contenedores de importación + parseo AI de packing list** (`containers` en Cendaro): funcionalidad genuina de Cendaro (no excluida), pero grande y con dependencia de IA. Si entra, sería Sprint 24 sobre un `containersPlugin` (import → recepción al kardex ya existente).
+
+### ✅ Criterios de Cierre de la Fase 5
+1. Ciclo completo pedido → remisión → factura operable desde la UI, sin tocar el admin de Payload.
+2. Cartera con antigüedad y página de tasas visibles por rol.
+3. Alertas proactivas evaluadas por Jobs Queue con idempotencia, visibles desde la navegación.
+4. Auditoría consultable globalmente con filtros.
+5. Todas las numeraciones nuevas con índice único compuesto y `nextDocumentNumber`; kardex inmutable intacto.
 
 ---
 
