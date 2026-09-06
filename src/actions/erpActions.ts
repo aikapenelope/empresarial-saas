@@ -1153,6 +1153,9 @@ export async function updateOrderAction(input: CreateOrderInput & { orderId: num
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      // Mismo lock de fila que las demás transiciones: una edición no puede
+      // leer 'draft' mientras otra transacción confirma el mismo pedido.
+      await lockOrderRow(parsed.orderId, req);
       const order = await payload.findByID({
         collection: 'orders',
         id: parsed.orderId,

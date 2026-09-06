@@ -25,10 +25,25 @@ const ALLOWED_TRANSITIONS: Record<string, Set<string>> = {
   confirmed: new Set(['confirmed', 'invoiced', 'canceled']),
 };
 
+/** Comparación estable de las líneas de negocio de un pedido. */
+function normalizeItems(items: Array<Record<string, unknown>> | undefined | null): string {
+  return JSON.stringify(
+    (items || []).map((it) => ({
+      product: it.product && typeof it.product === 'object' ? (it.product as { id: unknown }).id : it.product,
+      sku: it.sku ?? null,
+      description: it.description ?? null,
+      quantity: Number(it.quantity) || 0,
+      unitPriceUSD: Number(it.unitPriceUSD) || 0,
+      discountPct: Number(it.discountPct) || 0,
+    })),
+  );
+}
+
 const beforeValidateOrder: CollectionBeforeValidateHook = async ({
   data,
   originalDoc,
   operation,
+  req,
 }) => {
   if (!data) return data;
 
@@ -104,6 +119,25 @@ const beforeValidateOrder: CollectionBeforeValidateHook = async ({
       const issuedInvoice = data.issuedInvoice ?? originalDoc.issuedInvoice;
       if (!issuedInvoice) {
         throw new Error('Facturar un pedido requiere la relación issuedInvoice (factura generada).');
+      }
+    }
+
+    // confirmed→confirmed (status omitido): los campos de negocio NO pueden
+    // alterarse — un update que llegó tarde tras una confirmación no muta el
+    // pedido. Sólo una operación interna marcada (req.context) puede.
+    if (from === 'confirmed' && to === 'confirmed') {
+      const customerIdOf = (v: unknown) =>
+        v && typeof v === 'object' ? (v as { id: unknown }).id : v;
+      const businessChanged =
+        customerIdOf(data.customer) !== customerIdOf(originalDoc.customer) ||
+        (data.priceTierSnapshot !== undefined &&
+          data.priceTierSnapshot !== originalDoc.priceTierSnapshot) ||
+        normalizeItems(data.items as Array<Record<string, unknown>>) !==
+          normalizeItems(originalDoc.items as Array<Record<string, unknown>>);
+      if (businessChanged && !req.context?.allowConfirmedOrderEdit) {
+        throw new Error(
+          'Un pedido confirmado no admite cambios de cliente, tier o líneas; cancélelo o gestione la discrepancia en la factura.',
+        );
       }
     }
   }
