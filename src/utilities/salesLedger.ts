@@ -118,7 +118,11 @@ export async function applySaleStockDeduction(
       product: Number(extractId((item as { product?: unknown }).product)),
       quantity: Number(item.quantity) || 0,
     }))
-    .filter((line) => line.product > 0 && line.quantity > 0);
+    .filter((line) => line.product > 0 && line.quantity > 0)
+    // Orden determinista por id de producto: el beforeValidate del Kardex toma
+    // un advisory lock por (producto, almacén) — facturas concurrentes con las
+    // mismas líneas en distinto orden podrían interbloquearse sin este orden.
+    .sort((a, b) => a.product - b.product);
 
   if (linesWithProduct.length === 0) {
     return 0; // Factura de servicios o líneas de texto libre: sin efecto en el Kardex

@@ -44,6 +44,32 @@ export function getActiveDb(req: PayloadRequest): {
 }
 
 /**
+ * Lock transaccional del saldo de un par (producto, almacén). Serializa la
+ * validación de disponibilidad + creación del movimiento de salida: dos
+ * transacciones concurrentes no pueden leer el mismo saldo del kardex y
+ * descargar ambos (evita inventario negativo por carrera). El lock es
+ * `pg_advisory_xact_lock` — se libera en commit/rollback del llamador.
+ *
+ * Orden determinista: las operaciones que tocan varios pares deben adquirir
+ * los locks ordenados por id de producto (ver applySaleStockDeduction y el
+ * plan de consumo de producción) para evitar deadlocks.
+ */
+export async function lockStockBalance(
+  productIdRaw: unknown,
+  warehouseIdRaw: unknown,
+  req: PayloadRequest,
+): Promise<void> {
+  const productId = extractId(productIdRaw);
+  const warehouseId = extractId(warehouseIdRaw);
+  if (!productId || !warehouseId) return;
+
+  const db = getActiveDb(req);
+  await db.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`stockbalance:${productId}:${warehouseId}`}))`,
+  );
+}
+
+/**
  * Concurrency-safe query for available stock of a product inside a specific warehouse.
  * Computes net sum of inflows minus outflows from immutable stock movements.
  */
@@ -340,8 +366,14 @@ export async function executeProductionOrder(
     });
   }
 
-  // Create immutable consumption movements
-  for (const plan of consumptionPlan) {
+  // Create immutable consumption movements. Orden determinista por materia
+  // prima: el beforeValidate del Kardex toma un advisory lock por
+  // (producto, almacén) — dos producciones concurrentes con los mismos
+  // insumos en distinto orden podrían interbloquearse sin este orden.
+  const orderedPlan = [...consumptionPlan].sort(
+    (a, b) => Number(a.rawMaterialId) - Number(b.rawMaterialId),
+  );
+  for (const plan of orderedPlan) {
     await req.payload.create({
       collection: 'stock-movements',
       data: {

@@ -813,8 +813,20 @@ export async function getKardexEntries(
     });
   }
   if (filters.movementType) and.push({ movementType: { equals: filters.movementType } });
-  if (filters.from) and.push({ createdAt: { greater_than_equal: filters.from } });
-  if (filters.to) and.push({ createdAt: { less_than_equal: `${filters.to}T23:59:59.999Z` } });
+  // Los filtros son fechas de calendario (date-only). Se interpretan en la zona
+  // horaria de negocio (Venezuela, UTC-4, sin DST): "hasta" usa borde exclusivo
+  // del día siguiente para incluir los movimientos de la tarde/noche local,
+  // que un corte 23:59 UTC perdería (19:59 hora Venezuela).
+  if (filters.from) {
+    and.push({
+      createdAt: { greater_than_equal: new Date(`${filters.from}T00:00:00-04:00`).toISOString() },
+    });
+  }
+  if (filters.to) {
+    const toEndExclusive = new Date(`${filters.to}T00:00:00-04:00`);
+    toEndExclusive.setUTCDate(toEndExclusive.getUTCDate() + 1);
+    and.push({ createdAt: { less_than: toEndExclusive.toISOString() } });
+  }
 
   const res = await payload.find({
     collection: 'stock-movements',

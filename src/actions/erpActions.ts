@@ -337,6 +337,9 @@ export async function transferStockAction(input: TransferStockInput) {
       if (!product || Number(product.tenant) !== Number(parsed.tenantId)) {
         throw new Error('El producto no pertenece a este inquilino.');
       }
+      if (product.productType === 'service' || product.trackInventory === false) {
+        throw new Error(`"${product.name}" no controla existencias (servicio o sin kardex).`);
+      }
 
       return payload.create({
         collection: 'stock-movements',

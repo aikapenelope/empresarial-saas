@@ -7,6 +7,7 @@ import {
   extractId,
   getProductWarehouseStock,
   getUserTenantIds,
+  lockStockBalance,
   recalculateProductTotalStock,
   resolveTenantId,
   updateProductWeightedCostOnPurchase,
@@ -228,6 +229,19 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         type === 'adjustment_negative' ||
         type === 'scrap')
     ) {
+      // Servicios y productos sin control de existencias no generan kardex:
+      // una salida crearía saldo ficticio para algo excluido del inventario.
+      if (product.productType === 'service' || product.trackInventory === false) {
+        throw new Error(
+          `"${product.name}" no controla existencias (servicio o sin kardex): no admite salidas de inventario.`,
+        );
+      }
+
+      // Serializa validación + escritura del saldo (par producto/almacén) para
+      // que dos descargas concurrentes no lean el mismo disponible y negativicen
+      // el inventario. El hook corre dentro de la transacción del llamador.
+      await lockStockBalance(productId, sourceId, req);
+
       const availableStock = await getProductWarehouseStock(productId, sourceId, req);
       if (availableStock < qty - 0.0001) {
         throw new Error(
