@@ -17,6 +17,7 @@ import type {
   InventoryCount,
   StockMovement,
   SupplierPayment,
+  Order,
   User,
 } from '@/payload-types';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
@@ -125,6 +126,7 @@ type ErpDataCollection =
   | 'products'
   | 'invoices'
   | 'quotes'
+  | 'orders'
   | 'purchase-invoices'
   | 'suppliers'
   | 'cash-registers'
@@ -484,6 +486,61 @@ export async function getQuotesList(tenantId: number): Promise<Quote[]> {
     sort: '-createdAt',
     user,
   });
+}
+
+/** Pedidos de venta (Sprint 19) para la vista de pedidos. */
+export async function getOrdersList(tenantId: number): Promise<Order[]> {
+  const user = await requireErpTenantAccess(tenantId);
+  return findAllDocs<Order>({
+    collection: 'orders',
+    where: { tenant: { equals: tenantId } },
+    depth: 1,
+    sort: '-createdAt',
+    user,
+  });
+}
+
+export interface OrderDetailData {
+  order: Order;
+  invoice: Invoice | null;
+}
+
+/** Detalle de pedido: pedido poblado + factura emitida (si fue facturado). */
+export async function getOrderDetail(
+  tenantId: number,
+  orderId: number,
+): Promise<OrderDetailData> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const order = (await payload.findByID({
+    collection: 'orders',
+    id: orderId,
+    depth: 1,
+    user,
+    overrideAccess: false,
+  })) as Order;
+
+  if (!order || Number(order.tenant) !== Number(tenantId)) {
+    throw new Error('Pedido no encontrado en este inquilino.');
+  }
+
+  let invoice: Invoice | null = null;
+  const invoiceId =
+    typeof order.issuedInvoice === 'object' && order.issuedInvoice !== null
+      ? order.issuedInvoice.id
+      : order.issuedInvoice;
+  if (invoiceId) {
+    invoice = (await payload.findByID({
+      collection: 'invoices',
+      id: invoiceId as number,
+      depth: 0,
+      user,
+      overrideAccess: false,
+    })) as Invoice;
+  }
+
+  return { order, invoice };
 }
 
 export interface VendorCommissionRow {

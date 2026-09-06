@@ -167,6 +167,7 @@ function useMemoRoutes(tenantSlug: string) {
       { name: 'Facturación & Ventas', href: `/${tenantSlug}/erp/invoices` },
       { name: 'Clientes & Cartera CxC', href: `/${tenantSlug}/erp/customers` },
       { name: 'Cotizaciones', href: `/${tenantSlug}/erp/quotes` },
+      { name: 'Pedidos de Venta', href: `/${tenantSlug}/erp/orders` },
       { name: 'Catálogo, Stock & BOM', href: `/${tenantSlug}/erp/inventory` },
       { name: 'Cajas & Arqueos', href: `/${tenantSlug}/erp/cash-registers` },
       { name: 'Proveedores & CxP', href: `/${tenantSlug}/erp/suppliers` },

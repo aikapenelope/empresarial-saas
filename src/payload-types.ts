@@ -86,6 +86,7 @@ export interface Config {
     'cash-closures': CashClosure;
     'industry-templates': IndustryTemplate;
     quotes: Quote;
+    orders: Order;
     'inventory-counts': InventoryCount;
     'price-history': PriceHistory;
     'audit-log': AuditLog;
@@ -97,7 +98,11 @@ export interface Config {
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
   };
-  collectionsJoins: {};
+  collectionsJoins: {
+    customers: {
+      orders: 'orders';
+    };
+  };
   collectionsSelect: {
     tenants: TenantsSelect<false> | TenantsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
@@ -118,6 +123,7 @@ export interface Config {
     'cash-closures': CashClosuresSelect<false> | CashClosuresSelect<true>;
     'industry-templates': IndustryTemplatesSelect<false> | IndustryTemplatesSelect<true>;
     quotes: QuotesSelect<false> | QuotesSelect<true>;
+    orders: OrdersSelect<false> | OrdersSelect<true>;
     'inventory-counts': InventoryCountsSelect<false> | InventoryCountsSelect<true>;
     'price-history': PriceHistorySelect<false> | PriceHistorySelect<true>;
     'audit-log': AuditLogSelect<false> | AuditLogSelect<true>;
@@ -276,7 +282,109 @@ export interface Customer {
   aging0to30?: number | null;
   aging31to60?: number | null;
   aging60Plus?: number | null;
+  /**
+   * Pedidos de venta asociados a este cliente.
+   */
+  orders?: {
+    docs?: (number | Order)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   whatsappDebtUrl?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders".
+ */
+export interface Order {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Correlativo PED-##### generado por la Server Action (numeración con lock).
+   */
+  orderNumber: string;
+  customer: number | Customer;
+  /**
+   * Segmento del cliente al momento de crear el pedido.
+   */
+  priceTierSnapshot?: ('retail' | 'wholesale' | 'vendor' | 'promo') | null;
+  items: {
+    /**
+     * Opcional: las líneas sin producto son conceptos de texto libre.
+     */
+    product?: (number | null) | Product;
+    sku?: string | null;
+    description: string;
+    quantity: number;
+    unitPriceUSD: number;
+    discountPct?: number | null;
+    totalUSD?: number | null;
+    id?: string | null;
+  }[];
+  issueDate?: string | null;
+  confirmedAt?: string | null;
+  status: 'draft' | 'confirmed' | 'invoiced' | 'canceled';
+  exchangeRateSnapshot?: number | null;
+  totalUSD?: number | null;
+  totalVES?: number | null;
+  /**
+   * Se llena automáticamente al facturar el pedido confirmado.
+   */
+  issuedInvoice?: (number | null) | Invoice;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "products".
+ */
+export interface Product {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  sku: string;
+  barcode?: string | null;
+  productType: 'standard' | 'raw_material' | 'manufactured' | 'service';
+  category?: (number | null) | Category;
+  unitOfMeasure: 'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box';
+  costUSD: number;
+  priceUSD: number;
+  taxRate: 'exempt' | 'general' | 'reduced';
+  trackInventory?: boolean | null;
+  minStockAlert?: number | null;
+  maxStock?: number | null;
+  currentStock?: number | null;
+  description?: string | null;
+  image?: (number | null) | Media;
+  isActive?: boolean | null;
+  /**
+   * El precio base (retail) es el campo "Precio Base de Venta". Agrega aquí los tiers alternativos; los documentos seleccionan el tier según el cliente.
+   */
+  priceTiers?:
+    | {
+        tier: 'wholesale' | 'vendor' | 'promo';
+        priceUSD: number;
+        id?: string | null;
+      }[]
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  code: string;
+  description?: string | null;
+  parentCategory?: (number | null) | Category;
+  isActive?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -332,57 +440,6 @@ export interface Invoice {
    * De dónde sale el inventario de esta factura. Si se omite, se usa el almacén por defecto del inquilino. Solo se aplica al publicar la descarga (Kardex inmutable).
    */
   warehouse?: (number | null) | Warehouse;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "products".
- */
-export interface Product {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  sku: string;
-  barcode?: string | null;
-  productType: 'standard' | 'raw_material' | 'manufactured' | 'service';
-  category?: (number | null) | Category;
-  unitOfMeasure: 'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box';
-  costUSD: number;
-  priceUSD: number;
-  taxRate: 'exempt' | 'general' | 'reduced';
-  trackInventory?: boolean | null;
-  minStockAlert?: number | null;
-  maxStock?: number | null;
-  currentStock?: number | null;
-  description?: string | null;
-  image?: (number | null) | Media;
-  isActive?: boolean | null;
-  /**
-   * El precio base (retail) es el campo "Precio Base de Venta". Agrega aquí los tiers alternativos; los documentos seleccionan el tier según el cliente.
-   */
-  priceTiers?:
-    | {
-        tier: 'wholesale' | 'vendor' | 'promo';
-        priceUSD: number;
-        id?: string | null;
-      }[]
-    | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  code: string;
-  description?: string | null;
-  parentCategory?: (number | null) | Category;
-  isActive?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1132,6 +1189,10 @@ export interface PayloadLockedDocument {
         value: number | Quote;
       } | null)
     | ({
+        relationTo: 'orders';
+        value: number | Order;
+      } | null)
+    | ({
         relationTo: 'inventory-counts';
         value: number | InventoryCount;
       } | null)
@@ -1278,6 +1339,7 @@ export interface CustomersSelect<T extends boolean = true> {
   aging0to30?: T;
   aging31to60?: T;
   aging60Plus?: T;
+  orders?: T;
   whatsappDebtUrl?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1747,6 +1809,38 @@ export interface QuotesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders_select".
+ */
+export interface OrdersSelect<T extends boolean = true> {
+  tenant?: T;
+  orderNumber?: T;
+  customer?: T;
+  priceTierSnapshot?: T;
+  items?:
+    | T
+    | {
+        product?: T;
+        sku?: T;
+        description?: T;
+        quantity?: T;
+        unitPriceUSD?: T;
+        discountPct?: T;
+        totalUSD?: T;
+        id?: T;
+      };
+  issueDate?: T;
+  confirmedAt?: T;
+  status?: T;
+  exchangeRateSnapshot?: T;
+  totalUSD?: T;
+  totalVES?: T;
+  issuedInvoice?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "inventory-counts_select".
  */
 export interface InventoryCountsSelect<T extends boolean = true> {
@@ -1985,6 +2079,7 @@ export interface TaskCreateCollectionExport {
       | 'cash-closures'
       | 'industry-templates'
       | 'quotes'
+      | 'orders'
       | 'inventory-counts'
       | 'price-history'
       | 'audit-log'

@@ -193,6 +193,49 @@ export const updateQuoteStatusSchema = z.object({
   status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'expired']),
 });
 
+// ==========================================
+// Pedidos de venta (Sprint 19)
+// ==========================================
+
+export const orderItemSchema = z.object({
+  productId: idLike.optional(),
+  sku: z.string().trim().max(100).optional(),
+  description: z.string().trim().min(1, 'Cada línea requiere descripción.').max(500),
+  quantity: z.number().positive('La cantidad debe ser mayor a 0.').finite().max(1_000_000),
+  unitPriceUSD: z.number().min(0, 'El precio no puede ser negativo.').finite().max(10_000_000),
+  discountPct: z.number().min(0, 'El descuento no puede ser negativo.').max(100).optional(),
+});
+
+export const createOrderSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  customerId: idLike,
+  items: z.array(orderItemSchema).min(1, 'El pedido requiere al menos una línea.').max(200),
+  notes: clearableText(2000),
+});
+
+export const updateOrderSchema = createOrderSchema.extend({
+  orderId: idLike,
+});
+
+export const orderTransitionSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  orderId: idLike,
+});
+
+export const issueOrderInvoiceSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  orderId: idLike,
+  paymentTerms: z.enum(['cash', 'credit']),
+  cashMethod: z
+    .enum(['cash_usd', 'cash_ves', 'pos_ves', 'pago_movil', 'transfer_ves', 'zelle', 'binance'])
+    .optional(),
+  cashRegisterId: idLike.optional(),
+  warehouseId: idLike.optional(),
+});
+
 export const updateQuoteSchema = createQuoteSchema.extend({
   quoteId: idLike,
   // Edición: '' / null borran validUntil/notes; undefined no los modifica.

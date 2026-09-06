@@ -41,7 +41,11 @@ import {
   saveCountedItemsSchema,
   transferStockSchema,
   supplierPaymentSchema,
+  createOrderSchema,
+  issueOrderInvoiceSchema,
+  orderTransitionSchema,
   updateCustomerSchema,
+  updateOrderSchema,
   updateProductSchema,
   updateQuoteSchema,
   voidInvoiceSchema,
@@ -514,6 +518,7 @@ const DOC_NUMBER_TABLES: Record<
   | 'production-orders'
   | 'cash-closures'
   | 'quotes'
+  | 'orders'
   | 'purchase-invoices'
   | 'supplier-payments',
   { table: string; column: string }
@@ -523,6 +528,7 @@ const DOC_NUMBER_TABLES: Record<
   'production-orders': { table: 'production_orders', column: 'order_number' },
   'cash-closures': { table: 'cash_closures', column: 'closure_number' },
   quotes: { table: 'quotes', column: 'quote_number' },
+  orders: { table: 'orders', column: 'order_number' },
   'purchase-invoices': { table: 'purchase_invoices', column: 'invoice_number' },
   'supplier-payments': { table: 'supplier_payments', column: 'payment_number' },
 };
@@ -537,7 +543,7 @@ const DOC_NUMBER_TABLES: Record<
  */
 async function nextDocumentNumber(
   payload: Payload,
-  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes' | 'purchase-invoices' | 'supplier-payments',
+  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes' | 'orders' | 'purchase-invoices' | 'supplier-payments',
   tenantId: number,
   prefix: string,
   req: PayloadRequest,
@@ -1006,6 +1012,379 @@ export async function convertQuoteToInvoiceAction(input: ConvertQuoteInput) {
     return {
       success: false,
       error: toSafeActionError(error, 'No se pudo convertir la cotización a factura.'),
+    };
+  }
+}
+
+// ==========================================
+// 3b. PEDIDOS DE VENTA (ORDERS) — Sprint 19
+// ==========================================
+export interface CreateOrderInput {
+  tenantId: number;
+  tenantSlug: string;
+  customerId: number;
+  items: Array<{
+    productId?: number;
+    sku?: string;
+    description: string;
+    quantity: number;
+    unitPriceUSD: number;
+    discountPct?: number;
+  }>;
+  notes?: string | null;
+}
+
+/** Validación compartida de referencias de un pedido (cliente + productos). */
+async function assertOrderRefsInTenant(
+  payload: Payload,
+  tenantId: number,
+  customerId: number,
+  items: CreateOrderInput['items'],
+  req: PayloadRequest,
+): Promise<void> {
+  const customer = await payload.findByID({
+    collection: 'customers',
+    id: customerId,
+    depth: 0,
+    req,
+  });
+  if (!customer || Number(customer.tenant) !== Number(tenantId)) {
+    throw new Error('El cliente indicado no pertenece a este inquilino.');
+  }
+  for (const it of items) {
+    if (!it.productId) continue;
+    const product = await payload.findByID({
+      collection: 'products',
+      id: it.productId,
+      depth: 0,
+      req,
+    });
+    if (!product || Number(product.tenant) !== Number(tenantId)) {
+      throw new Error(
+        `Un producto de las líneas no pertenece a este inquilino (${it.sku || it.productId}).`,
+      );
+    }
+  }
+}
+
+/**
+ * Crea un pedido en borrador. El snapshot de tasa lo fija aquí (config del
+ * inquilino); los precios de línea llegan resueltos por tier desde el cliente.
+ * El pedido NO toca kardex — el stock se descarga al facturar.
+ */
+/** Lock de fila sobre el pedido: serializa TODAS las transiciones de estado
+ *  (confirmar, cancelar, facturar, editar) — dos requests concurrentes no
+ *  pueden leer el mismo estado y aplicar transiciones duplicadas. */
+async function lockOrderRow(orderId: number, req: PayloadRequest): Promise<void> {
+  const db = getActiveDb(req);
+  await db.execute(sql`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`);
+}
+
+export async function createOrderAction(input: CreateOrderInput) {
+  try {
+    const parsed = createOrderSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const tenant = await payload.findByID({
+        collection: 'tenants',
+        id: parsed.tenantId,
+        depth: 0,
+        req,
+      });
+      const rateResult = await resolveEffectiveRate(
+        tenant?.currencyConfig
+          ? {
+              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+            }
+          : undefined,
+      );
+
+      await assertOrderRefsInTenant(payload, parsed.tenantId, parsed.customerId, parsed.items, req);
+
+      const customer = await payload.findByID({
+        collection: 'customers',
+        id: parsed.customerId,
+        depth: 0,
+        req,
+      });
+
+      const orderNumber = await nextDocumentNumber(payload, 'orders', parsed.tenantId, 'PED', req);
+
+      return payload.create({
+        collection: 'orders',
+        data: {
+          tenant: parsed.tenantId,
+          orderNumber,
+          customer: parsed.customerId,
+          priceTierSnapshot: (customer.priceTier as 'retail') || 'retail',
+          items: parsed.items.map((it) => ({
+            product: it.productId || undefined,
+            sku: it.sku || undefined,
+            description: it.description,
+            quantity: it.quantity,
+            unitPriceUSD: it.unitPriceUSD,
+            discountPct: it.discountPct || 0,
+          })),
+          status: 'draft',
+          exchangeRateSnapshot: rateResult.rate,
+          notes: parsed.notes || undefined,
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo crear el pedido.') };
+  }
+}
+
+/** Actualiza un pedido en borrador (referencias revalidadas por inquilino). */
+export async function updateOrderAction(input: CreateOrderInput & { orderId: number }) {
+  try {
+    const parsed = updateOrderSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      // Mismo lock de fila que las demás transiciones: una edición no puede
+      // leer 'draft' mientras otra transacción confirma el mismo pedido.
+      await lockOrderRow(parsed.orderId, req);
+      const order = await payload.findByID({
+        collection: 'orders',
+        id: parsed.orderId,
+        depth: 0,
+        req,
+      });
+      if (!order || Number(order.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El pedido no pertenece a este inquilino.');
+      }
+      if (order.status !== 'draft') {
+        throw new Error('Solo los pedidos en borrador pueden editarse.');
+      }
+
+      await assertOrderRefsInTenant(payload, parsed.tenantId, parsed.customerId, parsed.items, req);
+
+      return payload.update({
+        collection: 'orders',
+        id: order.id,
+        data: {
+          customer: parsed.customerId,
+          items: parsed.items.map((it) => ({
+            product: it.productId || undefined,
+            sku: it.sku || undefined,
+            description: it.description,
+            quantity: it.quantity,
+            unitPriceUSD: it.unitPriceUSD,
+            discountPct: it.discountPct || 0,
+          })),
+          notes: parsed.notes,
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo actualizar el pedido.') };
+  }
+}
+
+/** Confirma un pedido en borrador: queda pendiente de despacho/facturación. */
+export async function confirmOrderAction(input: { tenantId: number; tenantSlug: string; orderId: number }) {
+  try {
+    const parsed = orderTransitionSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      await lockOrderRow(parsed.orderId, req);
+      const order = await payload.findByID({
+        collection: 'orders',
+        id: parsed.orderId,
+        depth: 0,
+        req,
+      });
+      if (!order || Number(order.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El pedido no pertenece a este inquilino.');
+      }
+      if (order.status !== 'draft') {
+        throw new Error(`No se puede confirmar un pedido en estado "${order.status}".`);
+      }
+
+      return payload.update({
+        collection: 'orders',
+        id: order.id,
+        data: {
+          status: 'confirmed',
+          confirmedAt: new Date().toISOString(),
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo confirmar el pedido.') };
+  }
+}
+
+/** Cancela un pedido (borrador o confirmado): estado final. Sólo administradores. */
+export async function cancelOrderAction(input: { tenantId: number; tenantSlug: string; orderId: number }) {
+  try {
+    const parsed = orderTransitionSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, [
+      'super-admin',
+      'tenant-admin',
+    ]);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      await lockOrderRow(parsed.orderId, req);
+      const order = await payload.findByID({
+        collection: 'orders',
+        id: parsed.orderId,
+        depth: 0,
+        req,
+      });
+      if (!order || Number(order.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El pedido no pertenece a este inquilino.');
+      }
+      if (order.status === 'invoiced' || order.status === 'canceled') {
+        throw new Error(`Un pedido "${order.status}" es final y no puede cancelarse.`);
+      }
+
+      return payload.update({
+        collection: 'orders',
+        id: order.id,
+        data: {
+          status: 'canceled',
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo cancelar el pedido.') };
+  }
+}
+
+/**
+ * Factura un pedido confirmado: reutiliza createInvoiceCore (numeración,
+ * snapshot de tasa, validación de crédito, recibo de contado y descarga de
+ * kardex vía el plugin de ventas) y marca el pedido como `invoiced` con el
+ * vínculo a la factura. Todo en UNA transacción; doble facturación imposible
+ * (el estado se verifica bajo lock transaccional y `invoiced` es inmutable).
+ */
+export async function issueInvoiceFromOrderAction(input: {
+  tenantId: number;
+  tenantSlug: string;
+  orderId: number;
+  paymentTerms: 'cash' | 'credit';
+  cashMethod?: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance';
+  cashRegisterId?: number;
+  warehouseId?: number;
+}) {
+  try {
+    const parsed = issueOrderInvoiceSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      // Lock de fila: serializa facturaciones concurrentes — el segundo request
+      // lee el estado YA facturado y aborta (doble facturación imposible).
+      await lockOrderRow(parsed.orderId, req);
+      const order = await payload.findByID({
+        collection: 'orders',
+        id: parsed.orderId,
+        depth: 0,
+        req,
+      });
+
+      if (!order || Number(order.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El pedido no pertenece a este inquilino.');
+      }
+      if (order.status === 'invoiced') {
+        throw new Error('El pedido ya fue facturado.');
+      }
+      if (order.status === 'canceled') {
+        throw new Error('No se puede facturar un pedido cancelado.');
+      }
+      if (order.status !== 'confirmed') {
+        throw new Error(`Confirma el pedido antes de facturar (estado actual: "${order.status}").`);
+      }
+
+      const invoiceParsed = createInvoiceSchema.parse({
+        tenantId: parsed.tenantId,
+        tenantSlug: parsed.tenantSlug,
+        customerId: order.customer,
+        paymentTerms: parsed.paymentTerms,
+        cashMethod: parsed.paymentTerms === 'cash' ? parsed.cashMethod : undefined,
+        cashRegisterId: parsed.cashRegisterId,
+        warehouseId: parsed.warehouseId,
+        items: (order.items || []).map((item) => {
+          // Descuento del pedido PRESERVADO: la factura usa el precio unitario
+          // NETO (total de línea con descuento ÷ cantidad) — así totales,
+          // validación de crédito, saldo y recibo de contado coinciden
+          // exactamente con lo confirmado en el pedido.
+          const qty = Number(item.quantity) || 0;
+          const lineTotal = Number(item.totalUSD) || Number((
+            (Number(item.quantity) || 0) *
+            (Number(item.unitPriceUSD) || 0) *
+            (1 - Math.min(Math.max(Number(item.discountPct) || 0, 0), 100) / 100)
+          ).toFixed(2));
+          const unitNet = qty > 0 ? lineTotal / qty : 0;
+          return {
+            productId:
+              typeof item.product === 'object' && item.product !== null
+                ? item.product.id
+                : (item.product as number | undefined) || undefined,
+            sku: item.sku || undefined,
+            description: item.description,
+            quantity: qty,
+            unitPriceUSD: unitNet,
+          };
+        }),
+        notes: `Facturación del pedido ${order.orderNumber}`,
+      });
+
+      const invoice = await createInvoiceCore(payload, user, invoiceParsed, req);
+
+      await payload.update({
+        collection: 'orders',
+        id: order.id,
+        data: {
+          status: 'invoiced',
+          issuedInvoice: invoice.id,
+        },
+        req,
+      });
+
+      return invoice;
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo facturar el pedido.'),
     };
   }
 }

@@ -16,6 +16,7 @@ import {
   Receipt,
   Settings,
   ShoppingCart,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/utilities/cn';
 
@@ -31,9 +32,9 @@ interface SidebarProps {
  * capa de datos son la autoridad real; esto es UX: cada rol ve solo su operación.
  */
 const ROLE_NAV: Record<string, string[]> = {
-  vendor: ['dashboard', 'pos', 'quotes', 'vendors', 'customers'],
-  cashier: ['dashboard', 'pos', 'invoices', 'customers', 'cash-registers'],
-  employee: ['dashboard', 'invoices', 'customers', 'inventory', 'quotes'],
+  vendor: ['dashboard', 'pos', 'quotes', 'orders', 'vendors', 'customers'],
+  cashier: ['dashboard', 'pos', 'invoices', 'orders', 'customers', 'cash-registers'],
+  employee: ['dashboard', 'invoices', 'customers', 'inventory', 'quotes', 'orders'],
   supervisor: [
     'dashboard',
     'pos',
@@ -41,6 +42,7 @@ const ROLE_NAV: Record<string, string[]> = {
     'customers',
     'inventory',
     'quotes',
+    'orders',
     'cash-registers',
     'purchases',
     'vendors',
@@ -80,6 +82,12 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile, userRole }: S
           href: `/${tenantSlug}/erp/quotes`,
           routeKey: 'quotes',
           icon: FileText,
+        },
+        {
+          name: 'Pedidos de Venta',
+          href: `/${tenantSlug}/erp/orders`,
+          routeKey: 'orders',
+          icon: ClipboardList,
         },
         {
           name: 'Vendedores & Comisiones',
