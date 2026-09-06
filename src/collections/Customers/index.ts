@@ -394,6 +394,19 @@ export const Customers: CollectionConfig = {
         afterRead: [aging60PlusHook],
       },
     },
+    // Relación inversa nativa: pedidos del cliente (Sprint 19)
+    {
+      name: 'orders',
+      label: 'Pedidos',
+      type: 'join',
+      collection: 'orders',
+      on: 'customer',
+      admin: {
+        allowCreate: false,
+        defaultColumns: ['orderNumber', 'status', 'totalUSD', 'createdAt'],
+        description: 'Pedidos de venta asociados a este cliente.',
+      },
+    },
     // Virtual WhatsApp direct bill link
     {
       name: 'whatsappDebtUrl',
