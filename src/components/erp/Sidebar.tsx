@@ -190,7 +190,7 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
   return (
     <>
       {/* Desktop Persistent Sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0 h-screen sticky top-0 z-20">
+      <aside className="hidden lg:block w-64 shrink-0 h-screen sticky top-0 z-20 print:hidden">
         {sidebarContent}
       </aside>
 

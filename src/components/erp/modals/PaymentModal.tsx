@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Modal } from './Modal';
 import { createPaymentAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from '../KpiCard';
@@ -29,7 +29,7 @@ export function PaymentModal({
   defaultCustomerId,
   defaultInvoiceId,
 }: PaymentModalProps) {
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const [customerId, setCustomerId] = useState<number>(defaultCustomerId || customers[0]?.id || 0);
@@ -82,32 +82,31 @@ export function PaymentModal({
       return;
     }
 
-    setLoading(true);
     setError(null);
 
-    const res = await createPaymentAction({
-      tenantId,
-      tenantSlug,
-      customerId,
-      invoiceId: invoiceId ? Number(invoiceId) : undefined,
-      amountUSD,
-      method,
-      referenceNumber: referenceNumber || undefined,
-      notes: notes || undefined,
+    startTransition(async () => {
+      const res = await createPaymentAction({
+        tenantId,
+        tenantSlug,
+        customerId,
+        invoiceId: invoiceId ? Number(invoiceId) : undefined,
+        amountUSD,
+        method,
+        referenceNumber: referenceNumber || undefined,
+        notes: notes || undefined,
+      });
+
+      if (res.success) {
+        setAmountUSD(10);
+        setReferenceNumber('');
+        setNotes('');
+        setInvoiceId(undefined);
+        setCustomerId(customers[0]?.id ?? 0);
+        onClose();
+      } else {
+        setError(res.error || 'Error al procesar cobro');
+      }
     });
-
-    setLoading(false);
-
-    if (res.success) {
-      setAmountUSD(10);
-      setReferenceNumber('');
-      setNotes('');
-      setInvoiceId(undefined);
-      setCustomerId(customers[0]?.id ?? 0);
-      onClose();
-    } else {
-      setError(res.error || 'Error al procesar cobro');
-    }
   };
 
   return (
@@ -270,10 +269,10 @@ export function PaymentModal({
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={isPending}
             className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-all disabled:opacity-50"
           >
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Registrar Cobro</span>
           </button>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { Modal } from './Modal';
 import { createSaleReturnAction } from '@/actions/erpActions';
 import { Loader2, Undo2 } from 'lucide-react';
@@ -22,7 +22,7 @@ export function ReturnModal({ isOpen, onClose, tenantId, tenantSlug, invoice }: 
     (it) => typeof it.productId === 'number' && it.productId > 0,
   );
 
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [reason, setReason] = useState('');
@@ -43,24 +43,23 @@ export function ReturnModal({ isOpen, onClose, tenantId, tenantSlug, invoice }: 
       return;
     }
 
-    setLoading(true);
     setError(null);
 
-    const res = await createSaleReturnAction({
-      tenantId,
-      tenantSlug,
-      invoiceId: invoice.id,
-      lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
-      reason: reason || undefined,
+    startTransition(async () => {
+      const res = await createSaleReturnAction({
+        tenantId,
+        tenantSlug,
+        invoiceId: invoice.id,
+        lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+        reason: reason || undefined,
+      });
+
+      if (res.success) {
+        onClose();
+      } else {
+        setError(res.error || 'Error al registrar la devolución');
+      }
     });
-
-    setLoading(false);
-
-    if (res.success) {
-      onClose();
-    } else {
-      setError(res.error || 'Error al registrar la devolución');
-    }
   };
 
   return (
@@ -153,10 +152,10 @@ export function ReturnModal({ isOpen, onClose, tenantId, tenantSlug, invoice }: 
           </button>
           <button
             type="submit"
-            disabled={loading || returnableItems.length === 0}
+            disabled={isPending || returnableItems.length === 0}
             className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-all disabled:opacity-50"
           >
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Registrar Devolución</span>
           </button>
         </div>

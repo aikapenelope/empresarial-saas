@@ -13,7 +13,9 @@ import type {
   IndustryTemplate,
   Warehouse,
   CashClosure,
+  CustomerPayment,
   InventoryCount,
+  StockMovement,
   User,
 } from '@/payload-types';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
@@ -635,4 +637,87 @@ export async function getInventoryCountsList(tenantId: number): Promise<Inventor
     sort: '-createdAt',
     user,
   });
+}
+
+export interface InvoiceDetailData {
+  invoice: Invoice;
+  payments: CustomerPayment[];
+  movements: StockMovement[];
+  audit: Array<Record<string, unknown>>;
+}
+
+/**
+ * Detalle completo de una factura (Sprint 13): documento con líneas, cuotas,
+ * pagos aplicados (allocations), kardex vinculado y auditoría (esta última
+ * solo visible para super-admin/tenant-admin según el acceso de la colección).
+ */
+export async function getInvoiceDetail(
+  tenantId: number,
+  invoiceId: number,
+): Promise<InvoiceDetailData> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const invoiceRes = await payload.find({
+    collection: 'invoices',
+    where: {
+      and: [
+        { tenant: { equals: tenantId } },
+        { id: { equals: invoiceId } },
+      ],
+    },
+    depth: 1,
+    limit: 1,
+    user,
+    overrideAccess: false,
+  });
+
+  if (invoiceRes.docs.length === 0) {
+    throw new Error('Factura no encontrada en este inquilino.');
+  }
+
+  const [paymentsRes, movementsRes, auditRes] = await Promise.all([
+    payload.find({
+      collection: 'customer-payments',
+      where: {
+        and: [
+          { tenant: { equals: tenantId } },
+          { 'allocations.invoice': { equals: invoiceId } },
+        ],
+      },
+      depth: 1,
+      sort: '-createdAt',
+      user,
+      overrideAccess: false,
+    }),
+    payload.find({
+      collection: 'stock-movements',
+      where: { invoice: { equals: invoiceId } },
+      depth: 1,
+      sort: 'createdAt',
+      user,
+      overrideAccess: false,
+    }),
+    payload.find({
+      collection: 'audit-log',
+      where: {
+        and: [
+          { collection: { equals: 'invoices' } },
+          { docId: { equals: invoiceId } },
+        ],
+      },
+      depth: 1,
+      sort: '-createdAt',
+      limit: 50,
+      user,
+      overrideAccess: false,
+    }),
+  ]);
+
+  return {
+    invoice: invoiceRes.docs[0] as Invoice,
+    payments: paymentsRes.docs as CustomerPayment[],
+    movements: movementsRes.docs as StockMovement[],
+    audit: auditRes.docs as unknown as Array<Record<string, unknown>>,
+  };
 }
