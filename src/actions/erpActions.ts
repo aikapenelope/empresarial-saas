@@ -1072,6 +1072,14 @@ async function assertOrderRefsInTenant(
  * inquilino); los precios de línea llegan resueltos por tier desde el cliente.
  * El pedido NO toca kardex — el stock se descarga al facturar.
  */
+/** Lock de fila sobre el pedido: serializa TODAS las transiciones de estado
+ *  (confirmar, cancelar, facturar, editar) — dos requests concurrentes no
+ *  pueden leer el mismo estado y aplicar transiciones duplicadas. */
+async function lockOrderRow(orderId: number, req: PayloadRequest): Promise<void> {
+  const db = getActiveDb(req);
+  await db.execute(sql`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`);
+}
+
 export async function createOrderAction(input: CreateOrderInput) {
   try {
     const parsed = createOrderSchema.parse(input);
@@ -1195,6 +1203,7 @@ export async function confirmOrderAction(input: { tenantId: number; tenantSlug: 
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      await lockOrderRow(parsed.orderId, req);
       const order = await payload.findByID({
         collection: 'orders',
         id: parsed.orderId,
@@ -1238,6 +1247,7 @@ export async function cancelOrderAction(input: { tenantId: number; tenantSlug: s
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      await lockOrderRow(parsed.orderId, req);
       const order = await payload.findByID({
         collection: 'orders',
         id: parsed.orderId,
@@ -1291,6 +1301,9 @@ export async function issueInvoiceFromOrderAction(input: {
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      // Lock de fila: serializa facturaciones concurrentes — el segundo request
+      // lee el estado YA facturado y aborta (doble facturación imposible).
+      await lockOrderRow(parsed.orderId, req);
       const order = await payload.findByID({
         collection: 'orders',
         id: parsed.orderId,
@@ -1319,16 +1332,29 @@ export async function issueInvoiceFromOrderAction(input: {
         cashMethod: parsed.paymentTerms === 'cash' ? parsed.cashMethod : undefined,
         cashRegisterId: parsed.cashRegisterId,
         warehouseId: parsed.warehouseId,
-        items: (order.items || []).map((item) => ({
-          productId:
-            typeof item.product === 'object' && item.product !== null
-              ? item.product.id
-              : (item.product as number | undefined) || undefined,
-          sku: item.sku || undefined,
-          description: item.description,
-          quantity: Number(item.quantity),
-          unitPriceUSD: Number(item.unitPriceUSD),
-        })),
+        items: (order.items || []).map((item) => {
+          // Descuento del pedido PRESERVADO: la factura usa el precio unitario
+          // NETO (total de línea con descuento ÷ cantidad) — así totales,
+          // validación de crédito, saldo y recibo de contado coinciden
+          // exactamente con lo confirmado en el pedido.
+          const qty = Number(item.quantity) || 0;
+          const lineTotal = Number(item.totalUSD) || Number((
+            (Number(item.quantity) || 0) *
+            (Number(item.unitPriceUSD) || 0) *
+            (1 - Math.min(Math.max(Number(item.discountPct) || 0, 0), 100) / 100)
+          ).toFixed(2));
+          const unitNet = qty > 0 ? lineTotal / qty : 0;
+          return {
+            productId:
+              typeof item.product === 'object' && item.product !== null
+                ? item.product.id
+                : (item.product as number | undefined) || undefined,
+            sku: item.sku || undefined,
+            description: item.description,
+            quantity: qty,
+            unitPriceUSD: unitNet,
+          };
+        }),
         notes: `Facturación del pedido ${order.orderNumber}`,
       });
 

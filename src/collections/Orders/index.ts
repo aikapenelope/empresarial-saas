@@ -11,6 +11,20 @@ import type { CollectionBeforeDeleteHook, CollectionBeforeValidateHook, Collecti
  */
 const FINAL_STATUSES = new Set(['invoiced', 'canceled']);
 
+/**
+ * Máquina de estados COMPLETA, aplicada en la colección (no sólo en Server
+ * Actions) para que admin panel y Local API no puedan saltarse el ciclo:
+ *   draft → draft | confirmed | canceled
+ *   confirmed → confirmed | invoiced (requiere issuedInvoice) | canceled
+ *   invoiced / canceled: finales inmutables
+ * La creación sólo admite `draft` (o vacío → default). Las Server Actions
+ * operan dentro de estas transiciones legales con lock de fila.
+ */
+const ALLOWED_TRANSITIONS: Record<string, Set<string>> = {
+  draft: new Set(['draft', 'confirmed', 'canceled']),
+  confirmed: new Set(['confirmed', 'invoiced', 'canceled']),
+};
+
 const beforeValidateOrder: CollectionBeforeValidateHook = async ({
   data,
   originalDoc,
@@ -53,7 +67,14 @@ const beforeValidateOrder: CollectionBeforeValidateHook = async ({
     }
   }
 
-  // Inmutabilidad de estados finales: un pedido facturado o cancelado no cambia.
+  // Creación: sólo borrador (sin saltos a estados intermedios o finales)
+  if (operation === 'create' && data.status && data.status !== 'draft') {
+    throw new Error(
+      'Un pedido nuevo sólo puede crearse en borrador; usa las acciones de confirmación, facturación o cancelación.',
+    );
+  }
+
+  // Inmutabilidad de estados finales
   if (operation === 'update' && originalDoc) {
     if (FINAL_STATUSES.has(originalDoc.status)) {
       throw new Error(
@@ -61,6 +82,29 @@ const beforeValidateOrder: CollectionBeforeValidateHook = async ({
           ? 'Un pedido ya facturado es inmutable.'
           : 'Un pedido cancelado no puede cambiar de estado.',
       );
+    }
+
+    // Máquina de estados: transiciones legales desde borrador/confirmado
+    const from = originalDoc.status as string;
+    const to = String(data.status ?? from);
+    const allowed = ALLOWED_TRANSITIONS[from];
+    if (!allowed || !allowed.has(to)) {
+      throw new Error(`Transición de estado inválida: "${from}" → "${to}".`);
+    }
+
+    // entradas a `confirmed` exigen su marca de tiempo
+    if (from === 'draft' && to === 'confirmed') {
+      const confirmedAt = data.confirmedAt ?? originalDoc.confirmedAt;
+      if (!confirmedAt) {
+        throw new Error('Confirmar un pedido requiere la fecha de confirmación (confirmedAt).');
+      }
+    }
+    // entrada a `invoiced` exige la factura generada
+    if (from === 'confirmed' && to === 'invoiced') {
+      const issuedInvoice = data.issuedInvoice ?? originalDoc.issuedInvoice;
+      if (!issuedInvoice) {
+        throw new Error('Facturar un pedido requiere la relación issuedInvoice (factura generada).');
+      }
     }
   }
 
@@ -93,8 +137,18 @@ export const Orders: CollectionConfig = {
   },
   access: {
     read: ({ req: { user } }) => Boolean(user),
-    create: ({ req: { user } }) => Boolean(user),
-    update: ({ req: { user } }) => Boolean(user),
+    // Escritura sólo para roles operativos: employee (y anónimos) no pueden
+    // forzar transiciones por REST; las Server Actions además revalidan RBAC.
+    create: ({ req: { user } }) =>
+      Boolean(
+        user &&
+          ['super-admin', 'tenant-admin', 'supervisor', 'vendor', 'cashier'].includes(user.role),
+      ),
+    update: ({ req: { user } }) =>
+      Boolean(
+        user &&
+          ['super-admin', 'tenant-admin', 'supervisor', 'vendor', 'cashier'].includes(user.role),
+      ),
     delete: ({ req: { user } }) =>
       Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
   },
@@ -109,7 +163,14 @@ export const Orders: CollectionConfig = {
       type: 'text',
       required: true,
       index: true,
+      access: {
+        // Generado por la Server Action (numeración con lock): inmutable vía
+        // REST/admin. Las acciones escriben con overrideAccess.
+        create: () => false,
+        update: () => false,
+      },
       admin: {
+        readOnly: true,
         description: 'Correlativo PED-##### generado por la Server Action (numeración con lock).',
       },
     },
@@ -210,6 +271,10 @@ export const Orders: CollectionConfig = {
       name: 'confirmedAt',
       label: 'Fecha de Confirmación',
       type: 'date',
+      access: {
+        create: () => false,
+        update: () => false,
+      },
       admin: {
         position: 'sidebar',
         readOnly: true,
@@ -221,6 +286,13 @@ export const Orders: CollectionConfig = {
       type: 'select',
       required: true,
       defaultValue: 'draft',
+      access: {
+        // Las transiciones las autorizan las Server Actions (overrideAccess) y
+        // la máquina de estados del beforeValidate; por REST/admin el campo no
+        // es escribible — imposible forjar confirmaciones/cancelaciones.
+        create: () => false,
+        update: () => false,
+      },
       options: [
         { label: 'Borrador', value: 'draft' },
         { label: 'Confirmado (pendiente de despacho)', value: 'confirmed' },
@@ -260,6 +332,10 @@ export const Orders: CollectionConfig = {
       type: 'relationship',
       relationTo: 'invoices',
       index: true,
+      access: {
+        create: () => false,
+        update: () => false,
+      },
       admin: {
         readOnly: true,
         position: 'sidebar',
