@@ -274,6 +274,10 @@ export interface Invoice {
     quantity: number;
     unitPriceUSD: number;
     totalUSD?: number | null;
+    /**
+     * Vínculo al catálogo. Las líneas con producto descargan inventario al publicarse (Kardex); las de texto libre sin producto no afectan existencias.
+     */
+    product?: (number | null) | Product;
     id?: string | null;
   }[];
   totalUSD: number;
@@ -281,6 +285,67 @@ export interface Invoice {
   balanceUSD: number;
   balanceVES: number;
   notes?: string | null;
+  /**
+   * De dónde sale el inventario de esta factura. Si se omite, se usa el almacén por defecto del inquilino. Solo se aplica al publicar la descarga (Kardex inmutable).
+   */
+  warehouse?: (number | null) | Warehouse;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "products".
+ */
+export interface Product {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  sku: string;
+  barcode?: string | null;
+  productType: 'standard' | 'raw_material' | 'manufactured' | 'service';
+  category?: (number | null) | Category;
+  unitOfMeasure: 'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box';
+  costUSD: number;
+  priceUSD: number;
+  taxRate: 'exempt' | 'general' | 'reduced';
+  trackInventory?: boolean | null;
+  minStockAlert?: number | null;
+  maxStock?: number | null;
+  currentStock?: number | null;
+  description?: string | null;
+  image?: (number | null) | Media;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  code: string;
+  description?: string | null;
+  parentCategory?: (number | null) | Category;
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "warehouses".
+ */
+export interface Warehouse {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  name: string;
+  code: string;
+  type: 'main' | 'raw_materials' | 'work_in_progress' | 'scrap' | 'retail';
+  location?: string | null;
+  isDefault?: boolean | null;
+  isActive?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -334,22 +399,6 @@ export interface CashRegister {
   currentClosure?: (number | null) | CashClosure;
   active?: boolean | null;
   notes?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "warehouses".
- */
-export interface Warehouse {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  code: string;
-  type: 'main' | 'raw_materials' | 'work_in_progress' | 'scrap' | 'retail';
-  location?: string | null;
-  isDefault?: boolean | null;
-  isActive?: boolean | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -433,47 +482,6 @@ export interface CashClosure {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  code: string;
-  description?: string | null;
-  parentCategory?: (number | null) | Category;
-  isActive?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "products".
- */
-export interface Product {
-  id: number;
-  tenant?: (number | null) | Tenant;
-  name: string;
-  sku: string;
-  barcode?: string | null;
-  productType: 'standard' | 'raw_material' | 'manufactured' | 'service';
-  category?: (number | null) | Category;
-  unitOfMeasure: 'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box';
-  costUSD: number;
-  priceUSD: number;
-  taxRate: 'exempt' | 'general' | 'reduced';
-  trackInventory?: boolean | null;
-  minStockAlert?: number | null;
-  maxStock?: number | null;
-  currentStock?: number | null;
-  description?: string | null;
-  image?: (number | null) | Media;
-  isActive?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "stock-movements".
  */
 export interface StockMovement {
@@ -488,7 +496,8 @@ export interface StockMovement {
     | 'transfer'
     | 'adjustment_positive'
     | 'adjustment_negative'
-    | 'scrap';
+    | 'scrap'
+    | 'sale_return';
   product: number | Product;
   sourceWarehouse?: (number | null) | Warehouse;
   targetWarehouse?: (number | null) | Warehouse;
@@ -1022,6 +1031,7 @@ export interface InvoicesSelect<T extends boolean = true> {
         quantity?: T;
         unitPriceUSD?: T;
         totalUSD?: T;
+        product?: T;
         id?: T;
       };
   totalUSD?: T;
@@ -1029,6 +1039,7 @@ export interface InvoicesSelect<T extends boolean = true> {
   balanceUSD?: T;
   balanceVES?: T;
   notes?: T;
+  warehouse?: T;
   updatedAt?: T;
   createdAt?: T;
 }

@@ -5,6 +5,7 @@ import * as migration_20260904_221053_add_accounts_payable from './20260904_2210
 import * as migration_20260904_224151_add_cash_registers from './20260904_224151_add_cash_registers';
 import * as migration_20260904_225525_add_industry_templates from './20260904_225525_add_industry_templates';
 import * as migration_20260905_203000_document_number_uniques from './20260905_203000_document_number_uniques';
+import * as migration_20260905_224331_add_sale_inventory from './20260905_224331_add_sale_inventory';
 
 export const migrations = [
   {
@@ -35,11 +36,16 @@ export const migrations = [
   {
     up: migration_20260904_225525_add_industry_templates.up,
     down: migration_20260904_225525_add_industry_templates.down,
-    name: '20260904_225525_add_industry_templates'
+    name: '20260904_225525_add_industry_templates',
   },
   {
     up: migration_20260905_203000_document_number_uniques.up,
     down: migration_20260905_203000_document_number_uniques.down,
-    name: '20260905_203000_document_number_uniques'
+    name: '20260905_203000_document_number_uniques',
+  },
+  {
+    up: migration_20260905_224331_add_sale_inventory.up,
+    down: migration_20260905_224331_add_sale_inventory.down,
+    name: '20260905_224331_add_sale_inventory'
   },
 ];
