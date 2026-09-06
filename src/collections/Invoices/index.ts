@@ -175,6 +175,48 @@ const afterChangeInvoice: CollectionAfterChangeHook = async ({
     await recalculateCustomerBalance(previousCustomerId, req);
   }
 
+  // ─── Cuotas: reconciliación contra el balance pagado (Sprint 12) ───
+  // Recorre las cuotas en orden y marca pagadas/parciales según el monto cubierto.
+  // El update de conciliación lleva skipBalanceRecalculation para no re-disparar
+  // este hook (la guard del inicio lo corta).
+  if (Array.isArray(doc.installments) && doc.installments.length > 0) {
+    const totalUSD = Number(doc.totalUSD) || 0;
+    const balanceUSD = Number(doc.balanceUSD) || 0;
+    const paidSoFar = Math.max(0, Math.min(totalUSD, totalUSD - balanceUSD));
+
+    let covered = 0;
+    let changed = false;
+    const reconciled = (doc.installments as Array<Record<string, unknown>>).map((inst) => {
+      const amount = Number(inst.amountUSD) || 0;
+      const prevPaid = Number(inst.paidUSD) || 0;
+      const remainingCredit = Math.max(0, paidSoFar - covered);
+      const paidUSD = Number(Math.min(amount, remainingCredit).toFixed(2));
+      covered += paidUSD;
+
+      const status =
+        paidUSD >= amount - 0.005 && amount > 0
+          ? 'paid'
+          : paidUSD > 0.005
+            ? 'partially_paid'
+            : 'pending';
+
+      if (prevPaid !== paidUSD || inst.status !== status) {
+        changed = true;
+      }
+      return { ...inst, paidUSD, status };
+    });
+
+    if (changed) {
+      await req.payload.update({
+        collection: 'invoices',
+        id: doc.id,
+        data: { installments: reconciled as never },
+        req,
+        context: { ...req.context, skipBalanceRecalculation: true },
+      });
+    }
+  }
+
   return doc;
 };
 
@@ -380,6 +422,58 @@ export const Invoices: CollectionConfig = {
       admin: {
         readOnly: true,
       },
+    },
+    {
+      name: 'installments',
+      label: 'Plan de Cuotas (CxC a Crédito)',
+      type: 'array',
+      admin: {
+        description:
+          'Generado automáticamente al emitir a crédito. Los estados se reconcilian contra el balance pagado (hook transaccional); no editar manualmente.',
+      },
+      fields: [
+        {
+          name: 'number',
+          label: 'Nro. Cuota',
+          type: 'number',
+          required: true,
+        },
+        {
+          name: 'dueDate',
+          label: 'Vencimiento',
+          type: 'date',
+          required: true,
+        },
+        {
+          name: 'amountUSD',
+          label: 'Monto (USD)',
+          type: 'number',
+          required: true,
+          min: 0,
+        },
+        {
+          name: 'paidUSD',
+          label: 'Pagado (USD)',
+          type: 'number',
+          defaultValue: 0,
+          min: 0,
+          admin: {
+            readOnly: true,
+          },
+        },
+        {
+          name: 'status',
+          label: 'Estado',
+          type: 'select',
+          required: true,
+          defaultValue: 'pending',
+          options: [
+            { label: 'Pendiente', value: 'pending' },
+            { label: 'Parcial', value: 'partially_paid' },
+            { label: 'Pagada', value: 'paid' },
+          ],
+        },
+      ],
     },
     {
       name: 'notes',

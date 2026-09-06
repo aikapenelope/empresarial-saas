@@ -86,7 +86,9 @@ export interface Config {
     'cash-closures': CashClosure;
     'industry-templates': IndustryTemplate;
     quotes: Quote;
+    'inventory-counts': InventoryCount;
     'price-history': PriceHistory;
+    'audit-log': AuditLog;
     exports: Export;
     imports: Import;
     'payload-kv': PayloadKv;
@@ -116,7 +118,9 @@ export interface Config {
     'cash-closures': CashClosuresSelect<false> | CashClosuresSelect<true>;
     'industry-templates': IndustryTemplatesSelect<false> | IndustryTemplatesSelect<true>;
     quotes: QuotesSelect<false> | QuotesSelect<true>;
+    'inventory-counts': InventoryCountsSelect<false> | InventoryCountsSelect<true>;
     'price-history': PriceHistorySelect<false> | PriceHistorySelect<true>;
+    'audit-log': AuditLogSelect<false> | AuditLogSelect<true>;
     exports: ExportsSelect<false> | ExportsSelect<true>;
     imports: ImportsSelect<false> | ImportsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
@@ -310,6 +314,19 @@ export interface Invoice {
   totalVES: number;
   balanceUSD: number;
   balanceVES: number;
+  /**
+   * Generado automáticamente al emitir a crédito. Los estados se reconcilian contra el balance pagado (hook transaccional); no editar manualmente.
+   */
+  installments?:
+    | {
+        number: number;
+        dueDate: string;
+        amountUSD: number;
+        paidUSD?: number | null;
+        status: 'pending' | 'partially_paid' | 'paid';
+        id?: string | null;
+      }[]
+    | null;
   notes?: string | null;
   /**
    * De dónde sale el inventario de esta factura. Si se omite, se usa el almacén por defecto del inquilino. Solo se aplica al publicar la descarga (Kardex inmutable).
@@ -761,6 +778,31 @@ export interface Quote {
   createdAt: string;
 }
 /**
+ * Conteo físico por almacén con snapshot del sistema y ajustes por Kardex al completar.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "inventory-counts".
+ */
+export interface InventoryCount {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  warehouse: number | Warehouse;
+  status: 'in_progress' | 'completed';
+  items: {
+    product: number | Product;
+    systemQty: number;
+    countedQty?: number | null;
+    difference?: number | null;
+    id?: string | null;
+  }[];
+  notes?: string | null;
+  openedBy?: (number | null) | User;
+  completedBy?: (number | null) | User;
+  completedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Bitácora inmutable de cambios de precio (escrita por el pricingPlugin).
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -776,6 +818,50 @@ export interface PriceHistory {
   newPriceVES: number;
   trigger: 'manual' | 'rate_change';
   changedBy?: (number | null) | User;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Bitácora inmutable escrita por auditPlugin: quién cambió qué, cuándo y con qué diff.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "audit-log".
+ */
+export interface AuditLog {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Usuario que realizó la operación (sistema si no aplica).
+   */
+  actor?: (number | null) | User;
+  actorRole?: string | null;
+  collection: string;
+  docId: number;
+  operation: 'create' | 'update' | 'delete';
+  /**
+   * Solo en updates: campos cuyo valor cambió.
+   */
+  diff?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * Estado final del documento (create) o previo (delete).
+   */
+  snapshot?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1046,8 +1132,16 @@ export interface PayloadLockedDocument {
         value: number | Quote;
       } | null)
     | ({
+        relationTo: 'inventory-counts';
+        value: number | InventoryCount;
+      } | null)
+    | ({
         relationTo: 'price-history';
         value: number | PriceHistory;
+      } | null)
+    | ({
+        relationTo: 'audit-log';
+        value: number | AuditLog;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1217,6 +1311,16 @@ export interface InvoicesSelect<T extends boolean = true> {
   totalVES?: T;
   balanceUSD?: T;
   balanceVES?: T;
+  installments?:
+    | T
+    | {
+        number?: T;
+        dueDate?: T;
+        amountUSD?: T;
+        paidUSD?: T;
+        status?: T;
+        id?: T;
+      };
   notes?: T;
   warehouse?: T;
   updatedAt?: T;
@@ -1643,6 +1747,30 @@ export interface QuotesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "inventory-counts_select".
+ */
+export interface InventoryCountsSelect<T extends boolean = true> {
+  tenant?: T;
+  warehouse?: T;
+  status?: T;
+  items?:
+    | T
+    | {
+        product?: T;
+        systemQty?: T;
+        countedQty?: T;
+        difference?: T;
+        id?: T;
+      };
+  notes?: T;
+  openedBy?: T;
+  completedBy?: T;
+  completedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "price-history_select".
  */
 export interface PriceHistorySelect<T extends boolean = true> {
@@ -1654,6 +1782,22 @@ export interface PriceHistorySelect<T extends boolean = true> {
   newPriceVES?: T;
   trigger?: T;
   changedBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "audit-log_select".
+ */
+export interface AuditLogSelect<T extends boolean = true> {
+  tenant?: T;
+  actor?: T;
+  actorRole?: T;
+  collection?: T;
+  docId?: T;
+  operation?: T;
+  diff?: T;
+  snapshot?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1841,7 +1985,9 @@ export interface TaskCreateCollectionExport {
       | 'cash-closures'
       | 'industry-templates'
       | 'quotes'
+      | 'inventory-counts'
       | 'price-history'
+      | 'audit-log'
       | 'exports'
       | 'imports';
     drafts?: ('yes' | 'no') | null;
