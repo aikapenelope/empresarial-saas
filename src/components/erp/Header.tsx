@@ -31,7 +31,7 @@ export function Header({
   const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-800/80 bg-slate-950/80 px-4 sm:px-6 backdrop-blur-md">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-800/80 bg-slate-950/80 px-4 sm:px-6 backdrop-blur-md print:hidden">
       <div className="flex items-center gap-3">
         {/* Mobile Menu Toggle Button */}
         {onMenuToggle && (

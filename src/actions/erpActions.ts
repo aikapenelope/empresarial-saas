@@ -34,6 +34,7 @@ import {
   createInventoryCountSchema,
   openCashShiftSchema,
   saveCountedItemsSchema,
+  voidInvoiceSchema,
   updateQuoteStatusSchema,
   updateTenantSettingsSchema,
 } from '@/utilities/erpValidation';
@@ -1195,6 +1196,71 @@ export async function completeInventoryCountAction(input: CompleteInventoryCount
       success: false,
       error: toSafeActionError(error, 'No se pudo completar el conteo.'),
     };
+  }
+}
+
+export interface VoidInvoiceInput {
+  tenantId: number;
+  tenantSlug: string;
+  invoiceId: number;
+  reason?: string;
+}
+
+/**
+ * Anulación de factura (Sprint 13). Solo super-admin/tenant-admin. El status
+ * `voided` dispara — vía salesInventoryPlugin — la reversión del kardex por
+ * saldos y deja el balance en cero; la reconciliación de cuotas marca todas
+ * pendientes como cubiertas por la anulación (balance 0 → pagado). Auditada.
+ */
+export async function voidInvoiceAction(input: VoidInvoiceInput) {
+  try {
+    const parsed = voidInvoiceSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, [
+      'super-admin',
+      'tenant-admin',
+    ]);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const invoice = await payload.findByID({
+        collection: 'invoices',
+        id: parsed.invoiceId,
+        depth: 0,
+        req,
+      });
+
+      if (!invoice || Number(invoice.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('La factura no pertenece a este inquilino.');
+      }
+      if (invoice.status === 'voided') {
+        throw new Error('La factura ya está anulada.');
+      }
+      if (invoice.status === 'draft') {
+        throw new Error('Las facturas en borrador se eliminan, no se anulan.');
+      }
+
+      return payload.update({
+        collection: 'invoices',
+        id: invoice.id,
+        data: {
+          status: 'voided',
+          ...(parsed.reason
+            ? {
+                notes: `${invoice.notes ? `${invoice.notes} — ` : ''}ANULADA: ${parsed.reason}`,
+              }
+            : {}),
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/invoices/${parsed.invoiceId}`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo anular la factura.') };
   }
 }
 

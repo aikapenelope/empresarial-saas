@@ -287,10 +287,16 @@ export function InvoicesView({
                   return (
                     <tr key={inv.id} className="hover:bg-slate-800/30 transition-colors">
                       <td className="p-3 font-mono font-bold text-white">
-                        <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/${tenantSlug}/erp/invoices/${inv.id}`}
+                          className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors"
+                          title="Ver detalle de la factura"
+                        >
                           <Receipt className="h-3.5 w-3.5 text-indigo-400" />
-                          <span>{inv.invoiceNumber}</span>
-                        </div>
+                          <span className="underline decoration-slate-700 underline-offset-2">
+                            {inv.invoiceNumber}
+                          </span>
+                        </Link>
                       </td>
                       <td className="p-3">
                         <div className="font-semibold text-white">{customerName}</div>

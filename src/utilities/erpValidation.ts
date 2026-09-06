@@ -159,6 +159,13 @@ export const saleReturnLineSchema = z.object({
   quantity: z.number().positive('La cantidad a devolver debe ser mayor a 0.').finite().max(1_000_000),
 });
 
+export const voidInvoiceSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  invoiceId: idLike,
+  reason: z.string().trim().max(1000).optional(),
+});
+
 export const createSaleReturnSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),
