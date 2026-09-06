@@ -203,6 +203,26 @@ export const supplierPaymentSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+export const transferStockSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  productId: idLike,
+  sourceWarehouseId: idLike,
+  targetWarehouseId: idLike,
+  quantity: z.number().positive('La cantidad a transferir debe ser mayor a 0.').finite().max(1_000_000),
+  reason: z.string().trim().max(1000).optional(),
+});
+
+export const adjustStockSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  productId: idLike,
+  warehouseId: idLike,
+  direction: z.enum(['in', 'out']),
+  quantity: z.number().positive('La cantidad debe ser mayor a 0.').finite().max(1_000_000),
+  reason: z.string().trim().min(3, 'Describe el motivo del ajuste.').max(500),
+});
+
 export const voidInvoiceSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),

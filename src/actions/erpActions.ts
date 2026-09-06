@@ -22,6 +22,7 @@ import {
   createInvoiceSchema,
   createPaymentSchema,
   createProductSchema,
+  adjustStockSchema,
   createPurchaseInvoiceSchema,
   createQuoteSchema,
   createSaleReturnSchema,
@@ -36,6 +37,7 @@ import {
   createInventoryCountSchema,
   openCashShiftSchema,
   saveCountedItemsSchema,
+  transferStockSchema,
   supplierPaymentSchema,
   voidInvoiceSchema,
   updateQuoteStatusSchema,
@@ -300,7 +302,164 @@ export async function importStockAction(input: ImportStockInput) {
   }
 }
 
+export interface TransferStockInput {
+  tenantId: number;
+  tenantSlug: string;
+  productId: number;
+  sourceWarehouseId: number;
+  targetWarehouseId: number;
+  quantity: number;
+  reason?: string;
+}
+
+/**
+ * Transferencia entre almacenes (Sprint 15). El beforeValidate del Kardex
+ * valida: almacenes distintos, pertenencia al inquilino y stock disponible
+ * en el origen. Un solo movimiento `transfer` (sale del origen, entra al destino).
+ */
+export async function transferStockAction(input: TransferStockInput) {
+  try {
+    const parsed = transferStockSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    if (Number(parsed.sourceWarehouseId) === Number(parsed.targetWarehouseId)) {
+      return { success: false, error: 'El almacén origen y destino deben ser distintos.' };
+    }
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const product = await payload.findByID({
+        collection: 'products',
+        id: parsed.productId,
+        depth: 0,
+        req,
+      });
+      if (!product || Number(product.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El producto no pertenece a este inquilino.');
+      }
+
+      return payload.create({
+        collection: 'stock-movements',
+        data: {
+          tenant: parsed.tenantId,
+          reference: `TRASLADO-${product.sku}`,
+          movementType: 'transfer',
+          product: product.id,
+          sourceWarehouse: parsed.sourceWarehouseId,
+          targetWarehouse: parsed.targetWarehouseId,
+          quantity: parsed.quantity,
+          unitCostUSD: Number(product.costUSD) || 0,
+          totalCostUSD: Number((parsed.quantity * (Number(product.costUSD) || 0)).toFixed(2)),
+          reason: parsed.reason || 'Transferencia entre almacenes',
+        },
+        req,
+        context: {
+          ...req.context,
+          allowInternalStockUpdate: true,
+        },
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory/kardex`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo transferir el inventario.') };
+  }
+}
+
+export interface AdjustStockInput {
+  tenantId: number;
+  tenantSlug: string;
+  productId: number;
+  warehouseId: number;
+  direction: 'in' | 'out';
+  quantity: number;
+  reason: string;
+}
+
+/**
+ * Ajuste manual de inventario (entrada/salida) con motivo obligatorio.
+ * Las salidas validan stock disponible vía el beforeValidate del Kardex.
+ */
+export async function adjustStockAction(input: AdjustStockInput) {
+  try {
+    const parsed = adjustStockSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const product = await payload.findByID({
+        collection: 'products',
+        id: parsed.productId,
+        depth: 0,
+        req,
+      });
+      if (!product || Number(product.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El producto no pertenece a este inquilino.');
+      }
+      if (product.productType === 'service' || product.trackInventory === false) {
+        throw new Error(`"${product.name}" no controla existencias (servicio o sin kardex).`);
+      }
+
+      const isEntry = parsed.direction === 'in';
+
+      if (isEntry) {
+        return payload.create({
+          collection: 'stock-movements',
+          data: {
+            tenant: parsed.tenantId,
+            reference: `AJUSTE-${product.sku}`,
+            movementType: 'adjustment_positive',
+            product: product.id,
+            targetWarehouse: parsed.warehouseId,
+            quantity: parsed.quantity,
+            unitCostUSD: Number(product.costUSD) || 0,
+            totalCostUSD: Number((parsed.quantity * (Number(product.costUSD) || 0)).toFixed(2)),
+            reason: parsed.reason,
+          },
+          req,
+          context: {
+            ...req.context,
+            allowInternalStockUpdate: true,
+          },
+        });
+      }
+
+      return payload.create({
+        collection: 'stock-movements',
+        data: {
+          tenant: parsed.tenantId,
+          reference: `AJUSTE-${product.sku}`,
+            movementType: 'adjustment_negative',
+            product: product.id,
+            sourceWarehouse: parsed.warehouseId,
+            quantity: parsed.quantity,
+            unitCostUSD: Number(product.costUSD) || 0,
+            totalCostUSD: Number((parsed.quantity * (Number(product.costUSD) || 0)).toFixed(2)),
+            reason: parsed.reason,
+        },
+        req,
+        context: {
+          ...req.context,
+          allowInternalStockUpdate: true,
+        },
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory/kardex`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo registrar el ajuste.') };
+  }
+}
+
 // ==========================================
+// 3. FACTURACIÓN & VENTAS (INVOICES)
+// ==========================================// ==========================================
 // 3. FACTURACIÓN & VENTAS (INVOICES)
 // ==========================================
 export interface InvoiceItemInput {

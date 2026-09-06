@@ -10,10 +10,12 @@ import {
   FlaskConical,
   Play,
   Upload,
-  ClipboardList,} from 'lucide-react';
+  ClipboardList,
+  ArrowRightLeft,} from 'lucide-react';
 import { formatUSD } from './KpiCard';
 import { Badge } from './Badge';
 import { ProductModal } from './modals/ProductModal';
+import { StockMovementModal } from './modals/StockMovementModal';
 import { ProductionModal } from './modals/ProductionModal';
 import type { Product, BillOfMaterial, Warehouse } from '@/payload-types';
 
@@ -39,6 +41,7 @@ export function InventoryView({
   lowStockCount,
 }: InventoryViewProps) {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
   const [isProductionModalOpen, setIsProductionModalOpen] = useState(false);
   const [selectedBomId, setSelectedBomId] = useState<number | undefined>(undefined);
 
@@ -104,6 +107,19 @@ export function InventoryView({
               <span>+ Fabricar Lote (BOM)</span>
             </button>
           )}
+          <button
+            onClick={() => setIsMovementModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Movimiento Manual</span>
+          </button>
+          <Link
+            href={`/${tenantSlug}/erp/inventory/kardex`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <span>Kardex</span>
+          </Link>
           <Link
             href={`/${tenantSlug}/erp/inventory/counts`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
@@ -401,6 +417,16 @@ export function InventoryView({
           </div>
         </div>
       )}
+
+      {/* Modal Movimiento Manual */}
+      <StockMovementModal
+        isOpen={isMovementModalOpen}
+        onClose={() => setIsMovementModalOpen(false)}
+        tenantId={tenantId}
+        tenantSlug={tenantSlug}
+        products={products.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
+        warehouses={warehouses.map((w) => ({ id: w.id, name: w.name, code: w.code }))}
+      />
 
       {/* Modal Nuevo Artículo */}
       <ProductModal

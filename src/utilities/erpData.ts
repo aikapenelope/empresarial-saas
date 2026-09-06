@@ -776,3 +776,61 @@ export async function getPurchasesPageData(tenantId: number): Promise<PurchasesP
     pendingReceptionCount,
   };
 }
+
+export interface KardexFilters {
+  page?: number;
+  productId?: number;
+  warehouseId?: number;
+  movementType?: string;
+  from?: string;
+  to?: string;
+}
+
+/**
+ * Kardex paginado con filtros (Sprint 15). Server-side pagination: el kardex
+ * crece con cada venta/ajuste — nunca se carga completo en la UI.
+ */
+export async function getKardexEntries(
+  tenantId: number,
+  filters: KardexFilters,
+): Promise<{
+  docs: StockMovement[];
+  totalDocs: number;
+  totalPages: number;
+  page: number;
+}> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  if (filters.productId) and.push({ product: { equals: filters.productId } });
+  if (filters.warehouseId) {
+    and.push({
+      or: [
+        { sourceWarehouse: { equals: filters.warehouseId } },
+        { targetWarehouse: { equals: filters.warehouseId } },
+      ],
+    });
+  }
+  if (filters.movementType) and.push({ movementType: { equals: filters.movementType } });
+  if (filters.from) and.push({ createdAt: { greater_than_equal: filters.from } });
+  if (filters.to) and.push({ createdAt: { less_than_equal: `${filters.to}T23:59:59.999Z` } });
+
+  const res = await payload.find({
+    collection: 'stock-movements',
+    where: { and },
+    depth: 1,
+    sort: '-createdAt',
+    page: filters.page || 1,
+    limit: 50,
+    user,
+    overrideAccess: false,
+  });
+
+  return {
+    docs: res.docs as StockMovement[],
+    totalDocs: res.totalDocs,
+    totalPages: res.totalPages,
+    page: res.page || 1,
+  };
+}
