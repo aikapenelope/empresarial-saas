@@ -399,6 +399,76 @@ Cada sprint concluye con:
 
 ---
 
+
+
+---
+
+# 🧭 Fase 6: Alineación con el Scaffold Oficial de Payload 3.88
+
+> **Objetivo:** Dejar el proyecto exactamente como Payload lo recomienda a hoy (`v3.88.0`, la última publicada), eliminando las desviaciones del scaffold original que rompen el admin en producción. Investigación completa en el PR #34 y en el issue upstream [payloadcms/payload#17545](https://github.com/payloadcms/payload/issues/17545).
+
+### 📋 Hallazgos de la auditoría (repo main vs template oficial v3.88.0)
+
+| # | Desviación | Impacto |
+|---|---|---|
+| 1 | **React 19.2.8 flotante** (`^19.2.8` desde el scaffold) — combinación sin precedente oficial; el admin no autenticado no renderiza en Vercel (bug upstream #17545, fix #17638 aún sin publicar) | 🔴 Admin inaccesible: no se puede crear el primer usuario |
+| 2 | **Falta `import '@payloadcms/next/css'`** en `(payload)/layout.tsx` y `(payload)/api/[...slug]/route.ts` — todos los templates oficiales (v3.48 → v3.88) lo traen; es la hoja de estilos completa del admin (`dist/prod/styles.css`) | 🔴 Estilos del admin ausentes |
+| 3 | **Campo `password` manual (type: text) en `Users.ts`** — las colecciones auth gestionan credenciales automáticamente (`salt`/`hash`); el template oficial no declara campos manuales | 🟡 Desviación de docs; columna `password` huérfana en BD |
+| 4 | **`graphql` no declarado** en dependencies (peer requerido `^16.8.1`; el template oficial lo declara) | 🟡 Resolución transaccional frágil |
+| 5 | **Rangos flotantes (`^`) para next/react/payload** — el template oficial **fija versiones exactas** (next `16.3.0`, react `19.2.6`, sharp `0.34.2`) | 🟡 Deriva de versiones no controlada |
+| 6 | `sharp ^0.35.3` vs oficial `0.34.2`; falta `dotenv` explícito; scripts con `PAYLOAD_CONFIG_PATH` (oficial: autodetección + `NODE_OPTIONS`) | 🟢 Cosmético, alinear de paso |
+
+**Contexto de versiones oficial (verificado por tag en el monorepo de Payload):**
+
+| Payload | Template oficial | React |
+|---|---|---|
+| 3.83.0 | next 16.2.3 | 19.2.4 |
+| 3.85.0 – 3.87.0 | next 16.2.6 | 19.2.6 |
+| **3.88.0 (latest)** | next 16.3.0 | 19.2.6 |
+
+`@payloadcms/next@3.88.0` soporta oficialmente `next >=15.4.11 <15.5.0` (nuestra línea) y `>=16.2.6 <17.0.0`. Node `>=20.9.0` ✓ (Vercel corre 24.x). Cendaro **no usa Payload** (app tRPC/Next 16): la herencia fue funcional, no de stack — la deriva vino del estilo de versionado del scaffold.
+
+---
+
+### 🅰️ Sprint 23 (PR #34, en curso): Admin operable en la línea soportada actual
+
+- [x] **Pin `react`/`react-dom` 19.2.4 exactos** (combinación verificada en la matriz de #17545 para next 15.4.11; 19.2.4 es versión que los propios templates de Payload fijaron en v3.83.0).
+- [x] **`import '@payloadcms/next/css'`** en `(payload)/layout.tsx` y `(payload)/api/[...slug]/route.ts` (alineación exacta con el scaffold oficial).
+- [ ] Validar en preview/producción: `/admin/create-first-user` renderiza → crear primer super-admin por la UI oficial.
+- **Entregable:** PR #34.
+
+### 🧹 Sprint 24: Limpieza de desviaciones del scaffold
+
+- [ ] **Eliminar el campo `password` manual de `Users.ts`** (las credenciales son automáticas: `salt`/`hash`; el create oficial lee `data.password` sin necesidad del campo).
+- [ ] **Declarar `graphql: ^16.8.1`** en dependencies.
+- [ ] **Pins exactos** para `next 15.4.11` (ya exacto), `react 19.2.4`, y `payload`/`@payloadcms/*` en `3.88.0` exacto (el monorepo se publica como bloque; evita deriva entre paquetes del mismo release).
+- [ ] Migración opcional de limpieza: `ALTER TABLE users DROP COLUMN password` (columna huérfana del scaffold).
+- [ ] Alinear `sharp` a `0.34.x` y añadir `dotenv` si se adopta el estilo de scripts oficial.
+- **Entregable:** PR `fix/scaffold-alignment-3.88`.
+
+### 🎯 Sprint 25 (experimento con puerta de decisión): Combo oficial de hoy — Next 16.3.0 + React 19.2.6
+
+- [ ] Rama de upgrade al combo **exacto** del template oficial v3.88.0: `next 16.3.0`, `react 19.2.6`, `eslint-config-next 16.3.0`, `@types/*` del template, y `next.config.ts` oficial completo (`images.localPatterns`, `webpack.extensionAlias`, `turbopack.root`, `devBundleServerPackages: false`).
+- [ ] Regenerar `importMap` y `payload-types`.
+- [ ] **Puerta de decisión empírica** en preview: ¿las rutas no autenticadas del admin renderizan con el combo oficial?
+  - ✅ **Sí** → merge: el proyecto queda **1:1 con el template oficial v3.88.0 de hoy**. Fin de la Fase 6.
+  - ❌ **No** → revertir con hallazgos documentados en #17545 y permanecer en el estado del Sprint 24 hasta que Payload publique el fix.
+- **Entregable:** PR `feat/official-template-3.88` (merge o revert documentado).
+
+### ⏳ Sprint 26 (condicionado al upstream): Release con el fix #17638
+
+- [ ] Monitorear el release de Payload que incluya [#17638](https://github.com/payloadcms/payload/pull/17638) (3.89+).
+- [ ] Al publicarse: actualizar `payload`/`@payloadcms/*` + `next`/`react` al combo exacto del template de ese release; retirar cualquier pin temporal; regresión completa (admin no autenticado, login, ERP smoke).
+- **Entregable:** PR `feat/upgrade-payload-fix-17545`.
+
+### ✅ Criterios de Cierre de la Fase 6
+1. `/admin` operable end-to-end desde la UI oficial de Payload (creación de primer usuario incluida).
+2. Cero desviaciones estructurales contra el template oficial de la versión instalada (auditoría diff documentada).
+3. Versiones exactas pineadas según la política oficial de templates.
+4. Stack final alineado 1:1 con lo que Payload recomienda en su repo a la versión instalada.
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.
