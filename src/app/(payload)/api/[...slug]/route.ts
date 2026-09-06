@@ -1,4 +1,5 @@
 import config from '@payload-config';
+import '@payloadcms/next/css';
 import { REST_DELETE, REST_GET, REST_OPTIONS, REST_PATCH, REST_POST } from '@payloadcms/next/routes';
 
 export const GET = REST_GET(config);
