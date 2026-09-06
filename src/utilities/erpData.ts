@@ -13,6 +13,7 @@ import type {
   IndustryTemplate,
   Warehouse,
   CashClosure,
+  InventoryCount,
   User,
 } from '@/payload-types';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
@@ -114,6 +115,7 @@ export async function getAllTenants(): Promise<Tenant[]> {
  * el control de acceso de las colecciones (multi-tenant) se evalúa siempre.
  */
 type ErpDataCollection =
+  | 'inventory-counts'
   | 'customers'
   | 'products'
   | 'invoices'
@@ -622,4 +624,15 @@ export async function getVendorsPageData(tenantId: number): Promise<VendorsPageD
     earnedUSD: Number(earnedUSD.toFixed(2)),
     pendingUSD: Number(pendingUSD.toFixed(2)),
   };
+}
+
+export async function getInventoryCountsList(tenantId: number): Promise<InventoryCount[]> {
+  const user = await requireErpTenantAccess(tenantId);
+  return findAllDocs<InventoryCount>({
+    collection: 'inventory-counts',
+    where: { tenant: { equals: tenantId } },
+    depth: 1,
+    sort: '-createdAt',
+    user,
+  });
 }

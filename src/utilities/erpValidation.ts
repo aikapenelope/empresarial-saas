@@ -58,6 +58,8 @@ export const createInvoiceSchema = z
     cashRegisterId: idLike.optional(),
     // Almacén de despacho: de dónde sale el inventario de esta venta
     warehouseId: idLike.optional(),
+    // Cuotas para ventas a crédito (1 = un solo vencimiento)
+    installmentsCount: z.number().int().min(1).max(12).optional(),
     items: z.array(invoiceItemSchema).min(1, 'La factura requiere al menos una línea.').max(200),
     notes: z.string().trim().max(1000).optional(),
   })
@@ -163,6 +165,34 @@ export const createSaleReturnSchema = z.object({
   invoiceId: idLike,
   lines: z.array(saleReturnLineSchema).min(1, 'Indica al menos un producto a devolver.').max(200),
   reason: z.string().trim().max(1000).optional(),
+});
+
+export const createInventoryCountSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  warehouseId: idLike,
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export const saveCountedItemsSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  countId: idLike,
+  counted: z
+    .array(
+      z.object({
+        productId: idLike,
+        countedQty: z.number().min(0, 'La cantidad contada no puede ser negativa.').finite(),
+      }),
+    )
+    .min(1)
+    .max(1000),
+});
+
+export const completeInventoryCountSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  countId: idLike,
 });
 
 export const stockImportRowSchema = z.object({

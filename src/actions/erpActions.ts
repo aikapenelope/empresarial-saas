@@ -30,11 +30,18 @@ import {
   executeProductionSchema,
   firstZodMessage,
   importStockSchema,
+  completeInventoryCountSchema,
+  createInventoryCountSchema,
   openCashShiftSchema,
+  saveCountedItemsSchema,
   updateQuoteStatusSchema,
   updateTenantSettingsSchema,
 } from '@/utilities/erpValidation';
 import { importStockToWarehouse } from '@/utilities/inventoryImport';
+import {
+  completeInventoryCount,
+  snapshotWarehouseStock,
+} from '@/utilities/inventoryCounts';
 import { returnSaleLines } from '@/utilities/salesLedger';
 
 // ==========================================
@@ -461,6 +468,35 @@ async function createInvoiceCore(
     },
     req,
   });
+
+  // Plan de cuotas para ventas a crédito: N cuotas iguales, la primera vence a
+  // creditDays y las siguientes cada 30 días (el ajuste de redondeo va a la última).
+  if (!isCash) {
+    const count = parsed.installmentsCount ?? 1;
+    const creditDays = customer.creditDays || 0;
+    const baseAmount = Math.floor((totalUSD / count) * 100) / 100;
+    const installments = Array.from({ length: count }, (_, i) => {
+      const isLast = i === count - 1;
+      return {
+        number: i + 1,
+        dueDate: new Date(
+          issueDate.getTime() + (creditDays + i * 30) * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+        amountUSD: isLast
+          ? Number((totalUSD - baseAmount * (count - 1)).toFixed(2))
+          : baseAmount,
+        paidUSD: 0,
+        status: 'pending' as const,
+      };
+    });
+
+    await payload.update({
+      collection: 'invoices',
+      id: invDoc.id,
+      data: { installments },
+      req,
+    });
+  }
 
   if (!isCash || !parsed.cashMethod) {
     return invDoc;
@@ -987,6 +1023,177 @@ export async function createSaleReturnAction(input: CreateSaleReturnInput) {
     return {
       success: false,
       error: toSafeActionError(error, 'No se pudo registrar la devolución.'),
+    };
+  }
+}
+
+export interface CreateInventoryCountInput {
+  tenantId: number;
+  tenantSlug: string;
+  warehouseId: number;
+  notes?: string;
+}
+
+/** Paso 1: abre un conteo con snapshot de existencias del sistema por almacén. */
+export async function createInventoryCountAction(input: CreateInventoryCountInput) {
+  try {
+    const parsed = createInventoryCountSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const warehouse = await payload.findByID({
+        collection: 'warehouses',
+        id: parsed.warehouseId,
+        depth: 0,
+        req,
+      });
+      if (!warehouse || Number(warehouse.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El almacén no pertenece a este inquilino.');
+      }
+
+      const items = await snapshotWarehouseStock({
+        warehouseId: Number(parsed.warehouseId),
+        req,
+      });
+      if (items.length === 0) {
+        throw new Error('El almacén no tiene movimientos de inventario que contar.');
+      }
+
+      return payload.create({
+        collection: 'inventory-counts',
+        data: {
+          tenant: parsed.tenantId,
+          warehouse: parsed.warehouseId,
+          status: 'in_progress',
+          items,
+          notes: parsed.notes || undefined,
+          openedBy: user.id,
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory/counts`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo crear el conteo.') };
+  }
+}
+
+export interface SaveCountedItemsInput {
+  tenantId: number;
+  tenantSlug: string;
+  countId: number;
+  counted: Array<{ productId: number; countedQty: number }>;
+}
+
+/** Paso 2: guarda las cantidades físicas contadas y calcula diferencias. */
+export async function saveCountedItemsAction(input: SaveCountedItemsInput) {
+  try {
+    const parsed = saveCountedItemsSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const count = await payload.findByID({
+        collection: 'inventory-counts',
+        id: parsed.countId,
+        depth: 0,
+        req,
+      });
+
+      if (!count || Number(count.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El conteo no pertenece a este inquilino.');
+      }
+      if (count.status === 'completed') {
+        throw new Error('El conteo ya está completado y es inmutable.');
+      }
+
+      const countedMap = new Map(
+        parsed.counted.map((c) => [Number(c.productId), Number(c.countedQty)]),
+      );
+
+      const items = (Array.isArray(count.items) ? count.items : []).map((item) => {
+        const productId = Number(
+          typeof item.product === 'object' && item.product !== null ? item.product.id : item.product,
+        );
+        const countedQty = countedMap.get(productId);
+        const systemQty = Number(item.systemQty) || 0;
+        if (countedQty === undefined) {
+          return { ...item, difference: Number((0 - systemQty).toFixed(4)) };
+        }
+        return {
+          ...item,
+          countedQty,
+          difference: Number((countedQty - systemQty).toFixed(4)),
+        };
+      });
+
+      return payload.update({
+        collection: 'inventory-counts',
+        id: count.id,
+        data: { items: items as never },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory/counts`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo guardar el conteo.') };
+  }
+}
+
+export interface CompleteInventoryCountInput {
+  tenantId: number;
+  tenantSlug: string;
+  countId: number;
+}
+
+/**
+ * Paso 3: completa el conteo generando ajustes por Kardex para cada diferencia
+ * (transaccional — el conteo marca completado solo si todos los ajustes se crean).
+ */
+export async function completeInventoryCountAction(input: CompleteInventoryCountInput) {
+  try {
+    const parsed = completeInventoryCountSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const count = await payload.findByID({
+        collection: 'inventory-counts',
+        id: parsed.countId,
+        depth: 0,
+        req,
+      });
+
+      if (!count || Number(count.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El conteo no pertenece a este inquilino.');
+      }
+
+      const adjusted = await completeInventoryCount({
+        count,
+        completedBy: user.id,
+        req,
+      });
+
+      return { countId: count.id, adjustedProducts: adjusted };
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory/counts`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo completar el conteo.'),
     };
   }
 }

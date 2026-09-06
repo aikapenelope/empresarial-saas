@@ -9,7 +9,8 @@ import {
   Plus,
   FlaskConical,
   Play,
-  Upload,} from 'lucide-react';
+  Upload,
+  ClipboardList,} from 'lucide-react';
 import { formatUSD } from './KpiCard';
 import { Badge } from './Badge';
 import { ProductModal } from './modals/ProductModal';
@@ -103,6 +104,13 @@ export function InventoryView({
               <span>+ Fabricar Lote (BOM)</span>
             </button>
           )}
+          <Link
+            href={`/${tenantSlug}/erp/inventory/counts`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <ClipboardList className="h-3.5 w-3.5 text-amber-400" />
+            <span>Conteos</span>
+          </Link>
           <Link
             href={`/${tenantSlug}/erp/inventory/import`}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"

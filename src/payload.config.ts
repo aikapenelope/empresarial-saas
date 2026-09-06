@@ -31,8 +31,10 @@ import { CashRegisters } from './collections/CashRegisters';
 import { CashClosures } from './collections/CashClosures';
 import { IndustryTemplates } from './collections/IndustryTemplates';
 import { Quotes } from './collections/Quotes';
+import { InventoryCounts } from './collections/InventoryCounts';
 import { salesInventoryPlugin } from './plugins/salesInventory';
 import { pricingPlugin } from './plugins/pricing';
+import { auditPlugin } from './plugins/audit';
 import { seedIndustryTemplateTask } from './jobs/seedIndustryTemplate';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
@@ -95,6 +97,7 @@ export default buildConfig({
     CashClosures,
     IndustryTemplates,
     Quotes,
+    InventoryCounts,
   ],
   jobs: {
     tasks: [seedIndustryTemplateTask],
@@ -141,6 +144,19 @@ export default buildConfig({
     // como plugin canónico de la constitución ((options) => (config) => Config).
     salesInventoryPlugin({ enabled: true }),
     pricingPlugin({ enabled: true }),
+    auditPlugin({
+      enabled: true,
+      collections: [
+        'invoices',
+        'customer-payments',
+        'purchase-invoices',
+        'supplier-payments',
+        'products',
+        'cash-closures',
+        'quotes',
+        'tenants',
+      ],
+    }),
     multiTenantPlugin({
       collections: {
         media: {},
@@ -160,6 +176,8 @@ export default buildConfig({
         'cash-closures': {},
         quotes: {},
         'price-history': {},
+        'audit-log': {},
+        'inventory-counts': {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),
       tenantsArrayField: {
