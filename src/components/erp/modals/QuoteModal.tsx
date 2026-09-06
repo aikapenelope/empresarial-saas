@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import { createQuoteAction } from '@/actions/erpActions';
+import { createQuoteAction, updateQuoteAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from '../KpiCard';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 
@@ -11,7 +11,15 @@ interface QuoteModalProps {
   onClose: () => void;
   tenantId: number;
   tenantSlug: string;
-  customers: Array<{ id: number; name: string; taxId: string }>;
+  customers: Array<{ id: number; name: string; taxId: string; priceTier?: string | null }>;
+  /** Si se pasa, el modal opera en modo edición sobre esa cotización (draft/sent). */
+  initial?: {
+    id: number;
+    customerId: number;
+    items: Array<{ productId?: number; sku?: string; description: string; quantity: number; unitPriceUSD: number }>;
+    validUntil?: string | null;
+    notes?: string | null;
+  } | null;
   products: Array<{
     id: number;
     name: string;
@@ -38,23 +46,37 @@ export function QuoteModal({
   customers,
   products,
   rate,
+  initial,
 }: QuoteModalProps) {
+  const isEdit = Boolean(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [customerId, setCustomerId] = useState<number>(customers[0]?.id || 0);
-  const [validUntil, setValidUntil] = useState<string>('');
-  const [notes, setNotes] = useState('');
+  const [customerId, setCustomerId] = useState<number>(initial?.customerId || customers[0]?.id || 0);
+  const [validUntil, setValidUntil] = useState<string>(
+    initial?.validUntil ? initial.validUntil.slice(0, 10) : '',
+  );
+  const [notes, setNotes] = useState(initial?.notes || '');
 
-  const [items, setItems] = useState<QuoteLine[]>([
-    {
-      productId: products[0]?.id,
-      sku: products[0]?.sku || '',
-      description: products[0]?.name || 'Concepto Cotizado',
-      quantity: 1,
-      unitPriceUSD: products[0]?.priceUSD || 0,
-    },
-  ]);
+  const [items, setItems] = useState<QuoteLine[]>(
+    initial?.items?.length
+      ? initial.items.map((it) => ({
+          productId: it.productId,
+          sku: it.sku || '',
+          description: it.description,
+          quantity: it.quantity,
+          unitPriceUSD: it.unitPriceUSD,
+        }))
+      : [
+          {
+            productId: products[0]?.id,
+            sku: products[0]?.sku || '',
+            description: products[0]?.name || 'Concepto Cotizado',
+            quantity: 1,
+            unitPriceUSD: products[0]?.priceUSD || 0,
+          },
+        ],
+  );
 
   const handleAddItem = () => {
     const prod = products[0];
@@ -115,20 +137,32 @@ export function QuoteModal({
     setLoading(true);
     setError(null);
 
-    const res = await createQuoteAction({
-      tenantId,
-      tenantSlug,
-      customerId,
-      items,
-      validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
-      notes: notes || undefined,
-    });
+    const res = isEdit
+      ? await updateQuoteAction({
+          tenantId,
+          tenantSlug,
+          quoteId: initial!.id,
+          customerId,
+          items,
+          validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
+          notes: notes || undefined,
+        })
+      : await createQuoteAction({
+          tenantId,
+          tenantSlug,
+          customerId,
+          items,
+          validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
+          notes: notes || undefined,
+        });
 
     setLoading(false);
 
     if (res.success) {
-      setNotes('');
-      setValidUntil('');
+      if (!isEdit) {
+        setNotes('');
+        setValidUntil('');
+      }
       onClose();
     } else {
       setError(res.error || 'Error al crear la cotización');
@@ -139,7 +173,7 @@ export function QuoteModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Nueva Cotización"
+      title={isEdit ? 'Editar Cotización' : 'Nueva Cotización'}
       description="Cotiza sin facturar: al aceptarla, se convierte en factura con un clic manteniendo las líneas."
       maxWidth="2xl"
     >
@@ -297,7 +331,7 @@ export function QuoteModal({
             className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            <span>Crear Cotización</span>
+            <span>{isEdit ? 'Guardar Cambios' : 'Crear Cotización'}</span>
           </button>
         </div>
       </form>

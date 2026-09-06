@@ -16,6 +16,7 @@ import { formatUSD } from './KpiCard';
 import { Badge } from './Badge';
 import { ProductModal } from './modals/ProductModal';
 import { StockMovementModal } from './modals/StockMovementModal';
+import { PricingReportCard } from './PricingReportCard';
 import { ProductionModal } from './modals/ProductionModal';
 import type { Product, BillOfMaterial, Warehouse } from '@/payload-types';
 
@@ -42,6 +43,7 @@ export function InventoryView({
 }: InventoryViewProps) {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
   const [isProductionModalOpen, setIsProductionModalOpen] = useState(false);
   const [selectedBomId, setSelectedBomId] = useState<number | undefined>(undefined);
 
@@ -269,6 +271,7 @@ export function InventoryView({
                   <th className="p-3 text-right">Precio Venta (USD)</th>
                   <th className="p-3 text-right">Existencia Actual</th>
                   <th className="p-3 text-center">Estado Stock</th>
+                  <th className="p-3 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -321,6 +324,14 @@ export function InventoryView({
                           {isLow ? `Bajo Mínimo (${min})` : 'Óptimo'}
                         </Badge>
                       </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => setEditingProduct(p)}
+                          className="text-indigo-400 hover:text-indigo-300 font-semibold text-[11px]"
+                        >
+                          Editar
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -329,6 +340,9 @@ export function InventoryView({
           </div>
         )}
       </div>
+
+      {/* Reporte de precios VES */}
+      <PricingReportCard tenantId={tenantId} />
 
       {/* Recetas y Fórmulas BOM */}
       {boms.length > 0 && (
@@ -432,12 +446,16 @@ export function InventoryView({
           .map((w) => ({ id: w.id, name: w.name, code: w.code, isDefault: w.isDefault }))}
       />
 
-      {/* Modal Nuevo Artículo */}
+      {/* Modal Nuevo/Editar Artículo */}
       <ProductModal
-        isOpen={isProductModalOpen}
-        onClose={() => setIsProductModalOpen(false)}
+        isOpen={isProductModalOpen || Boolean(editingProduct)}
+        onClose={() => {
+          setIsProductModalOpen(false);
+          setEditingProduct(undefined);
+        }}
         tenantId={tenantId}
         tenantSlug={tenantSlug}
+        initial={editingProduct}
       />
 
       {/* Modal Fabricar BOM */}

@@ -48,6 +48,7 @@ export function QuotesView({
   effectiveRate,
 }: QuotesViewProps) {
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [editingQuote, setEditingQuote] = useState<Quote | undefined>(undefined);
   const [convertQuote, setConvertQuote] = useState<Quote | undefined>(undefined);
   const [busyQuoteId, setBusyQuoteId] = useState<number | undefined>(undefined);
 
@@ -159,6 +160,14 @@ export function QuotesView({
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-1.5 flex-wrap">
+                          {(q.status === 'draft' || q.status === 'sent') && (
+                            <button
+                              onClick={() => setEditingQuote(q)}
+                              className="text-slate-400 hover:text-white text-[11px] font-semibold px-2 py-1"
+                            >
+                              Editar
+                            </button>
+                          )}
                           {convertible(q) && (
                             <button
                               onClick={() => setConvertQuote(q)}
@@ -214,12 +223,40 @@ export function QuotesView({
       {/* Modales */}
       <QuoteModal
         isOpen={isQuoteModalOpen}
-        onClose={() => setIsQuoteModalOpen(false)}
+        onClose={() => {
+          setIsQuoteModalOpen(false);
+          setEditingQuote(undefined);
+        }}
         tenantId={tenantId}
         tenantSlug={tenantSlug}
         customers={customers}
         products={products}
         rate={effectiveRate}
+        initial={
+          editingQuote
+            ? {
+                id: editingQuote.id,
+                customerId:
+                  typeof editingQuote.customer === 'object' && editingQuote.customer !== null
+                    ? editingQuote.customer.id
+                    : Number(editingQuote.customer),
+                items: (Array.isArray(editingQuote.items) ? editingQuote.items : []).map((it) => ({
+                  productId:
+                    typeof it.product === 'object' && it.product !== null
+                      ? it.product.id
+                      : typeof it.product === 'number'
+                        ? it.product
+                        : undefined,
+                  sku: it.sku || undefined,
+                  description: it.description,
+                  quantity: Number(it.quantity) || 1,
+                  unitPriceUSD: Number(it.unitPriceUSD) || 0,
+                })),
+                validUntil: editingQuote.validUntil,
+                notes: editingQuote.notes,
+              }
+            : null
+        }
       />
 
       {convertQuote && (

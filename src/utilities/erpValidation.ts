@@ -118,6 +118,24 @@ export const openCashShiftSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+export const updateCustomerSchema = createCustomerSchema.extend({
+  customerId: idLike,
+  priceTier: z.enum(['retail', 'wholesale', 'vendor', 'promo']).optional(),
+});
+
+export const updateProductSchema = createProductSchema.extend({
+  productId: idLike,
+  priceTiers: z
+    .array(
+      z.object({
+        tier: z.enum(['wholesale', 'vendor', 'promo']),
+        priceUSD: positiveMoney,
+      }),
+    )
+    .max(3, 'Máximo 3 tiers alternativos (el retail es el precio base).')
+    .optional(),
+});
+
 export const quoteItemSchema = z.object({
   productId: idLike.optional(),
   sku: z.string().trim().max(100).optional(),
@@ -140,6 +158,10 @@ export const updateQuoteStatusSchema = z.object({
   tenantSlug: z.string().min(1).max(120),
   quoteId: idLike,
   status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'expired']),
+});
+
+export const updateQuoteSchema = createQuoteSchema.extend({
+  quoteId: idLike,
 });
 
 export const convertQuoteSchema = z.object({

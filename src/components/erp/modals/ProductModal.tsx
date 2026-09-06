@@ -2,27 +2,52 @@
 
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import { createProductAction } from '@/actions/erpActions';
-import { Loader2 } from 'lucide-react';
+import { createProductAction, updateProductAction } from '@/actions/erpActions';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   tenantId: number;
   tenantSlug: string;
+  /** Si se pasa, el modal opera en modo edición sobre ese producto. */
+  initial?: {
+    id: number;
+    name: string;
+    sku: string;
+    productType?: string | null;
+    unitOfMeasure?: string | null;
+    costUSD?: number | null;
+    priceUSD?: number | null;
+    minStockAlert?: number | null;
+    priceTiers?: Array<{ tier: string; priceUSD: number }> | null;
+  } | null;
 }
 
-export function ProductModal({ isOpen, onClose, tenantId, tenantSlug }: ProductModalProps) {
+const TIER_OPTIONS = ['wholesale', 'vendor', 'promo'] as const;
+
+export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }: ProductModalProps) {
+  const isEdit = Boolean(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [name, setName] = useState('');
-  const [sku, setSku] = useState('');
-  const [productType, setProductType] = useState<'standard' | 'raw_material' | 'manufactured' | 'service'>('standard');
-  const [unitOfMeasure, setUnitOfMeasure] = useState<'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box'>('unit');
-  const [costUSD, setCostUSD] = useState(0);
-  const [priceUSD, setPriceUSD] = useState(0);
-  const [minStockAlert, setMinStockAlert] = useState(10);
+  const [name, setName] = useState(initial?.name || '');
+  const [sku, setSku] = useState(initial?.sku || '');
+  const [productType, setProductType] = useState<'standard' | 'raw_material' | 'manufactured' | 'service'>(
+    (initial?.productType as 'standard') || 'standard',
+  );
+  const [unitOfMeasure, setUnitOfMeasure] = useState<'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box'>(
+    (initial?.unitOfMeasure as 'unit') || 'unit',
+  );
+  const [costUSD, setCostUSD] = useState(Number(initial?.costUSD) || 0);
+  const [priceUSD, setPriceUSD] = useState(Number(initial?.priceUSD) || 0);
+  const [minStockAlert, setMinStockAlert] = useState(Number(initial?.minStockAlert) || 0);
+  const [tiers, setTiers] = useState<Array<{ tier: (typeof TIER_OPTIONS)[number]; priceUSD: number }>>(
+    (initial?.priceTiers || []).map((t) => ({
+      tier: (t.tier as (typeof TIER_OPTIONS)[number]) || 'wholesale',
+      priceUSD: Number(t.priceUSD) || 0,
+    })),
+  );
 
   const handleGenerateSku = () => {
     const prefix = productType === 'raw_material' ? 'MP' : productType === 'manufactured' ? 'PT' : 'ART';
@@ -35,25 +60,41 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug }: ProductM
     setLoading(true);
     setError(null);
 
-    const res = await createProductAction({
-      tenantId,
-      tenantSlug,
-      name,
-      sku: sku || `SKU-${Date.now().toString().slice(-5)}`,
-      productType,
-      unitOfMeasure,
-      costUSD,
-      priceUSD,
-      minStockAlert,
-    });
+    const res = isEdit
+      ? await updateProductAction({
+          tenantId,
+          tenantSlug,
+          productId: initial!.id,
+          name,
+          sku,
+          productType,
+          unitOfMeasure,
+          costUSD,
+          priceUSD,
+          minStockAlert,
+          priceTiers: tiers,
+        })
+      : await createProductAction({
+          tenantId,
+          tenantSlug,
+          name,
+          sku: sku || `SKU-${Date.now().toString().slice(-5)}`,
+          productType,
+          unitOfMeasure,
+          costUSD,
+          priceUSD,
+          minStockAlert,
+        });
 
     setLoading(false);
 
     if (res.success) {
-      setName('');
-      setSku('');
-      setCostUSD(0);
-      setPriceUSD(0);
+      if (!isEdit) {
+        setName('');
+        setSku('');
+        setCostUSD(0);
+        setPriceUSD(0);
+      }
       onClose();
     } else {
       setError(res.error || 'Error al guardar producto');
@@ -64,7 +105,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug }: ProductM
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Nuevo Artículo / Insumo"
+      title={isEdit ? `Editar Producto — ${initial!.name}` : 'Nuevo Artículo / Insumo'}
       description="Registra un nuevo producto para ventas directas o materia prima para fórmulas de fabricación BOM."
       maxWidth="lg"
     >
@@ -166,6 +207,77 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug }: ProductM
               className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono font-bold text-emerald-400"
             />
           </div>
+        </div>
+
+        {/* Tiers de precio alternativos (el retail es el precio base) */}
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-300 uppercase tracking-wider text-[10px]">
+              Precios por Segmento (mayorista / vendedor / promo)
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setTiers([
+                  ...tiers,
+                  { tier: TIER_OPTIONS.find((t) => !tiers.some((x) => x.tier === t)) || 'wholesale', priceUSD: 0 },
+                ])
+              }
+              disabled={tiers.length >= 3}
+              className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold disabled:opacity-40"
+            >
+              <Plus className="h-3 w-3" />
+              <span>Agregar Tier</span>
+            </button>
+          </div>
+          {tiers.map((t, idx) => (
+            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+              <div className="col-span-5">
+                <select
+                  value={t.tier}
+                  onChange={(e) => {
+                    const newTiers = [...tiers];
+                    newTiers[idx] = { ...t, tier: e.target.value as (typeof TIER_OPTIONS)[number] };
+                    setTiers(newTiers);
+                  }}
+                  className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-white"
+                >
+                  {TIER_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-5">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={t.priceUSD}
+                  onChange={(e) => {
+                    const newTiers = [...tiers];
+                    newTiers[idx] = { ...t, priceUSD: Number(e.target.value) };
+                    setTiers(newTiers);
+                  }}
+                  className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-white text-right font-mono"
+                  placeholder="Precio USD"
+                />
+              </div>
+              <div className="col-span-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => setTiers(tiers.filter((_, i) => i !== idx))}
+                  className="text-slate-500 hover:text-rose-400 p-1"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {tiers.length === 0 && (
+            <p className="text-slate-500 text-[11px]">Sin tiers alternativos: todos los clientes usan el precio base.</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/60">

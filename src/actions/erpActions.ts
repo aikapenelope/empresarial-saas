@@ -39,6 +39,9 @@ import {
   saveCountedItemsSchema,
   transferStockSchema,
   supplierPaymentSchema,
+  updateCustomerSchema,
+  updateProductSchema,
+  updateQuoteSchema,
   voidInvoiceSchema,
   updateQuoteStatusSchema,
   updateTenantSettingsSchema,
@@ -1810,7 +1813,168 @@ export async function createSupplierPaymentAction(input: CreateSupplierPaymentIn
   }
 }
 
+export interface UpdateCustomerInput {
+  tenantId: number;
+  tenantSlug: string;
+  customerId: number;
+  name: string;
+  taxId: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  status?: 'lead' | 'first_time' | 'recurring' | 'vip' | 'inactive';
+  creditAllowed?: boolean;
+  creditLimitUSD?: number;
+  creditDays?: number;
+  priceTier?: 'retail' | 'wholesale' | 'vendor' | 'promo';
+}
+
+export async function updateCustomerAction(input: UpdateCustomerInput) {
+  try {
+    const parsed = updateCustomerSchema.parse(input);
+    await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const doc = await payload.update({
+      collection: 'customers',
+      id: parsed.customerId,
+      data: {
+        name: parsed.name,
+        taxId: parsed.taxId,
+        phone: parsed.phone,
+        email: parsed.email || undefined,
+        address: parsed.address || undefined,
+        status: parsed.status || 'first_time',
+        creditAllowed: parsed.creditAllowed ?? false,
+        creditLimitUSD: parsed.creditLimitUSD ?? 0,
+        creditDays: parsed.creditDays ?? 0,
+        ...(parsed.priceTier ? { priceTier: parsed.priceTier } : {}),
+      },
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/customers`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo actualizar el cliente.') };
+  }
+}
+
+export interface UpdateProductInput {
+  tenantId: number;
+  tenantSlug: string;
+  productId: number;
+  name: string;
+  sku: string;
+  productType: 'standard' | 'raw_material' | 'manufactured' | 'service';
+  unitOfMeasure: 'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box';
+  costUSD: number;
+  priceUSD: number;
+  taxRate?: 'exempt' | 'general' | 'reduced';
+  minStockAlert?: number;
+  priceTiers?: Array<{ tier: 'wholesale' | 'vendor' | 'promo'; priceUSD: number }>;
+}
+
+export async function updateProductAction(input: UpdateProductInput) {
+  try {
+    const parsed = updateProductSchema.parse(input);
+    await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    // El cambio de priceUSD escribe price-history automáticamente (pricingPlugin).
+    // priceTiers: si llega undefined no se toca; si llega, reemplaza completo.
+    const doc = await payload.update({
+      collection: 'products',
+      id: parsed.productId,
+      data: {
+        name: parsed.name,
+        sku: parsed.sku,
+        productType: parsed.productType,
+        unitOfMeasure: parsed.unitOfMeasure,
+        costUSD: parsed.costUSD,
+        priceUSD: parsed.priceUSD,
+        taxRate: parsed.taxRate || 'exempt',
+        minStockAlert: parsed.minStockAlert ?? 0,
+        ...(parsed.priceTiers !== undefined ? { priceTiers: parsed.priceTiers } : {}),
+      },
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo actualizar el producto.') };
+  }
+}
+
+export interface UpdateQuoteInput {
+  tenantId: number;
+  tenantSlug: string;
+  quoteId: number;
+  customerId: number;
+  items: Array<{
+    productId?: number;
+    sku?: string;
+    description: string;
+    quantity: number;
+    unitPriceUSD: number;
+  }>;
+  validUntil?: string;
+  notes?: string;
+}
+
+export async function updateQuoteAction(input: UpdateQuoteInput) {
+  try {
+    const parsed = updateQuoteSchema.parse(input);
+    await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const quote = await payload.findByID({
+      collection: 'quotes',
+      id: parsed.quoteId,
+      depth: 0,
+    });
+
+    if (!quote || Number(quote.tenant) !== Number(parsed.tenantId)) {
+      return { success: false, error: 'La cotización no pertenece a este inquilino.' };
+    }
+    if (quote.status !== 'draft' && quote.status !== 'sent') {
+      return {
+        success: false,
+        error: 'Solo las cotizaciones en borrador o enviadas pueden editarse.',
+      };
+    }
+
+    const doc = await payload.update({
+      collection: 'quotes',
+      id: quote.id,
+      data: {
+        customer: parsed.customerId,
+        items: parsed.items.map((it) => ({
+          product: it.productId || undefined,
+          sku: it.sku || undefined,
+          description: it.description,
+          quantity: it.quantity,
+          unitPriceUSD: it.unitPriceUSD,
+        })),
+        validUntil: parsed.validUntil || undefined,
+        notes: parsed.notes || undefined,
+      },
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo actualizar la cotización.') };
+  }
+}
+
 // ==========================================
+// 5. CAJAS REGISTRADORAS & ARQUEOS CIEGOS
+// ==========================================// ==========================================
 // 5. CAJAS REGISTRADORAS & ARQUEOS CIEGOS
 // ==========================================
 export interface CreateCashRegisterInput {
