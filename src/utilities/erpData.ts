@@ -19,8 +19,18 @@ import type {
   SupplierPayment,
   Order,
   DeliveryNote,
+  PriceHistory,
   User,
 } from '@/payload-types';
+import {
+  aggregateAgingByVendor,
+  computeAgingRows,
+  summarizeAging,
+  type AgingInvoiceInput,
+  type AgingRow,
+  type AgingSummary,
+  type VendorAgingRow,
+} from './arAging';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
 import { ErpAccessError, requireErpTenantAccess, getErpUser, requireErpUser } from './erpAuth';
 
@@ -593,6 +603,245 @@ export async function getDeliveryNoteDetail(
     return null;
   }
   return note;
+}
+
+export interface ReceivablesPageData {
+  isVendor: boolean;
+  vendors: Array<{ id: number; name: string }>;
+  rows: AgingRow[];
+  vendorRows: VendorAgingRow[];
+  summary: AgingSummary;
+  asOf: string;
+}
+
+/**
+ * Cartera con antigüedad (Sprint 21). Facturas abiertas de venta
+ * (issued/partially_paid con saldo) agregadas por cliente en buckets
+ * 0-30/31-60/61-90/90+ vía la utility pura arAging. El rol `vendor` solo ve
+ * SU cartera (clientes con assignedVendor = user.id); admin/supervisor ven
+ * todo el inquilino.
+ */
+export async function getAccountsReceivableData(tenantId: number): Promise<ReceivablesPageData> {
+  const user = await requireErpTenantAccess(tenantId);
+  const isVendor = user.role === 'vendor';
+  const payload = await getPayload({ config });
+
+  // Vendedores del inquilino (para nombres y filtro del canal)
+  const vendorsRes = await payload.find({
+    collection: 'users',
+    where: {
+      and: [
+        { role: { equals: 'vendor' } },
+        { 'tenants.tenant': { equals: tenantId } },
+      ],
+    },
+    pagination: false,
+    depth: 0,
+    sort: 'name',
+    user,
+    overrideAccess: false,
+  });
+  const vendors = (vendorsRes.docs as User[]).map((v) => ({ id: v.id, name: v.name }));
+  const vendorNames = new Map<number, string>(vendors.map((v) => [v.id, v.name]));
+
+  // Todos los clientes (para mapear customerId → vendedor asignado)
+  const customers = await findAllDocs<Customer>({
+    collection: 'customers',
+    where: { tenant: { equals: tenantId } },
+    depth: 0,
+    sort: 'name',
+    user,
+  });
+  const customerInfo = new Map<number, { name: string; vendorId: number | null }>(
+    customers.map((c) => [
+      c.id,
+      {
+        name: c.name,
+        vendorId: c.assignedVendor
+          ? typeof c.assignedVendor === 'object'
+            ? c.assignedVendor.id
+            : Number(c.assignedVendor)
+          : null,
+      },
+    ]),
+  );
+
+  // Facturas abiertas (vendor → solo clientes de su canal)
+  const openCustomerIds = isVendor
+    ? customers.filter((c) => customerInfo.get(c.id)?.vendorId === user.id).map((c) => c.id)
+    : null;
+  const invoicesWhere: Where = isVendor
+    ? {
+        and: [
+          { tenant: { equals: tenantId } },
+          { status: { in: [...OPEN_SALE_INVOICE_STATUSES] } },
+          { customer: { in: openCustomerIds && openCustomerIds.length > 0 ? openCustomerIds : [0] } },
+        ],
+      }
+    : {
+        and: [
+          { tenant: { equals: tenantId } },
+          { status: { in: [...OPEN_SALE_INVOICE_STATUSES] } },
+        ],
+      };
+
+  const invoicesRes = await payload.find({
+    collection: 'invoices',
+    where: invoicesWhere,
+    pagination: false,
+    depth: 0,
+    sort: '-createdAt',
+    user,
+    overrideAccess: false,
+  });
+
+  const agingInputs: AgingInvoiceInput[] = [];
+  for (const inv of invoicesRes.docs as Invoice[]) {
+    const customerId =
+      typeof inv.customer === 'object' && inv.customer !== null ? inv.customer.id : Number(inv.customer);
+    const info = customerInfo.get(customerId);
+    const vendorId = isVendor ? user.id : info?.vendorId ?? null;
+    agingInputs.push({
+      customerId,
+      customerName: info?.name || (typeof inv.customer === 'object' && inv.customer !== null ? inv.customer.name : '—'),
+      vendorId,
+      vendorName: vendorId ? vendorNames.get(vendorId) || `#${vendorId}` : '—',
+      balanceUSD: Number(inv.balanceUSD) || 0,
+      dueDate: inv.dueDate,
+      issueDate: inv.issueDate,
+    });
+  }
+
+  const rows = computeAgingRows(agingInputs);
+  return {
+    isVendor,
+    vendors,
+    rows,
+    vendorRows: aggregateAgingByVendor(rows),
+    summary: summarizeAging(rows),
+    asOf: new Date().toISOString(),
+  };
+}
+
+export interface RateHistoryPriceEntry {
+  id: number;
+  date: string;
+  productName: string;
+  oldPriceUSD: number;
+  newPriceUSD: number;
+  exchangeRateSnapshot: number;
+  newPriceVES: number;
+}
+
+export interface RateHistoryInvoiceEntry {
+  id: number;
+  invoiceNumber: string;
+  date: string;
+  exchangeRateSnapshot: number;
+}
+
+export interface RatesPageData {
+  live: {
+    bcv: number | null;
+    binance: number | null;
+    paralelo: number | null;
+    lastUpdated: string;
+  };
+  effectiveRate: number;
+  rateSource: string;
+  /** Sólo super-admin/tenant-admin pueden cambiar la configuración de tasa. */
+  canEdit: boolean;
+  priceHistory: RateHistoryPriceEntry[];
+  invoiceHistory: RateHistoryInvoiceEntry[];
+}
+
+/**
+ * Datos de la página de tasas (Sprint 21): tasas en vivo, tasa efectiva del
+ * inquilino e historial de snapshots (price-history + facturas recientes).
+ */
+export async function getRatesPageData(tenantId: number): Promise<RatesPageData> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const tenant = await payload.findByID({
+    collection: 'tenants',
+    id: tenantId,
+    depth: 0,
+    user,
+    overrideAccess: false,
+  });
+
+  const [live, effective] = await Promise.all([
+    getLiveExchangeRates(),
+    resolveEffectiveRate(
+      tenant.currencyConfig
+        ? {
+            manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+            autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+          }
+        : undefined,
+    ),
+  ]);
+
+  const priceHistoryRes = await payload.find({
+    collection: 'price-history',
+    where: { tenant: { equals: tenantId } },
+    depth: 1,
+    sort: '-createdAt',
+    limit: 12,
+    user,
+    overrideAccess: false,
+  });
+  const priceHistory: RateHistoryPriceEntry[] = (
+    priceHistoryRes.docs as PriceHistory[]
+  ).map((ph) => {
+    const product =
+      typeof ph.product === 'object' && ph.product !== null ? ph.product : null;
+    return {
+      id: ph.id,
+      date: ph.createdAt,
+      productName: product ? product.name : '—',
+      oldPriceUSD: Number(ph.oldPriceUSD) || 0,
+      newPriceUSD: Number(ph.newPriceUSD) || 0,
+      exchangeRateSnapshot: Number(ph.exchangeRateSnapshot) || 0,
+      newPriceVES: Number(ph.newPriceVES) || 0,
+    };
+  });
+
+  const invoicesRes = await payload.find({
+    collection: 'invoices',
+    where: {
+      and: [
+        { tenant: { equals: tenantId } },
+        { status: { not_equals: 'draft' } },
+      ],
+    },
+    depth: 0,
+    sort: '-createdAt',
+    limit: 10,
+    user,
+    overrideAccess: false,
+  });
+  const invoiceHistory: RateHistoryInvoiceEntry[] = (invoicesRes.docs as Invoice[]).map((inv) => ({
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    date: inv.createdAt,
+    exchangeRateSnapshot: Number(inv.exchangeRateSnapshot) || 0,
+  }));
+
+  return {
+    live: {
+      bcv: live.bcv,
+      binance: live.binance,
+      paralelo: live.paralelo,
+      lastUpdated: live.lastUpdated,
+    },
+    effectiveRate: effective.rate,
+    rateSource: effective.source,
+    canEdit: user.role === 'super-admin' || user.role === 'tenant-admin',
+    priceHistory,
+    invoiceHistory,
+  };
 }
 
 /** Remisiones del inquilino para la vista de remisiones (Sprint 20). */

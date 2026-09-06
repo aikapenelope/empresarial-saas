@@ -17,6 +17,7 @@ import {
   Settings,
   ShoppingCart,
   ClipboardList,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/utilities/cn';
 
@@ -32,7 +33,7 @@ interface SidebarProps {
  * capa de datos son la autoridad real; esto es UX: cada rol ve solo su operación.
  */
 const ROLE_NAV: Record<string, string[]> = {
-  vendor: ['dashboard', 'pos', 'quotes', 'orders', 'delivery-notes', 'vendors', 'customers'],
+  vendor: ['dashboard', 'pos', 'quotes', 'orders', 'delivery-notes', 'vendors', 'customers', 'receivables'],
   cashier: ['dashboard', 'pos', 'invoices', 'orders', 'delivery-notes', 'customers', 'cash-registers'],
   employee: ['dashboard', 'invoices', 'customers', 'inventory', 'quotes', 'orders', 'delivery-notes'],
   supervisor: [
@@ -44,6 +45,7 @@ const ROLE_NAV: Record<string, string[]> = {
     'quotes',
     'orders',
     'delivery-notes',
+    'receivables',
     'cash-registers',
     'purchases',
     'vendors',
@@ -77,6 +79,12 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile, userRole }: S
           href: `/${tenantSlug}/erp/customers`,
           routeKey: 'customers',
           icon: Users,
+        },
+        {
+          name: 'Cartera por Antigüedad',
+          href: `/${tenantSlug}/erp/receivables`,
+          routeKey: 'receivables',
+          icon: Wallet,
         },
         {
           name: 'Cotizaciones',
@@ -155,6 +163,12 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile, userRole }: S
           href: `/${tenantSlug}/erp/templates`,
           routeKey: 'templates',
           icon: Layers,
+        },
+        {
+          name: 'Tasas de Cambio',
+          href: `/${tenantSlug}/erp/rates`,
+          routeKey: 'rates',
+          icon: TrendingUp,
         },
         {
           name: 'Ajustes de Empresa',
