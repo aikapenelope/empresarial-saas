@@ -26,9 +26,11 @@ import {
   ensureWalkInCustomerSchema,
   executeProductionSchema,
   firstZodMessage,
+  importStockSchema,
   openCashShiftSchema,
   updateTenantSettingsSchema,
 } from '@/utilities/erpValidation';
+import { importStockToWarehouse } from '@/utilities/inventoryImport';
 
 // ==========================================
 // Infraestructura de seguridad y transacciones
@@ -236,6 +238,48 @@ export async function createProductAction(input: CreateProductInput) {
     return { success: true, data: doc };
   } catch (error: unknown) {
     return { success: false, error: toSafeActionError(error, 'No se pudo registrar el producto.') };
+  }
+}
+
+export interface ImportStockInput {
+  tenantId: number;
+  tenantSlug: string;
+  warehouseId: number;
+  mode: 'adjust' | 'set';
+  rows: Array<{ sku: string; quantity: number }>;
+}
+
+/**
+ * Carga masiva de existencias por Kardex (Sprint 9). RBAC de operador
+ * (super-admin/tenant-admin/supervisor) — el mismo de los movimientos de inventario.
+ * Toda la importación corre en UNA transacción: válido se crea, inválido se
+ * rechaza por fila con mensaje; el stock resultante nunca puede quedar negativo.
+ */
+export async function importStockAction(input: ImportStockInput) {
+  try {
+    const parsed = importStockSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const summary = await withTransaction(payload, user, (req) =>
+      importStockToWarehouse({
+        tenantId: parsed.tenantId,
+        warehouseId: parsed.warehouseId,
+        mode: parsed.mode,
+        rows: parsed.rows,
+        req,
+      }),
+    );
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: summary };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo importar el inventario.'),
+    };
   }
 }
 

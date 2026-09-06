@@ -116,6 +116,22 @@ export const openCashShiftSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+export const stockImportRowSchema = z.object({
+  sku: z.string().trim().min(1).max(100),
+  quantity: z.number().finite('Cantidad no numérica.'),
+});
+
+export const importStockSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  warehouseId: idLike,
+  mode: z.enum(['adjust', 'set']),
+  rows: z
+    .array(stockImportRowSchema)
+    .min(1, 'El archivo no contiene filas válidas.')
+    .max(1000, 'Máximo 1000 filas por importación.'),
+});
+
 export const ensureWalkInCustomerSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),

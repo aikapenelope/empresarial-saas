@@ -283,6 +283,11 @@ export const Customers: CollectionConfig = {
       admin: {
         readOnly: true,
       },
+      custom: {
+        'plugin-import-export': {
+          disabled: true,
+        },
+      },
     },
     {
       name: 'currentDebtVES',
@@ -292,6 +297,11 @@ export const Customers: CollectionConfig = {
       admin: {
         readOnly: true,
       },
+      custom: {
+        'plugin-import-export': {
+          disabled: true,
+        },
+      },
     },
     {
       name: 'overdueDebtUSD',
@@ -300,6 +310,11 @@ export const Customers: CollectionConfig = {
       defaultValue: 0,
       admin: {
         readOnly: true,
+      },
+      custom: {
+        'plugin-import-export': {
+          disabled: true,
+        },
       },
       hooks: {
         afterRead: [overdueDebtUSDHook],

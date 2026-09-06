@@ -10,6 +10,7 @@ import sharp from 'sharp';
 
 import { s3Storage } from '@payloadcms/storage-s3';
 import { nodemailerAdapter } from '@payloadcms/email-nodemailer';
+import { importExportPlugin } from '@payloadcms/plugin-import-export';
 
 import { Users } from './collections/Users';
 import { Tenants } from './collections/Tenants';
@@ -183,6 +184,46 @@ export default buildConfig({
         forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
       },
       enabled: Boolean(process.env.S3_BUCKET),
+    }),
+    // ─── Sprint 9: Importación/Exportación de catálogos (plugin oficial) ───
+    // Catálogo ONLY: los campos ledger (currentStock, deudas) están marcados con
+    // custom['plugin-import-export'].disabled y el stock masivo entra por el Kardex
+    // (importStockAction). El tenant se resuelve solo: el plugin escribe con
+    // overrideAccess:false y los beforeValidate de cada colección toman el tenant
+    // del usuario que sube el archivo.
+    importExportPlugin({
+      collections: [
+        { slug: 'products', import: { disableJobsQueue: true, limit: 2000 }, export: { disableJobsQueue: true, limit: 5000, format: 'csv' } },
+        { slug: 'customers', import: { disableJobsQueue: true, limit: 2000 }, export: { disableJobsQueue: true, limit: 5000, format: 'csv' } },
+        { slug: 'categories', import: { disableJobsQueue: true, limit: 500 }, export: { disableJobsQueue: true, limit: 2000, format: 'csv' } },
+        { slug: 'suppliers', import: { disableJobsQueue: true, limit: 2000 }, export: { disableJobsQueue: true, limit: 5000, format: 'csv' } },
+      ],
+      overrideImportCollection: ({ collection }) => ({
+        ...collection,
+        access: {
+          read: ({ req: { user } }) => Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+          create: ({ req: { user } }) => Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+          update: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
+          delete: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
+        },
+        admin: {
+          ...collection.admin,
+          group: 'Administración',
+        },
+      }),
+      overrideExportCollection: ({ collection }) => ({
+        ...collection,
+        access: {
+          read: ({ req: { user } }) => Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+          create: ({ req: { user } }) => Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+          update: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
+          delete: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
+        },
+        admin: {
+          ...collection.admin,
+          group: 'Administración',
+        },
+      }),
     }),
   ],
 });
