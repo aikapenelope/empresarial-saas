@@ -11,11 +11,12 @@ import {
   Calendar,
   Clock,
   CheckCircle,
-} from 'lucide-react';
+  Undo2,} from 'lucide-react';
 import { formatUSD, formatVES } from './KpiCard';
 import { Badge } from './Badge';
 import { InvoiceModal } from './modals/InvoiceModal';
 import { PaymentModal } from './modals/PaymentModal';
+import { ReturnModal } from './modals/ReturnModal';
 import type { Invoice } from '@/payload-types';
 
 interface InvoicesViewProps {
@@ -41,6 +42,7 @@ export function InvoicesView({
 }: InvoicesViewProps) {
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [returnInvoice, setReturnInvoice] = useState<Invoice | undefined>(undefined);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | undefined>(undefined);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | undefined>(undefined);
 
@@ -350,21 +352,37 @@ export function InvoicesView({
                         </Badge>
                       </td>
                       <td className="p-3 text-center">
-                        {!isPaid && (
-                          <button
-                            onClick={() => handleOpenCollect(inv)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-colors"
-                          >
-                            <DollarSign className="h-3 w-3" />
-                            <span>Cobrar</span>
-                          </button>
-                        )}
-                        {isPaid && (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-semibold">
-                            <CheckCircle className="h-3 w-3" />
-                            <span>Completa</span>
-                          </span>
-                        )}
+                        <div className="flex items-center justify-center gap-1.5">
+                          {!isPaid && (
+                            <button
+                              onClick={() => handleOpenCollect(inv)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-colors"
+                            >
+                              <DollarSign className="h-3 w-3" />
+                              <span>Cobrar</span>
+                            </button>
+                          )}
+                          {isPaid && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-semibold">
+                              <CheckCircle className="h-3 w-3" />
+                              <span>Completa</span>
+                            </span>
+                          )}
+                          {inv.status !== 'voided' &&
+                            inv.status !== 'draft' &&
+                            (Array.isArray(inv.items) ? inv.items : []).some(
+                              (it) => typeof it.product === 'object' && it.product !== null,
+                            ) && (
+                              <button
+                                onClick={() => setReturnInvoice(inv)}
+                                title="Registrar devolución de mercancía"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-600/10 text-amber-300 border border-amber-500/30 hover:bg-amber-600 hover:text-white text-[11px] font-semibold transition-colors"
+                              >
+                                <Undo2 className="h-3 w-3" />
+                                <span>Devolver</span>
+                              </button>
+                            )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -389,6 +407,29 @@ export function InvoicesView({
       />
 
       {/* Modal Cobro */}
+      {returnInvoice && (
+        <ReturnModal
+          isOpen
+          onClose={() => setReturnInvoice(undefined)}
+          tenantId={tenantId}
+          tenantSlug={tenantSlug}
+          invoice={{
+            id: returnInvoice.id,
+            invoiceNumber: returnInvoice.invoiceNumber,
+            items: (Array.isArray(returnInvoice.items) ? returnInvoice.items : []).map((it) => ({
+              productId:
+                typeof it.product === 'object' && it.product !== null
+                  ? it.product.id
+                  : typeof it.product === 'number'
+                    ? it.product
+                    : undefined,
+              description: it.description,
+              quantity: Number(it.quantity) || 0,
+            })),
+          }}
+        />
+      )}
+
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}

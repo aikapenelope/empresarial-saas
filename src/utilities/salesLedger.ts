@@ -187,11 +187,12 @@ export async function applySaleStockDeduction(
 }
 
 /**
- * Reversión de inventario por anulación de factura o devolución de mercancía.
+ * Reversión de inventario por anulación total de la factura.
  *
- * Relee los movimientos `sale_out` inmutables de la factura y crea por cada uno un
- * movimiento `sale_return` que reingresa la misma cantidad, al mismo almacén y con
- * el mismo costo snapshot. Idempotente con la misma disciplina de lock + consulta.
+ * Idempotencia POR SALDOS: para cada (producto, almacén) calcula
+ * `vendido − devuelto` y solo reingresa el remanente. Así conviven las
+ * devoluciones parciales (returnSaleLines) con la anulación total sin
+ * duplicar jamás un reingreso.
  */
 export async function revertSaleFromInventory(
   invoiceIdRaw: unknown,
@@ -204,20 +205,28 @@ export async function revertSaleFromInventory(
 
   await db.execute(sql`SELECT id FROM invoices WHERE id = ${invoiceId} FOR UPDATE`);
 
-  // Idempotencia: no duplicar reversiones
-  const existingReversals = await db.execute(
-    sql`SELECT id FROM stock_movements WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_return' LIMIT 1`,
+  // Vendido por (producto, almacén de salida)
+  const soldRes = await db.execute(
+    sql`SELECT product_id, source_warehouse_id, SUM(quantity) AS qty
+        FROM stock_movements
+        WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_out'
+        GROUP BY product_id, source_warehouse_id`,
   );
-  if (existingReversals.rows && existingReversals.rows.length > 0) {
-    return 0; // Ya revertida
+  const soldGroups = soldRes.rows || [];
+  if (soldGroups.length === 0) {
+    return 0; // No hay descarga que revertir
   }
 
-  const saleMovementsRes = await db.execute(
-    sql`SELECT id, product_id, source_warehouse_id, quantity, unit_cost_u_s_d, reference FROM stock_movements WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_out'`,
+  // Devuelto hasta ahora por (producto, almacén de reingreso)
+  const returnedRes = await db.execute(
+    sql`SELECT product_id, target_warehouse_id, SUM(quantity) AS qty
+        FROM stock_movements
+        WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_return'
+        GROUP BY product_id, target_warehouse_id`,
   );
-  const saleMovements = saleMovementsRes.rows || [];
-  if (saleMovements.length === 0) {
-    return 0; // No hay descarga que revertir
+  const returnedByKey = new Map<string, number>();
+  for (const row of returnedRes.rows || []) {
+    returnedByKey.set(`${row.product_id}:${row.target_warehouse_id}`, Number(row.qty) || 0);
   }
 
   const invoice = (await req.payload.findByID({
@@ -238,12 +247,20 @@ export async function revertSaleFromInventory(
   const tenantId = extractId(invoice.tenant);
   let reversalsCreated = 0;
 
-  for (const row of saleMovements) {
-    const sourceWarehouseId = Number(row.source_warehouse_id);
-    if (!sourceWarehouseId) {
+  for (const row of soldGroups) {
+    const productId = Number(row.product_id);
+    const warehouseId = Number(row.source_warehouse_id);
+    if (!productId || !warehouseId) {
       throw new Error(
-        `El movimiento de venta ${row.reference} no tiene almacén de origen y no puede revertirse.`,
+        `El movimiento de venta de la factura ${invoice.invoiceNumber} no tiene producto o almacén de origen y no puede revertirse.`,
       );
+    }
+
+    const soldQty = Number(row.qty) || 0;
+    const alreadyReturned = returnedByKey.get(`${productId}:${warehouseId}`) || 0;
+    const remaining = Number((soldQty - alreadyReturned).toFixed(4));
+    if (remaining <= 0.0001) {
+      continue; // Ya devuelto completamente (devoluciones parciales previas)
     }
 
     await req.payload.create({
@@ -251,16 +268,14 @@ export async function revertSaleFromInventory(
       data: {
         reference: `DEVOL-${invoice.invoiceNumber}`,
         movementType: 'sale_return',
-        product: Number(row.product_id),
-        targetWarehouse: sourceWarehouseId,
-        quantity: Number(row.quantity),
-        unitCostUSD: Number(row.unit_cost_u_s_d) || 0,
-        totalCostUSD: Number(
-          ((Number(row.quantity) || 0) * (Number(row.unit_cost_u_s_d) || 0)).toFixed(2),
-        ),
+        product: productId,
+        targetWarehouse: warehouseId,
+        quantity: remaining,
+        unitCostUSD: 0,
+        totalCostUSD: 0,
         invoice: invoice.id,
         tenant: tenantId as number,
-        reason: `Devolución de mercancía de la factura ${invoice.invoiceNumber}`,
+        reason: `Reversión total por anulación de la factura ${invoice.invoiceNumber}`,
       },
       req,
       overrideAccess: true,
@@ -274,4 +289,151 @@ export async function revertSaleFromInventory(
   }
 
   return reversalsCreated;
+}
+
+/**
+ * Devolución PARCIAL de mercancía sobre una factura vigente.
+ *
+ * Valida por producto que `devuelto + solicitado ≤ vendido` (consultando el
+ * Kardex inmutable) y reingresa las unidades al MISMO almacén de donde salieron,
+ * asignando por orden de los movimientos `sale_out` (FIFO).
+ */
+export async function returnSaleLines({
+  invoice,
+  lines,
+  reason,
+  req,
+}: {
+  invoice: Invoice;
+  lines: Array<{ productId: number; quantity: number }>;
+  reason?: string;
+  req: PayloadRequest;
+}): Promise<{ movementsCreated: number; results: Array<{ productId: number; quantity: number; status: 'ok' | 'error'; message?: string }> }> {
+  const invoiceId = extractId(invoice.id);
+  if (!invoiceId) {
+    throw new Error('Factura inválida para registrar la devolución.');
+  }
+
+  const db = getActiveDb(req);
+
+  await db.execute(sql`SELECT id FROM invoices WHERE id = ${invoiceId} FOR UPDATE`);
+
+  const invoiceStatus = invoice.status;
+  if (invoiceStatus === 'voided' || invoiceStatus === 'draft') {
+    throw new Error('No se pueden devolver mercancías de una factura anulada o en borrador.');
+  }
+
+  const tenantId = extractId(invoice.tenant);
+  if (!tenantId) {
+    throw new Error('La factura no tiene un inquilino válido.');
+  }
+
+  // Vendido y devuelto por (producto, almacén)
+  const soldRes = await db.execute(
+    sql`SELECT product_id, source_warehouse_id, SUM(quantity) AS qty
+        FROM stock_movements
+        WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_out'
+        GROUP BY product_id, source_warehouse_id
+        ORDER BY id ASC`,
+  );
+  const soldByKey = new Map<string, number>();
+  const saleOrder: Array<{ key: string; productId: number; warehouseId: number }> = [];
+  for (const row of soldRes.rows || []) {
+    const key = `${row.product_id}:${row.source_warehouse_id}`;
+    soldByKey.set(key, (soldByKey.get(key) || 0) + (Number(row.qty) || 0));
+    saleOrder.push({ key, productId: Number(row.product_id), warehouseId: Number(row.source_warehouse_id) });
+  }
+
+  const returnedRes = await db.execute(
+    sql`SELECT product_id, target_warehouse_id, SUM(quantity) AS qty
+        FROM stock_movements
+        WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_return'
+        GROUP BY product_id, target_warehouse_id`,
+  );
+  const returnedByKey = new Map<string, number>();
+  for (const row of returnedRes.rows || []) {
+    returnedByKey.set(`${row.product_id}:${row.target_warehouse_id}`, Number(row.qty) || 0);
+  }
+
+  const results: Array<{ productId: number; quantity: number; status: 'ok' | 'error'; message?: string }> = [];
+  const pendingByProduct = new Map<number, number>();
+
+  for (const line of lines) {
+    if (!line.productId || line.quantity <= 0) {
+      results.push({ productId: line.productId, quantity: line.quantity, status: 'error', message: 'Línea inválida.' });
+      continue;
+    }
+    pendingByProduct.set(line.productId, (pendingByProduct.get(line.productId) || 0) + line.quantity);
+  }
+
+  let movementsCreated = 0;
+
+  // Asignación FIFO por producto a través de los almacenes de salida
+  for (const [productId, requestedQty] of pendingByProduct.entries()) {
+    let remainingRequest = requestedQty;
+    const soldTotal = [...soldByKey.entries()]
+      .filter(([key]) => key.startsWith(`${productId}:`))
+      .reduce((acc, [, qty]) => acc + qty, 0);
+    const returnedAtStart = [...returnedByKey.entries()]
+      .filter(([key]) => key.startsWith(`${productId}:`))
+      .reduce((acc, [, qty]) => acc + qty, 0);
+
+    if (soldTotal <= 0) {
+      results.push({ productId, quantity: requestedQty, status: 'error', message: 'El producto no fue vendido en esta factura (líneas sin catálogo no devuelven inventario).' });
+      continue;
+    }
+
+    for (const sale of saleOrder) {
+      if (sale.productId !== productId || remainingRequest <= 0.0001) continue;
+
+      const sold = soldByKey.get(sale.key) || 0;
+      const alreadyReturned = returnedByKey.get(sale.key) || 0;
+      const available = Number((sold - alreadyReturned).toFixed(4));
+      if (available <= 0.0001) continue;
+
+      const toReturn = Math.min(remainingRequest, available);
+
+      await req.payload.create({
+        collection: 'stock-movements',
+        data: {
+          reference: `DEVOL-${invoice.invoiceNumber}`,
+          movementType: 'sale_return',
+          product: productId,
+          targetWarehouse: sale.warehouseId,
+          quantity: toReturn,
+          unitCostUSD: 0,
+          totalCostUSD: 0,
+          invoice: invoice.id,
+          tenant: tenantId as number,
+          reason:
+            reason ||
+            `Devolución parcial de mercancía de la factura ${invoice.invoiceNumber}`,
+        },
+        req,
+        overrideAccess: true,
+        context: {
+          ...req.context,
+          allowInternalStockUpdate: true,
+        },
+      });
+
+      movementsCreated++;
+      remainingRequest = Number((remainingRequest - toReturn).toFixed(4));
+      returnedByKey.set(sale.key, alreadyReturned + toReturn);
+    }
+
+    if (remainingRequest > 0.0001) {
+      const availableTotal = Math.max(soldTotal - returnedAtStart, 0);
+      results.push({
+        productId,
+        quantity: remainingRequest,
+        status: 'error',
+        message: `Cantidad a devolver excede lo disponible: vendido ${soldTotal}, ya devuelto ${returnedAtStart.toFixed(4)}, disponible ${availableTotal.toFixed(4)}.`,
+      });
+    } else {
+      results.push({ productId, quantity: requestedQty, status: 'ok', message: 'Devolución registrada.' });
+    }
+  }
+
+  return { movementsCreated, results };
 }

@@ -5,6 +5,7 @@ import type {
   Customer,
   Product,
   Invoice,
+  Quote,
   PurchaseInvoice,
   Supplier,
   CashRegister,
@@ -116,6 +117,7 @@ type ErpDataCollection =
   | 'customers'
   | 'products'
   | 'invoices'
+  | 'quotes'
   | 'purchase-invoices'
   | 'suppliers'
   | 'cash-registers'
@@ -464,4 +466,15 @@ export async function getSuppliersPageData(
   ]);
 
   return { suppliers, openPurchaseInvoices };
+}
+
+export async function getQuotesList(tenantId: number): Promise<Quote[]> {
+  const user = await requireErpTenantAccess(tenantId);
+  return findAllDocs<Quote>({
+    collection: 'quotes',
+    where: { tenant: { equals: tenantId } },
+    depth: 1,
+    sort: '-createdAt',
+    user,
+  });
 }

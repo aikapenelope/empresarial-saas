@@ -30,6 +30,7 @@ import { SupplierPayments } from './collections/SupplierPayments';
 import { CashRegisters } from './collections/CashRegisters';
 import { CashClosures } from './collections/CashClosures';
 import { IndustryTemplates } from './collections/IndustryTemplates';
+import { Quotes } from './collections/Quotes';
 import { salesInventoryPlugin } from './plugins/salesInventory';
 import { seedIndustryTemplateTask } from './jobs/seedIndustryTemplate';
 import { migrations } from './migrations';
@@ -92,6 +93,7 @@ export default buildConfig({
     CashRegisters,
     CashClosures,
     IndustryTemplates,
+    Quotes,
   ],
   jobs: {
     tasks: [seedIndustryTemplateTask],
@@ -154,6 +156,7 @@ export default buildConfig({
         'supplier-payments': {},
         'cash-registers': {},
         'cash-closures': {},
+        quotes: {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),
       tenantsArrayField: {
