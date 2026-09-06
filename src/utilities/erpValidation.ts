@@ -107,6 +107,20 @@ export const cashClosureSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+export const openCashShiftSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  cashRegisterId: idLike,
+  openingFloatUSD: positiveMoney,
+  openingFloatVES: positiveMoney,
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export const ensureWalkInCustomerSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+});
+
 export const executeProductionSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),

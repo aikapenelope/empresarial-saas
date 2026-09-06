@@ -13,6 +13,7 @@ import {
   requireSuperAdmin,
 } from '@/utilities/erpAuth';
 import { getActiveDb } from '@/utilities/inventoryLedger';
+import { assertNoOpenShiftForRegister } from '@/utilities/cashLedger';
 import {
   cashClosureSchema,
   createCashRegisterSchema,
@@ -22,8 +23,10 @@ import {
   createProductSchema,
   createSupplierSchema,
   createTenantSchema,
+  ensureWalkInCustomerSchema,
   executeProductionSchema,
   firstZodMessage,
+  openCashShiftSchema,
   updateTenantSettingsSchema,
 } from '@/utilities/erpValidation';
 
@@ -127,6 +130,63 @@ export async function createCustomerAction(input: CreateCustomerInput) {
     return { success: true, data: doc };
   } catch (error: unknown) {
     return { success: false, error: toSafeActionError(error, 'No se pudo registrar el cliente.') };
+  }
+}
+
+export interface EnsureWalkInCustomerInput {
+  tenantId: number;
+  tenantSlug: string;
+}
+
+/**
+ * Garantiza la existencia del cliente genérico de mostrador (RIF V-00000000)
+ * para ventas rápidas sin identificación del comprador. Idempotente.
+ */
+export async function ensureWalkInCustomerAction(input: EnsureWalkInCustomerInput) {
+  try {
+    const parsed = ensureWalkInCustomerSchema.parse(input);
+    await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const existing = await payload.find({
+      collection: 'customers',
+      where: {
+        and: [
+          { tenant: { equals: parsed.tenantId } },
+          { taxId: { equals: 'V-00000000' } },
+        ],
+      },
+      limit: 1,
+      depth: 0,
+    });
+
+    if (existing.docs.length > 0) {
+      return { success: true, data: existing.docs[0] };
+    }
+
+    const doc = await payload.create({
+      collection: 'customers',
+      data: {
+        tenant: parsed.tenantId,
+        name: 'Cliente de Mostrador',
+        taxId: 'V-00000000',
+        phone: '58-0000000000',
+        status: 'recurring',
+        creditAllowed: false,
+        creditLimitUSD: 0,
+        creditDays: 0,
+      },
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/pos`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/customers`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo preparar el cliente de mostrador.'),
+    };
   }
 }
 
@@ -288,6 +348,23 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
       const totalUSD = subtotalUSD;
       const totalVES = totalUSD * rate;
       const isCash = parsed.paymentTerms === 'cash';
+
+      // Venta a crédito: validar habilitación y capacidad disponible del cliente
+      // (límite - deuda vigente) ANTES de crear el documento.
+      if (!isCash) {
+        if (customer.creditAllowed === false) {
+          throw new Error(
+            `El cliente "${customer.name}" no tiene crédito habilitado. Registre la venta de contado o habilite su línea de crédito.`,
+          );
+        }
+        const availableCreditUSD =
+          (Number(customer.creditLimitUSD) || 0) - (Number(customer.currentDebtUSD) || 0);
+        if (totalUSD > availableCreditUSD + 0.005) {
+          throw new Error(
+            `Límite de crédito insuficiente para "${customer.name}": disponible ${Math.max(availableCreditUSD, 0).toFixed(2)} USD, requerido ${totalUSD.toFixed(2)} USD.`,
+          );
+        }
+      }
 
       // Vencimiento contractual: contado vence el mismo día; crédito usa los
       // creditDays del cliente (cero = vencimiento inmediato).
@@ -689,6 +766,84 @@ export async function createCashClosureAction(input: CashClosureInput) {
     return {
       success: false,
       error: toSafeActionError(error, 'No se pudo cerrar la caja y registrar el arqueo.'),
+    };
+  }
+}
+
+export interface OpenCashShiftInput {
+  tenantId: number;
+  tenantSlug: string;
+  cashRegisterId: number;
+  openingFloatUSD: number;
+  openingFloatVES: number;
+  notes?: string;
+}
+
+/**
+ * Abre el turno de una caja registradora con su fondo de apertura (arqueo inicial).
+ * Valida pertenencia al inquilino, caja activa y ausencia de turno abierto previo
+ * (assertNoOpenShiftForRegister). El hook afterChange de CashClosures sincroniza
+ * el estado operativo de la caja (open + currentClosureId) atómicamente.
+ */
+export async function openCashShiftAction(input: OpenCashShiftInput) {
+  try {
+    const parsed = openCashShiftSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const register = await payload.findByID({
+        collection: 'cash-registers',
+        id: parsed.cashRegisterId,
+        depth: 0,
+        req,
+      });
+
+      if (!register || Number(register.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('La caja registradora no pertenece a este inquilino.');
+      }
+      if (!register.active) {
+        throw new Error('La caja registradora está inactiva y no puede abrir turno.');
+      }
+
+      await assertNoOpenShiftForRegister({ cashRegisterId: register.id, req });
+
+      const closureNumber = await nextDocumentNumber(
+        payload,
+        'cash-closures',
+        parsed.tenantId,
+        'CIERRE',
+        req,
+      );
+
+      return payload.create({
+        collection: 'cash-closures',
+        data: {
+          tenant: parsed.tenantId,
+          closureNumber,
+          cashRegister: register.id,
+          openedBy: user.id,
+          openedAt: new Date().toISOString(),
+          status: 'open',
+          openingFloat: {
+            cashUSD: parsed.openingFloatUSD,
+            cashVES: parsed.openingFloatVES,
+            notes: parsed.notes || undefined,
+          },
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/cash-registers`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/pos`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo abrir el turno de caja.'),
     };
   }
 }

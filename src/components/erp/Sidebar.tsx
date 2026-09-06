@@ -13,6 +13,7 @@ import {
   Sparkles,
   Receipt,
   Settings,
+  ShoppingCart,
 } from 'lucide-react';
 import { cn } from '@/utilities/cn';
 
@@ -60,6 +61,11 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
     {
       group: 'TESORERÍA & PUNTOS DE VENTA',
       items: [
+        {
+          name: 'Punto de Venta (POS)',
+          href: `/${tenantSlug}/erp/pos`,
+          icon: ShoppingCart,
+        },
         {
           name: 'Cajas & Arqueos',
           href: `/${tenantSlug}/erp/cash-registers`,
