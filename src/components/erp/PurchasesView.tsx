@@ -25,7 +25,13 @@ interface PurchasesViewProps {
   data: PurchasesPageData;
   effectiveRate: number;
   products: Array<{ id: number; name: string; sku: string; costUSD: number; productType: string | null }>;
-  warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
+  warehouses: Array<{
+    id: number;
+    name: string;
+    code: string;
+    isActive?: boolean | null;
+    isDefault?: boolean | null;
+  }>;
 }
 
 function receptionWarehouseId(inv: PurchaseInvoice): number | null {
@@ -368,7 +374,9 @@ export function PurchasesView({
           isOpen
           onClose={() => setReceivingInvoice(undefined)}
           invoiceNumber={receivingInvoice.invoiceNumber}
-          warehouses={warehouses.map((w) => ({ id: w.id, name: w.name, code: w.code }))}
+          warehouses={warehouses
+            .filter((w) => w.isActive !== false)
+            .map((w) => ({ id: w.id, name: w.name, code: w.code }))}
           onConfirm={handleReceiveWithWarehouse}
         />
       )}
@@ -381,7 +389,7 @@ export function PurchasesView({
         tenantSlug={tenantSlug}
         suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, taxId: s.taxId }))}
         products={products}
-        warehouses={warehouses}
+        warehouses={warehouses.filter((w) => w.isActive !== false)}
         rate={effectiveRate}
       />
 

@@ -1,6 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
-import { extractId, getActiveDb } from './inventoryLedger';
+import { extractId, getActiveDb, lockStockBalances } from './inventoryLedger';
 import type { Invoice, Product, Warehouse } from '@/payload-types';
 
 // Estados de factura que comprometen inventario: los borradores y anulados no descargan.
@@ -118,7 +118,11 @@ export async function applySaleStockDeduction(
       product: Number(extractId((item as { product?: unknown }).product)),
       quantity: Number(item.quantity) || 0,
     }))
-    .filter((line) => line.product > 0 && line.quantity > 0);
+    .filter((line) => line.product > 0 && line.quantity > 0)
+    // Orden determinista por id de producto: el beforeValidate del Kardex toma
+    // un advisory lock por (producto, almacén) — facturas concurrentes con las
+    // mismas líneas en distinto orden podrían interbloquearse sin este orden.
+    .sort((a, b) => a.product - b.product);
 
   if (linesWithProduct.length === 0) {
     return 0; // Factura de servicios o líneas de texto libre: sin efecto en el Kardex
@@ -126,6 +130,13 @@ export async function applySaleStockDeduction(
 
   const warehouseId = await resolveDispatchWarehouse(invoice, req);
   let movementsCreated = 0;
+
+  // Orden global de locks: todos los advisory locks de saldo ANTES de cualquier
+  // row lock de producto (recalculateProductTotalStock en el afterChange).
+  await lockStockBalances(
+    linesWithProduct.map((line) => ({ productId: line.product, warehouseId })),
+    req,
+  );
 
   for (const line of linesWithProduct) {
     const product = (await req.payload.findByID({

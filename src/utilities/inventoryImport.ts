@@ -1,5 +1,5 @@
 import type { PayloadRequest } from 'payload';
-import { extractId, getProductWarehouseStock } from './inventoryLedger';
+import { extractId, getProductWarehouseStock, lockStockBalances } from './inventoryLedger';
 import type { Product, Warehouse } from '@/payload-types';
 
 export type StockImportMode = 'adjust' | 'set';
@@ -152,6 +152,18 @@ export async function importStockToWarehouse({
 
   // 4. Validar saldos y crear movimientos (misma transacción)
   let movementsCreated = 0;
+
+  // Orden global de locks: todos los advisory locks de saldo ANTES de cualquier
+  // row lock de producto (recalculateProductTotalStock del afterChange).
+  await lockStockBalances(
+    [...aggregates.values()]
+      .map((aggregate) => ({
+        productId: productsBySku.get(aggregate.sku)?.id,
+        warehouseId,
+      }))
+      .filter((pair) => Boolean(pair.productId)),
+    req,
+  );
 
   for (const aggregate of aggregates.values()) {
     const product = productsBySku.get(aggregate.sku);

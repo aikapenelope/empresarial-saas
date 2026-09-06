@@ -203,6 +203,26 @@ export const supplierPaymentSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+export const transferStockSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  productId: idLike,
+  sourceWarehouseId: idLike,
+  targetWarehouseId: idLike,
+  quantity: z.number().positive('La cantidad a transferir debe ser mayor a 0.').finite().max(1_000_000),
+  reason: z.string().trim().max(1000).optional(),
+});
+
+export const adjustStockSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  productId: idLike,
+  warehouseId: idLike,
+  direction: z.enum(['in', 'out']),
+  quantity: z.number().positive('La cantidad debe ser mayor a 0.').finite().max(1_000_000),
+  reason: z.string().trim().min(3, 'Describe el motivo del ajuste.').max(500),
+});
+
 export const voidInvoiceSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),
@@ -318,3 +338,52 @@ export const createTenantSchema = z.object({
 export function firstZodMessage(error: z.ZodError): string {
   return error.issues[0]?.message || 'Datos inválidos.';
 }
+
+// ==========================================
+// Filtros de URL (RSC) — el kardex recibe searchParams sin pasar por Server
+// Action: todo valor malformado se descarta (no rompe la página).
+// ==========================================
+
+/** Fecha de calendario (YYYY-MM-DD): sintaxis y validez real del día. */
+const dateOnly = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (se espera YYYY-MM-DD).')
+  .refine((value) => {
+    const [year, month, day] = value.split('-').map(Number);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    return (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    );
+  }, 'Fecha de calendario inexistente.');
+
+/** Entero positivo tolerante: descarta NaN, negativos, cero y fracciones. */
+const optionalPositiveInt = z.coerce
+  .number()
+  .int()
+  .positive()
+  .optional()
+  .catch(undefined);
+
+export const kardexFiltersSchema = z.object({
+  page: z.coerce.number().int().positive().catch(1),
+  product: optionalPositiveInt,
+  warehouse: optionalPositiveInt,
+  movementType: z
+    .enum([
+      'purchase_in',
+      'sale_out',
+      'sale_return',
+      'production_consume',
+      'production_output',
+      'transfer',
+      'adjustment_positive',
+      'adjustment_negative',
+      'scrap',
+    ])
+    .optional()
+    .catch(undefined),
+  from: dateOnly.optional().catch(undefined),
+  to: dateOnly.optional().catch(undefined),
+});

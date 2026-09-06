@@ -1,6 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
-import { extractId, getActiveDb } from './inventoryLedger';
+import { extractId, getActiveDb, lockStockBalances } from './inventoryLedger';
 import type { InventoryCount, Product } from '@/payload-types';
 
 /**
@@ -96,6 +96,13 @@ export async function completeInventoryCount({
   }
 
   const tenantId = Number(extractId(count.tenant));
+
+  // Orden global de locks: todos los advisory locks de saldo ANTES de cualquier
+  // row lock de producto (recalculateProductTotalStock del afterChange).
+  await lockStockBalances(
+    [...deltas.keys()].map((productId) => ({ productId, warehouseId })),
+    req,
+  );
 
   for (const [productId, delta] of deltas.entries()) {
     const product = (await req.payload.findByID({
