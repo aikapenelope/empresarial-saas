@@ -159,6 +159,50 @@ export const saleReturnLineSchema = z.object({
   quantity: z.number().positive('La cantidad a devolver debe ser mayor a 0.').finite().max(1_000_000),
 });
 
+export const purchaseInvoiceItemSchema = z.object({
+  productId: idLike,
+  sku: z.string().trim().max(100).optional(),
+  description: z.string().trim().min(1, 'Cada línea requiere descripción.').max(500),
+  quantity: z.number().positive('La cantidad debe ser mayor a 0.').finite().max(1_000_000),
+  unitCostUSD: z.number().min(0, 'El costo no puede ser negativo.').finite().max(10_000_000),
+});
+
+export const createPurchaseInvoiceSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  supplierId: idLike,
+  items: z.array(purchaseInvoiceItemSchema).min(1, 'La compra requiere al menos una línea.').max(200),
+  dueDate: z.string().datetime({ offset: true }).optional(),
+  receptionWarehouseId: idLike.optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+
+export const receivePurchaseGoodsSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  purchaseInvoiceId: idLike,
+  warehouseId: idLike,
+});
+
+export const supplierPaymentSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  supplierId: idLike,
+  amountUSD: z.number().positive('El monto a pagar debe ser mayor a 0.').finite().max(10_000_000),
+  method: z.enum([
+    'cash_usd',
+    'cash_ves',
+    'pos_ves',
+    'pago_movil',
+    'transfer_ves',
+    'zelle',
+    'binance',
+  ]),
+  purchaseInvoiceId: idLike.optional(),
+  referenceNumber: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
+
 export const voidInvoiceSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),
