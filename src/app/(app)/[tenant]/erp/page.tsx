@@ -76,6 +76,7 @@ export default async function ErpDashboardPage({ params }: PageProps) {
     name: c.name,
     taxId: c.taxId,
     currentDebtUSD: c.currentDebtUSD,
+    priceTier: c.priceTier,
   }));
 
   const sanitizedProducts = products.map((p) => ({
@@ -84,6 +85,7 @@ export default async function ErpDashboardPage({ params }: PageProps) {
     sku: p.sku,
     priceUSD: Number(p.priceUSD) || 0,
     unitOfMeasure: p.unitOfMeasure,
+    priceTiers: p.priceTiers,
   }));
 
   return (

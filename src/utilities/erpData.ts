@@ -478,3 +478,148 @@ export async function getQuotesList(tenantId: number): Promise<Quote[]> {
     user,
   });
 }
+
+export interface VendorCommissionRow {
+  invoiceId: number;
+  invoiceNumber: string;
+  customerName: string;
+  vendorId: number | null;
+  vendorName: string;
+  totalUSD: number;
+  status: string;
+  commissionUSD: number;
+}
+
+export interface VendorsPageData {
+  isVendor: boolean;
+  vendors: User[];
+  customers: Customer[];
+  commissionRows: VendorCommissionRow[];
+  earnedUSD: number;
+  pendingUSD: number;
+}
+
+/**
+ * Datos del canal de vendedores (Sprint 11). Las comisiones se derivan de las
+ * facturas: `creadoPor × commissionPct del cliente`, separando ganado (pagado)
+ * de pendiente (emitido/parcial). El rol `vendor` solo ve SU cartera; los
+ * administradores ven todo el inquilino.
+ */
+export async function getVendorsPageData(tenantId: number): Promise<VendorsPageData> {
+  const user = await requireErpTenantAccess(tenantId);
+  const isVendor = user.role === 'vendor';
+  const payload = await getPayload({ config });
+
+  // Vendedores del inquilino (usuarios con rol vendor miembros del tenant)
+  const vendorsRes = await payload.find({
+    collection: 'users',
+    where: {
+      and: [
+        { role: { equals: 'vendor' } },
+        { 'tenants.tenant': { equals: tenantId } },
+      ],
+    },
+    pagination: false,
+    depth: 0,
+    sort: 'name',
+    user,
+    overrideAccess: false,
+  });
+  const vendors = vendorsRes.docs as User[];
+  const vendorNames = new Map<number, string>(vendors.map((v) => [v.id, v.name]));
+
+  // Cartera: vendor → solo sus clientes; admin → clientes con vendedor asignado
+  const customersWhere: Where = isVendor
+    ? {
+        and: [
+          { tenant: { equals: tenantId } },
+          { assignedVendor: { equals: user.id } },
+        ],
+      }
+    : {
+        and: [
+          { tenant: { equals: tenantId } },
+          { assignedVendor: { not_equals: null } },
+        ],
+      };
+
+  const customersRes = await payload.find({
+    collection: 'customers',
+    where: customersWhere,
+    pagination: false,
+    depth: 0,
+    sort: 'name',
+    user,
+    overrideAccess: false,
+  });
+  const customers = customersRes.docs as Customer[];
+  const commissionPctByCustomer = new Map<number, number>(
+    customers.map((c) => [c.id, Number(c.commissionPct) || 0]),
+  );
+  const customerNames = new Map<number, string>(customers.map((c) => [c.id, c.name]));
+
+  // Facturas con vendedor (vendor → solo las suyas)
+  const invoicesWhere: Where = isVendor
+    ? {
+        and: [
+          { tenant: { equals: tenantId } },
+          { createdBy: { equals: user.id } },
+          { status: { in: ['issued', 'partially_paid', 'paid'] } },
+        ],
+      }
+    : {
+        and: [
+          { tenant: { equals: tenantId } },
+          { createdBy: { not_equals: null } },
+          { status: { in: ['issued', 'partially_paid', 'paid'] } },
+        ],
+      };
+
+  const invoicesRes = await payload.find({
+    collection: 'invoices',
+    where: invoicesWhere,
+    pagination: false,
+    depth: 1,
+    sort: '-createdAt',
+    user,
+    overrideAccess: false,
+  });
+
+  let earnedUSD = 0;
+  let pendingUSD = 0;
+  const commissionRows: VendorCommissionRow[] = (invoicesRes.docs as Invoice[]).map((inv) => {
+    const customerId = typeof inv.customer === 'object' && inv.customer !== null ? inv.customer.id : Number(inv.customer);
+    const pct = commissionPctByCustomer.get(customerId) || 0;
+    const totalUSD = Number(inv.totalUSD) || 0;
+    const commissionUSD = Number(((totalUSD * pct) / 100).toFixed(2));
+
+    const vendorId =
+      typeof inv.createdBy === 'object' && inv.createdBy !== null ? inv.createdBy.id : Number(inv.createdBy) || null;
+    const vendorName = vendorId ? vendorNames.get(vendorId) || `#${vendorId}` : '—';
+
+    const row: VendorCommissionRow = {
+      invoiceId: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      customerName: customerNames.get(customerId) || (typeof inv.customer === 'object' && inv.customer !== null ? inv.customer.name : '—'),
+      vendorId,
+      vendorName,
+      totalUSD,
+      status: inv.status,
+      commissionUSD,
+    };
+
+    if (inv.status === 'paid') earnedUSD += commissionUSD;
+    else pendingUSD += commissionUSD;
+
+    return row;
+  });
+
+  return {
+    isVendor,
+    vendors,
+    customers,
+    commissionRows,
+    earnedUSD: Number(earnedUSD.toFixed(2)),
+    pendingUSD: Number(pendingUSD.toFixed(2)),
+  };
+}

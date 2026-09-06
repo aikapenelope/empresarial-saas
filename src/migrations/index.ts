@@ -7,6 +7,7 @@ import * as migration_20260904_225525_add_industry_templates from './20260904_22
 import * as migration_20260905_203000_document_number_uniques from './20260905_203000_document_number_uniques';
 import * as migration_20260905_224331_add_sale_inventory from './20260905_224331_add_sale_inventory';
 import * as migration_20260906_023548_add_quotes from './20260906_023548_add_quotes';
+import * as migration_20260906_030500_add_pricing_vendors from './20260906_030500_add_pricing_vendors';
 
 export const migrations = [
   {
@@ -52,6 +53,11 @@ export const migrations = [
   {
     up: migration_20260906_023548_add_quotes.up,
     down: migration_20260906_023548_add_quotes.down,
-    name: '20260906_023548_add_quotes'
+    name: '20260906_023548_add_quotes',
+  },
+  {
+    up: migration_20260906_030500_add_pricing_vendors.up,
+    down: migration_20260906_030500_add_pricing_vendors.down,
+    name: '20260906_030500_add_pricing_vendors'
   },
 ];

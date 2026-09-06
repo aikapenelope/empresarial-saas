@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   FileText,
+  Trophy,
   Users,
   Package,
   Wallet,
@@ -51,6 +52,11 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
           name: 'Cotizaciones',
           href: `/${tenantSlug}/erp/quotes`,
           icon: FileText,
+        },
+        {
+          name: 'Vendedores & Comisiones',
+          href: `/${tenantSlug}/erp/vendors`,
+          icon: Trophy,
         },
       ],
     },

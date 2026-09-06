@@ -229,6 +229,18 @@ export const Invoices: CollectionConfig = {
       index: true,
     },
     {
+      name: 'createdBy',
+      label: 'Emitida Por (Vendedor)',
+      type: 'relationship',
+      relationTo: 'users',
+      index: true,
+      admin: {
+        readOnly: true,
+        position: 'sidebar',
+        description: 'Usuario que emitió la factura. Base del cálculo de comisiones.',
+      },
+    },
+    {
       name: 'issueDate',
       label: 'Fecha de Emisión',
       type: 'date',

@@ -241,6 +241,43 @@ export const Customers: CollectionConfig = {
       type: 'textarea',
     },
     {
+      name: 'priceTier',
+      label: 'Tier de Precio del Cliente',
+      type: 'select',
+      defaultValue: 'retail',
+      index: true,
+      options: [
+        { label: 'Retail (detal)', value: 'retail' },
+        { label: 'Wholesale (mayorista)', value: 'wholesale' },
+        { label: 'Vendor (vendedor)', value: 'vendor' },
+        { label: 'Promo (promoción)', value: 'promo' },
+      ],
+      admin: {
+        description: 'Define qué lista de precios del catálogo aplica por defecto a este cliente.',
+      },
+    },
+    {
+      name: 'assignedVendor',
+      label: 'Vendedor Asignado',
+      type: 'relationship',
+      relationTo: 'users',
+      index: true,
+      admin: {
+        description: 'Representante comercial responsable de esta cuenta.',
+      },
+    },
+    {
+      name: 'commissionPct',
+      label: 'Comisión del Vendedor (%)',
+      type: 'number',
+      min: 0,
+      max: 100,
+      defaultValue: 0,
+      admin: {
+        description: 'Porcentaje sobre facturas pagadas de este cliente, derivado para el vendedor asignado.',
+      },
+    },
+    {
       name: 'status',
       label: 'Segmentación de Cliente',
       type: 'select',

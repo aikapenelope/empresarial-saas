@@ -82,12 +82,18 @@ export default async function QuotesPage({ params }: PageProps) {
         tenantId={tenant.id}
         tenantSlug={tenant.slug}
         quotes={quotes}
-        customers={customers.map((c) => ({ id: c.id, name: c.name, taxId: c.taxId }))}
+        customers={customers.map((c) => ({
+          id: c.id,
+          name: c.name,
+          taxId: c.taxId,
+          priceTier: c.priceTier,
+        }))}
         products={products.map((p) => ({
           id: p.id,
           name: p.name,
           sku: p.sku,
           priceUSD: Number(p.priceUSD) || 0,
+          priceTiers: p.priceTiers,
         }))}
         cashRegisters={registers.map((r) => ({
           id: r.id,

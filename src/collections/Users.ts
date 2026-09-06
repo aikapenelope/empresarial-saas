@@ -47,6 +47,7 @@ export const Users: CollectionConfig = {
         { label: 'Super Administrador (Plataforma Global)', value: 'super-admin' },
         { label: 'Administrador de Empresa (Tenant Admin)', value: 'tenant-admin' },
         { label: 'Supervisor / Ventas', value: 'supervisor' },
+        { label: 'Vendedor / Representante Comercial', value: 'vendor' },
         { label: 'Cajero / Operador', value: 'cashier' },
         { label: 'Empleado / Consulta', value: 'employee' },
       ],

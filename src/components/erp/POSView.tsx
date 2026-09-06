@@ -14,14 +14,28 @@ import {
 } from 'lucide-react';
 import { createInvoiceAction, ensureWalkInCustomerAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from './KpiCard';
+import { effectivePriceForTier } from '@/utilities/priceTiers';
 import { Badge } from './Badge';
 
 interface POSViewProps {
   tenantId: number;
   tenantSlug: string;
   rate: number;
-  products: Array<{ id: number; name: string; sku: string; priceUSD: number; unitOfMeasure: string }>;
-  customers: Array<{ id: number; name: string; taxId: string; currentDebtUSD?: number | null }>;
+  products: Array<{
+    id: number;
+    name: string;
+    sku: string;
+    priceUSD: number;
+    unitOfMeasure: string;
+    priceTiers?: Array<{ tier: string; priceUSD: number }> | null;
+  }>;
+  customers: Array<{
+    id: number;
+    name: string;
+    taxId: string;
+    currentDebtUSD?: number | null;
+    priceTier?: string | null;
+  }>;
   registers: Array<{ id: number; name: string; code: string; currentStatus: string }>;
   warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
 }
@@ -73,6 +87,14 @@ export function POSView({
   const [error, setError] = useState<string | null>(null);
   const [lastInvoiceNumber, setLastInvoiceNumber] = useState<string | null>(null);
 
+  // Tier de precio: mostrador = retail; cliente registrado = su tier asignado
+  const activeTier =
+    customerMode === 'registered'
+      ? customers.find((c) => c.id === customerId)?.priceTier || 'retail'
+      : 'retail';
+  const priceFor = (product: { priceUSD: number; priceTiers?: Array<{ tier: string; priceUSD: number }> | null }) =>
+    effectivePriceForTier(product, activeTier);
+
   const totalUSD = useMemo(
     () => cart.reduce((acc, it) => acc + it.quantity * it.unitPriceUSD, 0),
     [cart],
@@ -86,8 +108,11 @@ export function POSView({
       return;
     }
     setError(null);
+    const tieredUnitPrice = priceFor(prod);
     setCart((prev) => {
-      const existing = prev.find((l) => l.productId === prod.id && l.unitPriceUSD === unitPriceUSD);
+      const existing = prev.find(
+        (l) => l.productId === prod.id && l.unitPriceUSD === tieredUnitPrice,
+      );
       if (existing) {
         return prev.map((l) =>
           l === existing ? { ...l, quantity: l.quantity + quantity } : l,
@@ -100,7 +125,7 @@ export function POSView({
           sku: prod.sku,
           description: prod.name,
           quantity,
-          unitPriceUSD,
+          unitPriceUSD: tieredUnitPrice,
         },
       ];
     });

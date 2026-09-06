@@ -5,14 +5,22 @@ import { Modal } from './Modal';
 import { createInvoiceAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from '../KpiCard';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { effectivePriceForTier } from '@/utilities/priceTiers';
 
 interface InvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
   tenantId: number;
   tenantSlug: string;
-  customers: Array<{ id: number; name: string; taxId: string }>;
-  products: Array<{ id: number; name: string; sku: string; priceUSD: number; unitOfMeasure: string }>;
+  customers: Array<{ id: number; name: string; taxId: string; priceTier?: string | null }>;
+  products: Array<{
+    id: number;
+    name: string;
+    sku: string;
+    priceUSD: number;
+    unitOfMeasure: string;
+    priceTiers?: Array<{ tier: string; priceUSD: number }> | null;
+  }>;
   rate: number;
   cashRegisters?: Array<{ id: number; name: string; code: string; currentStatus: string }>;
   warehouses?: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
@@ -46,13 +54,18 @@ export function InvoiceModal({
   // Sólo las cajas con turno ABIERTO pueden asociar el recibo al arqueo del turno.
   const openRegisters = cashRegisters.filter((cr) => cr.currentStatus === 'open');
 
+  // Tier de precio según el cliente seleccionado (fallback retail)
+  const customerTier = customers.find((c) => c.id === customerId)?.priceTier || 'retail';
+  const priceFor = (product: { priceUSD: number; priceTiers?: Array<{ tier: string; priceUSD: number }> | null }) =>
+    effectivePriceForTier(product, customerTier);
+
   const [items, setItems] = useState<Array<{ productId?: number; sku: string; description: string; quantity: number; unitPriceUSD: number }>>([
     {
       productId: products[0]?.id,
       sku: products[0]?.sku || '',
       description: products[0]?.name || 'Artículo de Venta',
       quantity: 1,
-      unitPriceUSD: products[0]?.priceUSD || 10,
+      unitPriceUSD: products[0] ? priceFor(products[0]) : 10,
     },
   ]);
 
@@ -84,7 +97,7 @@ export function InvoiceModal({
       sku: prod.sku,
       description: prod.name,
       quantity: newItems[index].quantity,
-      unitPriceUSD: prod.priceUSD,
+      unitPriceUSD: priceFor(prod),
     };
     setItems(newItems);
   };
