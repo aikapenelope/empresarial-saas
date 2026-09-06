@@ -69,14 +69,15 @@ export function PurchaseInvoiceModal({
       },
     ]);
   };
+  // Nota: productId ya es la clave de selección — el valor 0 solo ocurre sin catálogo.
 
   const handleRemoveItem = (index: number) => {
     if (items.length <= 1) return;
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const handleSelectProduct = (index: number, sku: string) => {
-    const prod = products.find((p) => p.sku === sku);
+  const handleSelectProduct = (index: number, productId: number) => {
+    const prod = products.find((p) => p.id === productId);
     if (!prod) return;
     const newItems = [...items];
     newItems[index] = {
@@ -123,7 +124,8 @@ export function PurchaseInvoiceModal({
       tenantSlug,
       supplierId,
       items,
-      dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+      // Mediodía local: evita que UTC midnight muestre el día anterior en offsets negativos
+      dueDate: dueDate ? new Date(`${dueDate}T12:00:00`).toISOString() : undefined,
       receptionWarehouseId: receiveNow ? receptionWarehouseId : undefined,
       notes: notes || undefined,
     });
@@ -205,12 +207,12 @@ export function PurchaseInvoiceModal({
               >
                 <div className="col-span-4">
                   <select
-                    value={it.sku}
-                    onChange={(e) => handleSelectProduct(idx, e.target.value)}
+                    value={it.productId ?? ''}
+                    onChange={(e) => handleSelectProduct(idx, Number(e.target.value))}
                     className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white"
                   >
                     {products.map((p) => (
-                      <option key={p.id} value={p.sku}>
+                      <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
                     ))}

@@ -13,6 +13,7 @@ import {
 import { formatUSD, formatVES } from './KpiCard';
 import { Badge } from './Badge';
 import { PurchaseInvoiceModal } from './modals/PurchaseInvoiceModal';
+import { ReceiveWarehouseModal } from './modals/ReceiveWarehouseModal';
 import { SupplierPaymentModal } from './modals/SupplierPaymentModal';
 import { receivePurchaseGoodsAction } from '@/actions/erpActions';
 import type { PurchasesPageData } from '@/utilities/erpData';
@@ -51,6 +52,7 @@ export function PurchasesView({
   const [paymentInvoiceId, setPaymentInvoiceId] = useState<number | undefined>(undefined);
   const [receivingId, setReceivingId] = useState<number | null>(null);
   const [receiveError, setReceiveError] = useState<string | null>(null);
+  const [receivingInvoice, setReceivingInvoice] = useState<PurchaseInvoice | undefined>(undefined);
 
   const supplierName = (inv: PurchaseInvoice) =>
     typeof inv.supplier === 'object' && inv.supplier !== null ? inv.supplier.name : '—';
@@ -70,12 +72,11 @@ export function PurchasesView({
     setIsPaymentModalOpen(true);
   };
 
-  const handleReceive = async (invoice: PurchaseInvoice) => {
-    const warehouseId = receptionWarehouseId(invoice);
+  const handleReceive = async (invoice: PurchaseInvoice, warehouseIdOverride?: number) => {
+    const warehouseId = warehouseIdOverride ?? receptionWarehouseId(invoice);
     if (!warehouseId) {
-      setReceiveError(
-        `La compra ${invoice.invoiceNumber} no tiene almacén de recepción asignado. Asígnalo desde el admin y luego recibe.`,
-      );
+      // Sin almacén asignado: abrir modal de selección al momento de recibir
+      setReceivingInvoice(invoice);
       return;
     }
     if (
@@ -95,6 +96,24 @@ export function PurchasesView({
     });
     setReceivingId(null);
     if (!res.success) {
+      setReceiveError(res.error || 'Error al recepcionar.');
+    }
+  };
+
+  const handleReceiveWithWarehouse = async (warehouseId: number) => {
+    if (!receivingInvoice) return;
+    setReceivingId(receivingInvoice.id);
+    setReceiveError(null);
+    const res = await receivePurchaseGoodsAction({
+      tenantId,
+      tenantSlug,
+      purchaseInvoiceId: receivingInvoice.id,
+      warehouseId,
+    });
+    setReceivingId(null);
+    if (res.success) {
+      setReceivingInvoice(undefined);
+    } else {
       setReceiveError(res.error || 'Error al recepcionar.');
     }
   };
@@ -212,10 +231,7 @@ export function PurchasesView({
                   const balance = Number(inv.balanceUSD) || 0;
                   const whId = receptionWarehouseId(inv);
                   const canReceive =
-                    inv.receptionStatus === 'pending' &&
-                    inv.status !== 'voided' &&
-                    inv.status !== 'paid' &&
-                    whId !== null;
+                    inv.receptionStatus === 'pending' && inv.status !== 'voided';
                   const canPay =
                     balance > 0 &&
                     (inv.status === 'received' || inv.status === 'partially_paid');
@@ -344,6 +360,17 @@ export function PurchasesView({
             </table>
           </div>
         </div>
+      )}
+
+      {/* Modal de selección de almacén para recepción diferida */}
+      {receivingInvoice && (
+        <ReceiveWarehouseModal
+          isOpen
+          onClose={() => setReceivingInvoice(undefined)}
+          invoiceNumber={receivingInvoice.invoiceNumber}
+          warehouses={warehouses.map((w) => ({ id: w.id, name: w.name, code: w.code }))}
+          onConfirm={handleReceiveWithWarehouse}
+        />
       )}
 
       {/* Modales */}

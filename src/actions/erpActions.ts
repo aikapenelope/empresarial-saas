@@ -337,16 +337,36 @@ export interface CreateInvoiceInput {
  * llamador (req requerido). Los índices únicos compuestos (tenant, número) sirven
  * de red de seguridad en base de datos.
  */
+const DOC_NUMBER_TABLES: Record<
+  | 'invoices'
+  | 'customer-payments'
+  | 'production-orders'
+  | 'cash-closures'
+  | 'quotes'
+  | 'purchase-invoices'
+  | 'supplier-payments',
+  { table: string; column: string }
+> = {
+  invoices: { table: 'invoices', column: 'invoice_number' },
+  'customer-payments': { table: 'customer_payments', column: 'payment_number' },
+  'production-orders': { table: 'production_orders', column: 'order_number' },
+  'cash-closures': { table: 'cash_closures', column: 'closure_number' },
+  quotes: { table: 'quotes', column: 'quote_number' },
+  'purchase-invoices': { table: 'purchase_invoices', column: 'invoice_number' },
+  'supplier-payments': { table: 'supplier_payments', column: 'payment_number' },
+};
+
+/**
+ * Numeración consecutiva por inquilino y tipo de documento. Toma un advisory lock
+ * transaccional (liberado en commit/rollback) para que dos escrituras concurrentes
+ * no elijan el mismo número; debe llamarse SIEMPRE dentro de la transacción del
+ * llamador (req requerido). Usa MAX del sufijo numérico — no COUNT — para que los
+ * gaps por eliminación no reciclen números ya emitidos; los índices únicos
+ * compuestos (tenant, número) son la red de seguridad final en base de datos.
+ */
 async function nextDocumentNumber(
   payload: Payload,
-  collection:
-    | 'invoices'
-    | 'customer-payments'
-    | 'production-orders'
-    | 'cash-closures'
-    | 'quotes'
-    | 'purchase-invoices'
-    | 'supplier-payments',
+  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes' | 'purchase-invoices' | 'supplier-payments',
   tenantId: number,
   prefix: string,
   req: PayloadRequest,
@@ -356,12 +376,15 @@ async function nextDocumentNumber(
     sql`SELECT pg_advisory_xact_lock(hashtext(${`docnum:${collection}:${tenantId}`}))`,
   );
 
-  const count = await payload.count({
-    collection,
-    where: { tenant: { equals: tenantId } },
-    req,
-  });
-  return `${prefix}-${String(count.totalDocs + 1).padStart(5, '0')}`;
+  const { table, column } = DOC_NUMBER_TABLES[collection];
+  const maxRes = await db.execute(
+    sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(${sql.raw(column)}, '^.*-', '') AS integer)), 0) AS max_num
+        FROM ${sql.raw(table)}
+        WHERE tenant_id = ${tenantId}`,
+  );
+  const maxNum = Number(maxRes.rows?.[0]?.max_num) || 0;
+
+  return `${prefix}-${String(maxNum + 1).padStart(5, '0')}`;
 }
 
 /**
@@ -1299,7 +1322,7 @@ export interface CreatePurchaseInvoiceInput {
 export async function createPurchaseInvoiceAction(input: CreatePurchaseInvoiceInput) {
   try {
     const parsed = createPurchaseInvoiceSchema.parse(input);
-    const user = await requireErpTenantAccess(parsed.tenantId);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
@@ -1473,7 +1496,7 @@ export interface CreateSupplierPaymentInput {
 export async function createSupplierPaymentAction(input: CreateSupplierPaymentInput) {
   try {
     const parsed = supplierPaymentSchema.parse(input);
-    const user = await requireErpTenantAccess(parsed.tenantId);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
