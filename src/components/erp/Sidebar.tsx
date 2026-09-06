@@ -89,6 +89,11 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
       group: 'COMPRAS & PROVEEDORES',
       items: [
         {
+          name: 'Compras & CxP',
+          href: `/${tenantSlug}/erp/purchases`,
+          icon: ShoppingCart,
+        },
+        {
           name: 'Proveedores & CxP',
           href: `/${tenantSlug}/erp/suppliers`,
           icon: Truck,

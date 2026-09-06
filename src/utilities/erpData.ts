@@ -16,6 +16,7 @@ import type {
   CustomerPayment,
   InventoryCount,
   StockMovement,
+  SupplierPayment,
   User,
 } from '@/payload-types';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
@@ -117,6 +118,8 @@ export async function getAllTenants(): Promise<Tenant[]> {
  * el control de acceso de las colecciones (multi-tenant) se evalúa siempre.
  */
 type ErpDataCollection =
+  | 'purchase-invoices'
+  | 'supplier-payments'
   | 'inventory-counts'
   | 'customers'
   | 'products'
@@ -719,5 +722,57 @@ export async function getInvoiceDetail(
     payments: paymentsRes.docs as CustomerPayment[],
     movements: movementsRes.docs as StockMovement[],
     audit: auditRes.docs as unknown as Array<Record<string, unknown>>,
+  };
+}
+
+export interface PurchasesPageData {
+  suppliers: Supplier[];
+  purchaseInvoices: PurchaseInvoice[];
+  supplierPayments: SupplierPayment[];
+  totalPayablesUSD: number;
+  pendingReceptionCount: number;
+}
+
+export async function getPurchasesPageData(tenantId: number): Promise<PurchasesPageData> {
+  const user = await requireErpTenantAccess(tenantId);
+
+  const [suppliers, purchaseInvoices, supplierPayments] = await Promise.all([
+    findAllDocs<Supplier>({
+      collection: 'suppliers',
+      where: { tenant: { equals: tenantId } },
+      depth: 0,
+      sort: 'name',
+      user,
+    }),
+    findAllDocs<PurchaseInvoice>({
+      collection: 'purchase-invoices',
+      where: { tenant: { equals: tenantId } },
+      depth: 1,
+      sort: '-createdAt',
+      user,
+    }),
+    findAllDocs<SupplierPayment>({
+      collection: 'supplier-payments',
+      where: { tenant: { equals: tenantId } },
+      depth: 1,
+      sort: '-createdAt',
+      user,
+    }),
+  ]);
+
+  const totalPayablesUSD = purchaseInvoices
+    .filter((p) => p.status === 'received' || p.status === 'partially_paid')
+    .reduce((acc, p) => acc + (Number(p.balanceUSD) || 0), 0);
+
+  const pendingReceptionCount = purchaseInvoices.filter(
+    (p) => p.receptionStatus === 'pending' && p.status !== 'voided',
+  ).length;
+
+  return {
+    suppliers,
+    purchaseInvoices,
+    supplierPayments,
+    totalPayablesUSD: Number(totalPayablesUSD.toFixed(2)),
+    pendingReceptionCount,
   };
 }

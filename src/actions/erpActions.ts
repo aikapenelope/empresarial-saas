@@ -22,6 +22,7 @@ import {
   createInvoiceSchema,
   createPaymentSchema,
   createProductSchema,
+  createPurchaseInvoiceSchema,
   createQuoteSchema,
   createSaleReturnSchema,
   createSupplierSchema,
@@ -30,10 +31,12 @@ import {
   executeProductionSchema,
   firstZodMessage,
   importStockSchema,
+  receivePurchaseGoodsSchema,
   completeInventoryCountSchema,
   createInventoryCountSchema,
   openCashShiftSchema,
   saveCountedItemsSchema,
+  supplierPaymentSchema,
   voidInvoiceSchema,
   updateQuoteStatusSchema,
   updateTenantSettingsSchema,
@@ -334,9 +337,36 @@ export interface CreateInvoiceInput {
  * llamador (req requerido). Los índices únicos compuestos (tenant, número) sirven
  * de red de seguridad en base de datos.
  */
+const DOC_NUMBER_TABLES: Record<
+  | 'invoices'
+  | 'customer-payments'
+  | 'production-orders'
+  | 'cash-closures'
+  | 'quotes'
+  | 'purchase-invoices'
+  | 'supplier-payments',
+  { table: string; column: string }
+> = {
+  invoices: { table: 'invoices', column: 'invoice_number' },
+  'customer-payments': { table: 'customer_payments', column: 'payment_number' },
+  'production-orders': { table: 'production_orders', column: 'order_number' },
+  'cash-closures': { table: 'cash_closures', column: 'closure_number' },
+  quotes: { table: 'quotes', column: 'quote_number' },
+  'purchase-invoices': { table: 'purchase_invoices', column: 'invoice_number' },
+  'supplier-payments': { table: 'supplier_payments', column: 'payment_number' },
+};
+
+/**
+ * Numeración consecutiva por inquilino y tipo de documento. Toma un advisory lock
+ * transaccional (liberado en commit/rollback) para que dos escrituras concurrentes
+ * no elijan el mismo número; debe llamarse SIEMPRE dentro de la transacción del
+ * llamador (req requerido). Usa MAX del sufijo numérico — no COUNT — para que los
+ * gaps por eliminación no reciclen números ya emitidos; los índices únicos
+ * compuestos (tenant, número) son la red de seguridad final en base de datos.
+ */
 async function nextDocumentNumber(
   payload: Payload,
-  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes',
+  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes' | 'purchase-invoices' | 'supplier-payments',
   tenantId: number,
   prefix: string,
   req: PayloadRequest,
@@ -346,12 +376,19 @@ async function nextDocumentNumber(
     sql`SELECT pg_advisory_xact_lock(hashtext(${`docnum:${collection}:${tenantId}`}))`,
   );
 
-  const count = await payload.count({
-    collection,
-    where: { tenant: { equals: tenantId } },
-    req,
-  });
-  return `${prefix}-${String(count.totalDocs + 1).padStart(5, '0')}`;
+  const { table, column } = DOC_NUMBER_TABLES[collection];
+  // Solo se consideran identificadores con el formato generado por el sistema
+  // (`prefijo-<solo dígitos>`): valores manuales o históricos con otro formato
+  // se ignoran en la secuencia y no pueden romper el CAST del sufijo.
+  const maxRes = await db.execute(
+    sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(${sql.raw(column)}, '^.*-', '') AS integer)), 0) AS max_num
+        FROM ${sql.raw(table)}
+        WHERE tenant_id = ${tenantId}
+          AND ${sql.raw(column)} ~ ('^' || ${prefix} || '-[0-9]+$')`,
+  );
+  const maxNum = Number(maxRes.rows?.[0]?.max_num) || 0;
+
+  return `${prefix}-${String(maxNum + 1).padStart(5, '0')}`;
 }
 
 /**
@@ -1261,6 +1298,353 @@ export async function voidInvoiceAction(input: VoidInvoiceInput) {
     return { success: true, data: doc };
   } catch (error: unknown) {
     return { success: false, error: toSafeActionError(error, 'No se pudo anular la factura.') };
+  }
+}
+
+export interface CreatePurchaseInvoiceInput {
+  tenantId: number;
+  tenantSlug: string;
+  supplierId: number;
+  items: Array<{
+    productId: number;
+    sku?: string;
+    description: string;
+    quantity: number;
+    unitCostUSD: number;
+  }>;
+  dueDate?: string;
+  receptionWarehouseId?: number;
+  notes?: string;
+}
+
+/**
+ * Registra una compra a proveedor (Sprint 14). Si se indica almacén de
+ * recepción, la compra nace `received` y el hook existente descarga el
+ * snapshot de tasa, ingresa `purchase_in` al kardex y actualiza el costo
+ * ponderado — todo en la misma transacción.
+ */
+export async function createPurchaseInvoiceAction(input: CreatePurchaseInvoiceInput) {
+  try {
+    const parsed = createPurchaseInvoiceSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const tenant = await payload.findByID({
+        collection: 'tenants',
+        id: parsed.tenantId,
+        depth: 0,
+        req,
+      });
+
+      const supplier = await payload.findByID({
+        collection: 'suppliers',
+        id: parsed.supplierId,
+        depth: 0,
+        req,
+      });
+
+      if (!supplier || Number(supplier.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El proveedor seleccionado no pertenece a este inquilino.');
+      }
+
+      const rateResult = await resolveEffectiveRate(
+        tenant?.currencyConfig
+          ? {
+              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+            }
+          : undefined,
+      );
+      const rate = rateResult.rate;
+
+      const invoiceNumber = await nextDocumentNumber(
+        payload,
+        'purchase-invoices',
+        parsed.tenantId,
+        'COMP',
+        req,
+      );
+
+      const totalUSD = parsed.items.reduce(
+        (acc, it) => acc + it.quantity * it.unitCostUSD,
+        0,
+      );
+      const receiveNow = Boolean(parsed.receptionWarehouseId);
+
+      return payload.create({
+        collection: 'purchase-invoices',
+        data: {
+          tenant: parsed.tenantId,
+          invoiceNumber,
+          supplier: parsed.supplierId,
+          issueDate: new Date().toISOString(),
+          dueDate:
+            parsed.dueDate ||
+            new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          paymentTerms: 'credit',
+          status: 'received',
+          receptionStatus: receiveNow ? 'received' : 'pending',
+          receptionWarehouse: parsed.receptionWarehouseId || undefined,
+          receptionDate: receiveNow ? new Date().toISOString() : undefined,
+          exchangeRateSnapshot: rate,
+          items: parsed.items.map((it) => ({
+            product: it.productId,
+            sku: it.sku || undefined,
+            description: it.description,
+            quantity: it.quantity,
+            unitCostUSD: it.unitCostUSD,
+          })),
+          totalUSD,
+          totalVES: totalUSD * rate,
+          balanceUSD: totalUSD,
+          balanceVES: totalUSD * rate,
+          notes: parsed.notes || undefined,
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/purchases`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo registrar la compra.') };
+  }
+}
+
+export interface ReceivePurchaseGoodsInput {
+  tenantId: number;
+  tenantSlug: string;
+  purchaseInvoiceId: number;
+  warehouseId: number;
+}
+
+/**
+ * Paso de recepción: marca `receptionStatus: received` — el hook de
+ * PurchaseInvoices genera los movimientos `purchase_in` y recalcula el costo
+ * ponderado dentro de esta transacción.
+ */
+export async function receivePurchaseGoodsAction(input: ReceivePurchaseGoodsInput) {
+  try {
+    const parsed = receivePurchaseGoodsSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const invoice = await payload.findByID({
+        collection: 'purchase-invoices',
+        id: parsed.purchaseInvoiceId,
+        depth: 0,
+        req,
+      });
+
+      if (!invoice || Number(invoice.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('La factura de compra no pertenece a este inquilino.');
+      }
+      if (invoice.status === 'voided') {
+        throw new Error('No se puede recepcionar una factura de compra anulada.');
+      }
+      if (invoice.receptionStatus === 'received') {
+        throw new Error('La mercancía de esta compra ya fue recepcionada.');
+      }
+
+      const warehouse = await payload.findByID({
+        collection: 'warehouses',
+        id: parsed.warehouseId,
+        depth: 0,
+        req,
+      });
+      if (!warehouse || Number(warehouse.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El almacén de recepción no pertenece a este inquilino.');
+      }
+
+      return payload.update({
+        collection: 'purchase-invoices',
+        id: invoice.id,
+        data: {
+          receptionStatus: 'received',
+          receptionWarehouse: parsed.warehouseId,
+          receptionDate: new Date().toISOString(),
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/purchases`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo recepcionar la compra.') };
+  }
+}
+
+export interface CreateSupplierPaymentInput {
+  tenantId: number;
+  tenantSlug: string;
+  supplierId: number;
+  amountUSD: number;
+  method: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance';
+  purchaseInvoiceId?: number;
+  referenceNumber?: string;
+  notes?: string;
+}
+
+/**
+ * Pago a proveedor (espejo de cobranzas). Sin factura específica: imputación
+ * FIFO por vencimiento sobre facturas de compra abiertas; con factura: valida
+ * pertenencia y saldo. Rechaza sobrepagos. El hook de SupplierPayments aplica
+ * las allocations y recalcula la deuda del proveedor en la misma transacción.
+ */
+export async function createSupplierPaymentAction(input: CreateSupplierPaymentInput) {
+  try {
+    const parsed = supplierPaymentSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const tenant = await payload.findByID({
+        collection: 'tenants',
+        id: parsed.tenantId,
+        depth: 0,
+        req,
+      });
+
+      const rateResult = await resolveEffectiveRate(
+        tenant?.currencyConfig
+          ? {
+              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+            }
+          : undefined,
+      );
+      const rate = rateResult.rate;
+
+      const amountUSD = parsed.amountUSD;
+      const isUSDMethod =
+        parsed.method === 'cash_usd' || parsed.method === 'zelle' || parsed.method === 'binance';
+      const amountNative = isUSDMethod ? amountUSD : amountUSD * rate;
+
+      let allocations: Array<{ purchaseInvoice: number; allocatedAmountUSD: number }>;
+
+      if (parsed.purchaseInvoiceId) {
+        const invoice = await payload.findByID({
+          collection: 'purchase-invoices',
+          id: parsed.purchaseInvoiceId,
+          depth: 0,
+          req,
+        });
+
+        if (!invoice || Number(invoice.tenant) !== Number(parsed.tenantId)) {
+          throw new Error('La factura de compra no pertenece a este inquilino.');
+        }
+        if (Number(invoice.supplier) !== Number(parsed.supplierId)) {
+          throw new Error('La factura de compra no pertenece al proveedor indicado.');
+        }
+
+        const balance = Number(invoice.balanceUSD) || 0;
+        if (invoice.status === 'paid' || balance <= 0) {
+          throw new Error('La factura de compra ya no tiene saldo pendiente.');
+        }
+        if (amountUSD > balance + 0.005) {
+          throw new Error(
+            `El monto excede el saldo pendiente de la factura (${balance.toFixed(2)} USD).`,
+          );
+        }
+
+        allocations = [
+          {
+            purchaseInvoice: invoice.id,
+            allocatedAmountUSD: Math.min(amountUSD, balance),
+          },
+        ];
+      } else {
+        const openInvoices = await payload.find({
+          collection: 'purchase-invoices',
+          where: {
+            and: [
+              { tenant: { equals: parsed.tenantId } },
+              { supplier: { equals: parsed.supplierId } },
+              { status: { in: ['received', 'partially_paid'] } },
+            ],
+          },
+          sort: 'dueDate',
+          pagination: false,
+          depth: 0,
+          req,
+        });
+
+        let remaining = amountUSD;
+        allocations = [];
+
+        for (const inv of openInvoices.docs) {
+          if (remaining <= 0.005) break;
+          const balance = Number(inv.balanceUSD) || 0;
+          if (balance <= 0) continue;
+
+          const alloc = Math.min(remaining, balance);
+          allocations.push({
+            purchaseInvoice: inv.id,
+            allocatedAmountUSD: Number(alloc.toFixed(2)),
+          });
+          remaining -= alloc;
+        }
+
+        if (remaining > 0.005) {
+          throw new Error(
+            'El monto excede la deuda abierta del proveedor: no hay facturas suficientes para imputar el sobrante.',
+          );
+        }
+      }
+
+      const paymentNumber = await nextDocumentNumber(
+        payload,
+        'supplier-payments',
+        parsed.tenantId,
+        'PAG',
+        req,
+      );
+
+      return payload.create({
+        collection: 'supplier-payments',
+        data: {
+          tenant: parsed.tenantId,
+          paymentNumber,
+          supplier: parsed.supplierId,
+          paymentDate: new Date().toISOString(),
+          status: 'confirmed',
+          methods: [
+            {
+              method: parsed.method,
+              currency: isUSDMethod ? 'USD' : 'VES',
+              amount: amountNative,
+              exchangeRate: rate,
+              amountUSD,
+              reference: parsed.referenceNumber || undefined,
+            },
+          ],
+          totalUSD: amountUSD,
+          allocations,
+          notes: parsed.notes || undefined,
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/purchases`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/suppliers`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo registrar el pago al proveedor.'),
+    };
   }
 }
 

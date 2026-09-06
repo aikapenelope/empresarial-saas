@@ -9,6 +9,7 @@ import * as migration_20260905_224331_add_sale_inventory from './20260905_224331
 import * as migration_20260906_023548_add_quotes from './20260906_023548_add_quotes';
 import * as migration_20260906_030500_add_pricing_vendors from './20260906_030500_add_pricing_vendors';
 import * as migration_20260906_032741_add_governance from './20260906_032741_add_governance';
+import * as migration_20260906_041000_cxp_number_uniques from './20260906_041000_cxp_number_uniques';
 
 export const migrations = [
   {
@@ -65,5 +66,10 @@ export const migrations = [
     up: migration_20260906_032741_add_governance.up,
     down: migration_20260906_032741_add_governance.down,
     name: '20260906_032741_add_governance'
+  },
+  {
+    up: migration_20260906_041000_cxp_number_uniques.up,
+    down: migration_20260906_041000_cxp_number_uniques.down,
+    name: '20260906_041000_cxp_number_uniques'
   },
 ];
