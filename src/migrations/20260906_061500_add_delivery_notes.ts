@@ -61,10 +61,10 @@ export async function down({ db }: MigrateDownArgs): Promise<void> {
   await db.execute(sql`
    ALTER TABLE "delivery_notes_items" DISABLE ROW LEVEL SECURITY;
   ALTER TABLE "delivery_notes" DISABLE ROW LEVEL SECURITY;
-  DROP TABLE "delivery_notes_items" CASCADE;
-  DROP TABLE "delivery_notes" CASCADE;
   ALTER TABLE "payload_locked_documents_rels" DROP CONSTRAINT "payload_locked_documents_rels_delivery_notes_fk";
   DROP INDEX "payload_locked_documents_rels_delivery_notes_id_idx";
   ALTER TABLE "payload_locked_documents_rels" DROP COLUMN "delivery_notes_id";
+  DROP TABLE "delivery_notes_items" CASCADE;
+  DROP TABLE "delivery_notes" CASCADE;
   DROP TYPE "public"."enum_delivery_notes_status";`)
 }
