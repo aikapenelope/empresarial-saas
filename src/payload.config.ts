@@ -33,11 +33,13 @@ import { IndustryTemplates } from './collections/IndustryTemplates';
 import { Quotes } from './collections/Quotes';
 import { Orders } from './collections/Orders';
 import { DeliveryNotes } from './collections/DeliveryNotes';
+import { Alerts } from './collections/Alerts';
 import { InventoryCounts } from './collections/InventoryCounts';
 import { salesInventoryPlugin } from './plugins/salesInventory';
 import { pricingPlugin } from './plugins/pricing';
 import { auditPlugin } from './plugins/audit';
 import { seedIndustryTemplateTask } from './jobs/seedIndustryTemplate';
+import { evaluateAlertsTask } from './jobs/evaluateAlerts';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 
@@ -101,10 +103,20 @@ export default buildConfig({
     Quotes,
     Orders,
     DeliveryNotes,
+    Alerts,
     InventoryCounts,
   ],
   jobs: {
-    tasks: [seedIndustryTemplateTask],
+    tasks: [seedIndustryTemplateTask, evaluateAlertsTask],
+    // Sprint 22: el evaluador de alertas se encola cada 15 min y el autoRun
+    // procesa la cola (schedule + autoRun del Jobs Queue oficial de Payload).
+    autoRun: [
+      {
+        cron: '*/15 * * * *',
+        queue: 'alerts',
+        limit: 10,
+      },
+    ],
     // Conservar los registros de jobs (éxitos y errores) como pista de auditoría del onboarding
     deleteJobOnComplete: false,
   },
@@ -183,6 +195,7 @@ export default buildConfig({
         quotes: {},
         orders: {},
         'delivery-notes': {},
+        alerts: {},
         'price-history': {},
         'audit-log': {},
         'inventory-counts': {},

@@ -171,6 +171,8 @@ function useMemoRoutes(tenantSlug: string) {
       { name: 'Remisiones', href: `/${tenantSlug}/erp/delivery-notes` },
       { name: 'Cartera por Antigüedad (CxC)', href: `/${tenantSlug}/erp/receivables` },
       { name: 'Tasas de Cambio', href: `/${tenantSlug}/erp/rates` },
+      { name: 'Centro de Alertas', href: `/${tenantSlug}/erp/alerts` },
+      { name: 'Auditoría Global', href: `/${tenantSlug}/erp/audit` },
       { name: 'Catálogo, Stock & BOM', href: `/${tenantSlug}/erp/inventory` },
       { name: 'Cajas & Arqueos', href: `/${tenantSlug}/erp/cash-registers` },
       { name: 'Proveedores & CxP', href: `/${tenantSlug}/erp/suppliers` },

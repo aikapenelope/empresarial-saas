@@ -3,6 +3,7 @@ import Link from 'next/link';
 import {
   getTenantBySlug,
   getAllTenants,
+  getActiveAlertCount,
 } from '@/utilities/erpData';
 import { getLiveExchangeRates, resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { requireErpTenantAccess, ErpAccessError } from '@/utilities/erpAuth';
@@ -92,7 +93,7 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
     throw error;
   }
 
-  const [fetchedTenants, liveRates, effectiveRateData] = await Promise.all([
+  const [fetchedTenants, liveRates, effectiveRateData, activeAlertCount] = await Promise.all([
     getAllTenants(),
     getLiveExchangeRates(),
     resolveEffectiveRate(
@@ -103,6 +104,7 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
           }
         : undefined,
     ),
+    getActiveAlertCount(tenant.id),
   ]);
   availableTenants = fetchedTenants;
 
@@ -121,6 +123,7 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
       availableTenants={availableTenants}
       rates={rates}
       userRole={actor?.role}
+      activeAlertCount={activeAlertCount}
     >
       {children}
     </AppShell>
