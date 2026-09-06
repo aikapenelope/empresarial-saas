@@ -18,6 +18,7 @@ import type {
   StockMovement,
   SupplierPayment,
   Order,
+  DeliveryNote,
   User,
 } from '@/payload-types';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
@@ -127,6 +128,7 @@ type ErpDataCollection =
   | 'invoices'
   | 'quotes'
   | 'orders'
+  | 'delivery-notes'
   | 'purchase-invoices'
   | 'suppliers'
   | 'cash-registers'
@@ -503,9 +505,13 @@ export async function getOrdersList(tenantId: number): Promise<Order[]> {
 export interface OrderDetailData {
   order: Order;
   invoice: Invoice | null;
+  /** Remisiones emitidas (no anuladas) del pedido. */
+  deliveryNotes: DeliveryNote[];
+  /** Cantidades despachadas por índice de línea del pedido. */
+  dispatchedByIndex: Record<number, number>;
 }
 
-/** Detalle de pedido: pedido poblado + factura emitida (si fue facturado). */
+/** Detalle de pedido: pedido + factura emitida + remisiones con crosstab de despacho. */
 export async function getOrderDetail(
   tenantId: number,
   orderId: number,
@@ -540,7 +546,65 @@ export async function getOrderDetail(
     })) as Invoice;
   }
 
-  return { order, invoice };
+  // Remisiones emitidas del pedido (las anuladas no cuentan como despacho)
+  const notesRes = await payload.find({
+    collection: 'delivery-notes',
+    where: {
+      and: [
+        { order: { equals: orderId } },
+        { status: { equals: 'issued' } },
+      ],
+    },
+    depth: 0,
+    sort: 'createdAt',
+    limit: 200,
+    user,
+    overrideAccess: false,
+  });
+  const deliveryNotes = notesRes.docs as DeliveryNote[];
+  const dispatchedByIndex: Record<number, number> = {};
+  for (const note of deliveryNotes) {
+    for (const item of Array.isArray(note.items) ? note.items : []) {
+      const idx = Number(item.orderItemIndex);
+      dispatchedByIndex[idx] = (dispatchedByIndex[idx] || 0) + (Number(item.quantity) || 0);
+    }
+  }
+
+  return { order, invoice, deliveryNotes, dispatchedByIndex };
+}
+
+/** Detalle de una remisión (Sprint 20) para la página imprimible. */
+export async function getDeliveryNoteDetail(
+  tenantId: number,
+  noteId: number,
+): Promise<DeliveryNote | null> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const note = (await payload.findByID({
+    collection: 'delivery-notes',
+    id: noteId,
+    depth: 1,
+    user,
+    overrideAccess: false,
+  })) as DeliveryNote;
+
+  if (!note || Number(note.tenant) !== Number(tenantId)) {
+    return null;
+  }
+  return note;
+}
+
+/** Remisiones del inquilino para la vista de remisiones (Sprint 20). */
+export async function getDeliveryNotesList(tenantId: number): Promise<DeliveryNote[]> {
+  const user = await requireErpTenantAccess(tenantId);
+  return findAllDocs<DeliveryNote>({
+    collection: 'delivery-notes',
+    where: { tenant: { equals: tenantId } },
+    depth: 1,
+    sort: '-createdAt',
+    user,
+  });
 }
 
 export interface VendorCommissionRow {

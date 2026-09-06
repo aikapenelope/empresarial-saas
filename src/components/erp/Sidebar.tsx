@@ -32,9 +32,9 @@ interface SidebarProps {
  * capa de datos son la autoridad real; esto es UX: cada rol ve solo su operación.
  */
 const ROLE_NAV: Record<string, string[]> = {
-  vendor: ['dashboard', 'pos', 'quotes', 'orders', 'vendors', 'customers'],
-  cashier: ['dashboard', 'pos', 'invoices', 'orders', 'customers', 'cash-registers'],
-  employee: ['dashboard', 'invoices', 'customers', 'inventory', 'quotes', 'orders'],
+  vendor: ['dashboard', 'pos', 'quotes', 'orders', 'delivery-notes', 'vendors', 'customers'],
+  cashier: ['dashboard', 'pos', 'invoices', 'orders', 'delivery-notes', 'customers', 'cash-registers'],
+  employee: ['dashboard', 'invoices', 'customers', 'inventory', 'quotes', 'orders', 'delivery-notes'],
   supervisor: [
     'dashboard',
     'pos',
@@ -43,6 +43,7 @@ const ROLE_NAV: Record<string, string[]> = {
     'inventory',
     'quotes',
     'orders',
+    'delivery-notes',
     'cash-registers',
     'purchases',
     'vendors',
@@ -88,6 +89,12 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile, userRole }: S
           href: `/${tenantSlug}/erp/orders`,
           routeKey: 'orders',
           icon: ClipboardList,
+        },
+        {
+          name: 'Remisiones',
+          href: `/${tenantSlug}/erp/delivery-notes`,
+          routeKey: 'delivery-notes',
+          icon: Truck,
         },
         {
           name: 'Vendedores & Comisiones',

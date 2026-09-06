@@ -239,6 +239,12 @@ export function OrdersView({
                                 <FileText className="h-3 w-3" />
                                 <span>Facturar</span>
                               </button>
+                              <Link
+                                href={`/${tenantSlug}/erp/orders/${o.id}`}
+                                className="text-slate-400 hover:text-white text-[11px] font-semibold px-2 py-1"
+                              >
+                                Remisión
+                              </Link>
                               <button
                                 onClick={() => handleCancel(o.id)}
                                 disabled={busyOrderId === o.id}

@@ -32,6 +32,7 @@ import { CashClosures } from './collections/CashClosures';
 import { IndustryTemplates } from './collections/IndustryTemplates';
 import { Quotes } from './collections/Quotes';
 import { Orders } from './collections/Orders';
+import { DeliveryNotes } from './collections/DeliveryNotes';
 import { InventoryCounts } from './collections/InventoryCounts';
 import { salesInventoryPlugin } from './plugins/salesInventory';
 import { pricingPlugin } from './plugins/pricing';
@@ -99,6 +100,7 @@ export default buildConfig({
     IndustryTemplates,
     Quotes,
     Orders,
+    DeliveryNotes,
     InventoryCounts,
   ],
   jobs: {
@@ -157,6 +159,7 @@ export default buildConfig({
         'cash-closures',
         'quotes',
         'orders',
+        'delivery-notes',
         'tenants',
       ],
     }),
@@ -179,6 +182,7 @@ export default buildConfig({
         'cash-closures': {},
         quotes: {},
         orders: {},
+        'delivery-notes': {},
         'price-history': {},
         'audit-log': {},
         'inventory-counts': {},
