@@ -325,6 +325,11 @@ export const Products: CollectionConfig = {
       admin: {
         readOnly: true,
       },
+      custom: {
+        'plugin-import-export': {
+          disabled: true,
+        },
+      },
     },
     {
       name: 'description',
@@ -336,6 +341,11 @@ export const Products: CollectionConfig = {
       label: 'Foto o Imagen del Producto',
       type: 'upload',
       relationTo: 'media',
+      custom: {
+        'plugin-import-export': {
+          disabled: true,
+        },
+      },
     },
     {
       name: 'isActive',
