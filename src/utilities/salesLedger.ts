@@ -1,6 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
-import { extractId, getActiveDb } from './inventoryLedger';
+import { extractId, getActiveDb, lockStockBalances } from './inventoryLedger';
 import type { Invoice, Product, Warehouse } from '@/payload-types';
 
 // Estados de factura que comprometen inventario: los borradores y anulados no descargan.
@@ -130,6 +130,13 @@ export async function applySaleStockDeduction(
 
   const warehouseId = await resolveDispatchWarehouse(invoice, req);
   let movementsCreated = 0;
+
+  // Orden global de locks: todos los advisory locks de saldo ANTES de cualquier
+  // row lock de producto (recalculateProductTotalStock en el afterChange).
+  await lockStockBalances(
+    linesWithProduct.map((line) => ({ productId: line.product, warehouseId })),
+    req,
+  );
 
   for (const line of linesWithProduct) {
     const product = (await req.payload.findByID({

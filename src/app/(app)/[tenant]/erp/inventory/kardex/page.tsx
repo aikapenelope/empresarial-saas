@@ -8,6 +8,7 @@ import {
   getWarehousesList,
 } from '@/utilities/erpData';
 import { ErpAccessError } from '@/utilities/erpAuth';
+import { kardexFiltersSchema } from '@/utilities/erpValidation';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { formatUSD } from '@/components/erp/KpiCard';
 import { Badge } from '@/components/erp/Badge';
@@ -54,13 +55,17 @@ export default async function KardexPage({ params, searchParams }: PageProps) {
     notFound();
   }
 
+  // Filtros validados con Zod: fechas con sintaxis/calendario válidos, page e
+  // IDs como enteros positivos. Valores malformados se descartan (catch) en
+  // lugar de llegar a getKardexEntries y romper con Invalid Date.
+  const q = kardexFiltersSchema.parse(sp);
   const filters = {
-    page: sp.page ? Number(sp.page) : 1,
-    productId: sp.product ? Number(sp.product) : undefined,
-    warehouseId: sp.warehouse ? Number(sp.warehouse) : undefined,
-    movementType: sp.type || undefined,
-    from: sp.from || undefined,
-    to: sp.to || undefined,
+    page: q.page,
+    productId: q.product,
+    warehouseId: q.warehouse,
+    movementType: q.movementType,
+    from: q.from,
+    to: q.to,
   };
 
   let entries, products, warehouses;
@@ -78,19 +83,19 @@ export default async function KardexPage({ params, searchParams }: PageProps) {
   }
 
   const buildQuery = (overrides: Record<string, string | number | undefined>) => {
-    const q = new URLSearchParams();
+    const params = new URLSearchParams();
     const merged: Record<string, string | number | undefined> = {
-      product: sp.product,
-      warehouse: sp.warehouse,
-      type: sp.type,
-      from: sp.from,
-      to: sp.to,
+      product: q.product,
+      warehouse: q.warehouse,
+      type: q.movementType,
+      from: q.from,
+      to: q.to,
       ...overrides,
     };
-    for (const [k, v] of Object.entries(merged)) {
-      if (v !== undefined && v !== '') q.set(k, String(v));
+    for (const [key, value] of Object.entries(merged)) {
+      if (value !== undefined && value !== '') params.set(key, String(value));
     }
-    const qs = q.toString();
+    const qs = params.toString();
     return qs ? `?${qs}` : '';
   };
 

@@ -129,6 +129,12 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
       if (swTenant && String(effectiveTenant) !== String(swTenant)) {
         throw new Error('Violación de multi-inquilino: El almacén de origen pertenece a otro inquilino.');
       }
+      // Invariante de almacén activo (misma que importStockToWarehouse): un
+      // almacén deshabilitado no procesa movimientos — cubre transferencias,
+      // ajustes, ventas y cualquier otro punto de entrada manual.
+      if (sourceWarehouse && sourceWarehouse.isActive === false) {
+        throw new Error('El almacén de origen está inactivo: no admite salidas de inventario.');
+      }
     }
 
     if (targetId) {
@@ -142,6 +148,9 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
       const twTenant = extractId(targetWarehouse?.tenant);
       if (twTenant && String(effectiveTenant) !== String(twTenant)) {
         throw new Error('Violación de multi-inquilino: El almacén de destino pertenece a otro inquilino.');
+      }
+      if (targetWarehouse && targetWarehouse.isActive === false) {
+        throw new Error('El almacén de destino está inactivo: no admite entradas de inventario.');
       }
     }
 

@@ -67,11 +67,13 @@ export function InventoryView({
     setIsProductionModalOpen(true);
   };
 
-  const sanitizedWarehouses = warehouses.map((w) => ({
-    id: w.id,
-    name: w.name,
-    code: w.code,
-  }));
+  const sanitizedWarehouses = warehouses
+    .filter((w) => w.isActive !== false)
+    .map((w) => ({
+      id: w.id,
+      name: w.name,
+      code: w.code,
+    }));
 
   return (
     <div className="space-y-6">
@@ -425,7 +427,9 @@ export function InventoryView({
         tenantId={tenantId}
         tenantSlug={tenantSlug}
         products={products.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
-        warehouses={warehouses.map((w) => ({ id: w.id, name: w.name, code: w.code }))}
+        warehouses={warehouses
+          .filter((w) => w.isActive !== false)
+          .map((w) => ({ id: w.id, name: w.name, code: w.code, isDefault: w.isDefault }))}
       />
 
       {/* Modal Nuevo Artículo */}

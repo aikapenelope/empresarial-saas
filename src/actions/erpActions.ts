@@ -328,6 +328,13 @@ export async function transferStockAction(input: TransferStockInput) {
     }
 
     const doc = await withTransaction(payload, user, async (req) => {
+      const tenant = await payload.findByID({
+        collection: 'tenants',
+        id: parsed.tenantId,
+        depth: 0,
+        req,
+      });
+
       const product = await payload.findByID({
         collection: 'products',
         id: parsed.productId,
@@ -341,7 +348,7 @@ export async function transferStockAction(input: TransferStockInput) {
         throw new Error(`"${product.name}" no controla existencias (servicio o sin kardex).`);
       }
 
-      return payload.create({
+      const movement = await payload.create({
         collection: 'stock-movements',
         data: {
           tenant: parsed.tenantId,
@@ -361,12 +368,15 @@ export async function transferStockAction(input: TransferStockInput) {
           allowInternalStockUpdate: true,
         },
       });
+
+      // El slug para revalidatePath viene del inquilino autorizado, no del input
+      return { movement, tenantSlug: String(tenant.slug) };
     });
 
-    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
-    revalidatePath(`/${parsed.tenantSlug}/erp/inventory/kardex`);
+    revalidatePath(`/${doc.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${doc.tenantSlug}/erp/inventory/kardex`);
 
-    return { success: true, data: doc };
+    return { success: true, data: doc.movement };
   } catch (error: unknown) {
     return { success: false, error: toSafeActionError(error, 'No se pudo transferir el inventario.') };
   }
@@ -393,6 +403,13 @@ export async function adjustStockAction(input: AdjustStockInput) {
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      const tenant = await payload.findByID({
+        collection: 'tenants',
+        id: parsed.tenantId,
+        depth: 0,
+        req,
+      });
+
       const product = await payload.findByID({
         collection: 'products',
         id: parsed.productId,
@@ -407,54 +424,37 @@ export async function adjustStockAction(input: AdjustStockInput) {
       }
 
       const isEntry = parsed.direction === 'in';
+      const movementData = {
+        tenant: parsed.tenantId,
+        reference: `AJUSTE-${product.sku}`,
+        product: product.id,
+        quantity: parsed.quantity,
+        unitCostUSD: Number(product.costUSD) || 0,
+        totalCostUSD: Number((parsed.quantity * (Number(product.costUSD) || 0)).toFixed(2)),
+        reason: parsed.reason,
+        ...(isEntry
+          ? { movementType: 'adjustment_positive' as const, targetWarehouse: parsed.warehouseId }
+          : { movementType: 'adjustment_negative' as const, sourceWarehouse: parsed.warehouseId }),
+      };
 
-      if (isEntry) {
-        return payload.create({
-          collection: 'stock-movements',
-          data: {
-            tenant: parsed.tenantId,
-            reference: `AJUSTE-${product.sku}`,
-            movementType: 'adjustment_positive',
-            product: product.id,
-            targetWarehouse: parsed.warehouseId,
-            quantity: parsed.quantity,
-            unitCostUSD: Number(product.costUSD) || 0,
-            totalCostUSD: Number((parsed.quantity * (Number(product.costUSD) || 0)).toFixed(2)),
-            reason: parsed.reason,
-          },
-          req,
-          context: {
-            ...req.context,
-            allowInternalStockUpdate: true,
-          },
-        });
-      }
-
-      return payload.create({
+      const movement = await payload.create({
         collection: 'stock-movements',
-        data: {
-          tenant: parsed.tenantId,
-          reference: `AJUSTE-${product.sku}`,
-            movementType: 'adjustment_negative',
-            product: product.id,
-            sourceWarehouse: parsed.warehouseId,
-            quantity: parsed.quantity,
-            unitCostUSD: Number(product.costUSD) || 0,
-            totalCostUSD: Number((parsed.quantity * (Number(product.costUSD) || 0)).toFixed(2)),
-            reason: parsed.reason,
-        },
+        data: movementData,
         req,
         context: {
           ...req.context,
           allowInternalStockUpdate: true,
         },
       });
+
+      // El slug para revalidatePath viene del inquilino autorizado, no del input
+      return { movement, tenantSlug: String(tenant.slug) };
     });
 
-    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
-    revalidatePath(`/${parsed.tenantSlug}/erp/inventory/kardex`);
+    revalidatePath(`/${doc.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${doc.tenantSlug}/erp/inventory/kardex`);
 
-    return { success: true, data: doc };
+    return { success: true, data: doc.movement };
   } catch (error: unknown) {
     return { success: false, error: toSafeActionError(error, 'No se pudo registrar el ajuste.') };
   }
