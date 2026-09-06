@@ -95,6 +95,10 @@ async function withTransaction<T>(
 /** Roles con permiso de crear/actualizar catálogos y operaciones restringidas (RBAC de colecciones). */
 const ERP_OPERATOR_ROLES: Array<User['role']> = ['super-admin', 'tenant-admin', 'supervisor'];
 
+/** Prefijo `alt` con el que uploadReceiptAction marca los comprobantes de cobro;
+ *  deleteOrphanReceiptAction sólo borra media con esta marca. */
+const RECEIPT_ALT_PREFIX = 'Comprobante de pago';
+
 /** Traduce un error interno a un mensaje seguro para el cliente, registrando el detalle. */
 function toSafeActionError(error: unknown, fallback: string): string {
   if (error instanceof ErpAccessError) {
@@ -1052,7 +1056,15 @@ export async function createPaymentAction(input: CreatePaymentInput) {
 
       // Aislamiento multi-inquilino: el comprobante adjunto debe pertenecer al
       // inquilino del cobro — un ID foráneo expondría un archivo ajeno.
+      // Además, el mismo advisory lock `receipt-media:<id>` que usa
+      // deleteOrphanReceiptAction serializa adjunción vs limpieza: la
+      // verificación de referencias y el INSERT del cobro ocurren atómicamente
+      // respecto a cualquier borrado concurrente (el FK es ON DELETE SET NULL).
       if (parsed.receiptMediaId) {
+        const db = getActiveDb(req);
+        await db.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${`receipt-media:${parsed.receiptMediaId}`}))`,
+        );
         const receipt = await payload.findByID({
           collection: 'media',
           id: parsed.receiptMediaId,
@@ -2102,6 +2114,9 @@ export async function inviteUserAction(input: InviteUserInput) {
       },
       user: actor,
       overrideAccess: actor.role === 'super-admin' ? false : true,
+      // Flag interno: habilita el create de colección para tenant-admin SÓLO
+      // por esta vía (Users.create lo exige); un POST REST directo no lo lleva.
+      context: { viaInviteUserAction: true },
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/settings`);
@@ -2136,6 +2151,17 @@ export async function uploadReceiptAction(formData: FormData): Promise<{
     if (file.size > 8 * 1024 * 1024) {
       return { success: false, error: 'El comprobante no puede superar 8 MB.' };
     }
+    // Valida tipo y tamaño ANTES de materializar el buffer: rechazar temprano
+    // evita consumir memoria del serverless con cargas no soportadas.
+    const ALLOWED_RECEIPT_TYPES = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+    ] as const;
+    if (!ALLOWED_RECEIPT_TYPES.includes(file.type as (typeof ALLOWED_RECEIPT_TYPES)[number])) {
+      return { success: false, error: 'Formato no soportado (usá JPG, PNG, WebP o PDF).' };
+    }
 
     // Aislamiento multi-inquilino: se verifica membresía ANTES de escribir el
     // archivo. Con ella verificada, el overrideAccess privilegiado de la
@@ -2148,7 +2174,7 @@ export async function uploadReceiptAction(formData: FormData): Promise<{
       collection: 'media',
       data: {
         tenant: tenantId,
-        alt: `Comprobante de pago — ${file.name}`,
+        alt: `${RECEIPT_ALT_PREFIX} — ${file.name}`,
       },
       file: {
         data: buffer,
@@ -2170,56 +2196,75 @@ export async function uploadReceiptAction(formData: FormData): Promise<{
 
 /**
  * Limpieza compensatoria del flujo cobro+comprobante: si la creación del cobro
- * falla DESPUÉS de subir el recibo, se elimina el archivo huérfano. Sólo borra
- * si el media pertenece al inquilino verificado y NO está referenciado por
- * ningún cobro (métodos[].receipt) — autorización explícita alrededor de una
- * escritura privilegiada.
+ * falla DESPUÉS de subir el recibo, se elimina el archivo huérfano.
+ *
+ * Acotado y seguro por diseño:
+ * - Sólo comprobantes del flujo (alt con el prefijo que pone uploadReceiptAction):
+ *   imágenes de productos u otros media del inquilino NO se tocan.
+ * - Sólo roles operativos (los mismos que crean cobros).
+ * - Transaccional con advisory lock `receipt-media:<id>` COMPARTIDO con
+ *   createPaymentAction: la verificación de referencias y el borrado son
+ *   atómicos respecto a la adjunción del recibo por un cobro concurrente —
+ *   imposible que el FK ON DELETE SET NULL desadjunte un cobro ya confirmado.
  */
 export async function deleteOrphanReceiptAction(tenantId: number, mediaId: number): Promise<{
   success: boolean;
   error?: string;
 }> {
   try {
-    const actor = await requireErpTenantAccess(tenantId);
+    const actor = await requireErpTenantAccess(tenantId, ERP_OPERATOR_ROLES);
     const payload = await getPayload({ config });
 
-    const media = await payload.findByID({
-      collection: 'media',
-      id: mediaId,
-      depth: 0,
-      user: actor,
-      overrideAccess: false,
-    });
-    if (!media || Number(media.tenant) !== Number(tenantId)) {
-      return { success: false, error: 'El comprobante no pertenece a este inquilino.' };
-    }
+    await withTransaction(payload, actor, async (req) => {
+      // Serializa adjunción (cobro) vs limpieza (aquí) del mismo media.
+      const db = getActiveDb(req);
+      await db.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`receipt-media:${mediaId}`}))`,
+      );
 
-    const referenced = await payload.find({
-      collection: 'customer-payments',
-      where: { 'methods.receipt': { equals: mediaId } },
-      limit: 1,
-      depth: 0,
-      user: actor,
-      overrideAccess: false,
-    });
-    if (referenced.totalDocs > 0) {
-      return { success: false, error: 'El comprobante está referenciado por un cobro.' };
-    }
+      const media = await payload.findByID({
+        collection: 'media',
+        id: mediaId,
+        depth: 0,
+        req,
+      });
+      if (!media || Number(media.tenant) !== Number(tenantId)) {
+        throw new Error('El comprobante no pertenece a este inquilino.');
+      }
+      if (!media.alt || !String(media.alt).startsWith(RECEIPT_ALT_PREFIX)) {
+        throw new Error('El archivo no es un comprobante de cobro: no se puede borrar por esta vía.');
+      }
 
-    await payload.delete({
-      collection: 'media',
-      id: mediaId,
-      user: actor,
+      const referenced = await payload.find({
+        collection: 'customer-payments',
+        where: { 'methods.receipt': { equals: mediaId } },
+        limit: 1,
+        depth: 0,
+        req,
+      });
+      if (referenced.totalDocs > 0) {
+        throw new Error('El comprobante está referenciado por un cobro.');
+      }
+
       // Escritura privilegiada con autorización explícita equivalente:
-      // pertenencia al inquilino y ausencia de referencias ya verificadas.
-      overrideAccess: true,
+      // pertenencia al inquilino, marcador de comprobante y ausencia de
+      // referencias ya verificadas bajo lock.
+      await payload.delete({
+        collection: 'media',
+        id: mediaId,
+        req,
+        overrideAccess: true,
+      });
     });
 
     return { success: true };
   } catch (error: unknown) {
     if (error instanceof ErpAccessError) return { success: false, error: error.message };
     console.error('[deleteOrphanReceipt]', error);
-    return { success: false, error: 'No se pudo limpiar el comprobante huérfano.' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'No se pudo limpiar el comprobante huérfano.',
+    };
   }
 }
 

@@ -25,8 +25,16 @@ export const Users: CollectionConfig = {
         'tenants.tenant': { in: tenantIds },
       };
     },
-    create: ({ req: { user } }) =>
-      Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+    // Escalación de privilegios: el tenant-admin NO puede crear usuarios por
+    // REST directo (podría fijar cualquier rol saltándose inviteUserAction).
+    // Sólo se le permite a través de la Server Action, que marca el contexto
+    // interno `viaInviteUserAction` y aplica sus restricciones (sin roles
+    // administrativos, sólo su inquilino verificado).
+    create: ({ req: { user, context } }) => {
+      if (user?.role === 'super-admin') return true;
+      if (user?.role === 'tenant-admin') return Boolean(context?.viaInviteUserAction);
+      return false;
+    },
     update: ({ req: { user } }) => {
       if (user?.role === 'super-admin') return true;
       return { id: { equals: user?.id } };
@@ -64,6 +72,10 @@ export const Users: CollectionConfig = {
         { label: 'Empleado / Consulta', value: 'employee' },
       ],
       access: {
+        // Sólo super-admin asigna roles — en creación y en actualización.
+        // La vía del tenant-admin (inviteUserAction) usa overrideAccess:true
+        // con roles administrativos ya bloqueados en la propia acción.
+        create: ({ req: { user } }) => user?.role === 'super-admin',
         update: ({ req: { user } }) => user?.role === 'super-admin',
       },
     },
