@@ -381,6 +381,19 @@ export const Orders: CollectionConfig = {
       label: 'Notas / Instrucciones de Entrega',
       type: 'textarea',
     },
+    // Relación inversa nativa: remisiones emitidas desde este pedido (Sprint 20)
+    {
+      name: 'deliveryNotes',
+      label: 'Remisiones',
+      type: 'join',
+      collection: 'delivery-notes',
+      on: 'order',
+      admin: {
+        allowCreate: false,
+        defaultColumns: ['noteNumber', 'status', 'totalUSD', 'createdAt'],
+        description: 'Remisiones de entrega emitidas desde este pedido.',
+      },
+    },
   ],
   timestamps: true,
 };

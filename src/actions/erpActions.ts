@@ -42,9 +42,11 @@ import {
   transferStockSchema,
   supplierPaymentSchema,
   createOrderSchema,
+  issueDeliveryNoteSchema,
   issueOrderInvoiceSchema,
   orderTransitionSchema,
   updateCustomerSchema,
+  voidDeliveryNoteSchema,
   updateOrderSchema,
   updateProductSchema,
   updateQuoteSchema,
@@ -519,6 +521,7 @@ const DOC_NUMBER_TABLES: Record<
   | 'cash-closures'
   | 'quotes'
   | 'orders'
+  | 'delivery-notes'
   | 'purchase-invoices'
   | 'supplier-payments',
   { table: string; column: string }
@@ -529,6 +532,7 @@ const DOC_NUMBER_TABLES: Record<
   'cash-closures': { table: 'cash_closures', column: 'closure_number' },
   quotes: { table: 'quotes', column: 'quote_number' },
   orders: { table: 'orders', column: 'order_number' },
+  'delivery-notes': { table: 'delivery_notes', column: 'note_number' },
   'purchase-invoices': { table: 'purchase_invoices', column: 'invoice_number' },
   'supplier-payments': { table: 'supplier_payments', column: 'payment_number' },
 };
@@ -543,7 +547,7 @@ const DOC_NUMBER_TABLES: Record<
  */
 async function nextDocumentNumber(
   payload: Payload,
-  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes' | 'orders' | 'purchase-invoices' | 'supplier-payments',
+  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes' | 'orders' | 'delivery-notes' | 'purchase-invoices' | 'supplier-payments',
   tenantId: number,
   prefix: string,
   req: PayloadRequest,
@@ -1264,6 +1268,25 @@ export async function cancelOrderAction(input: { tenantId: number; tenantSlug: s
         throw new Error(`Un pedido "${order.status}" es final y no puede cancelarse.`);
       }
 
+      // Mercancía ya despachada: no se puede cancelar hasta anular las remisiones
+      const issuedNotes = await payload.find({
+        collection: 'delivery-notes',
+        where: {
+          and: [
+            { order: { equals: order.id } },
+            { status: { equals: 'issued' } },
+          ],
+        },
+        limit: 1,
+        depth: 0,
+        req,
+      });
+      if (issuedNotes.totalDocs > 0) {
+        throw new Error(
+          'El pedido tiene remisiones de entrega emitidas: anúlelas antes de cancelarlo.',
+        );
+      }
+
       return payload.update({
         collection: 'orders',
         id: order.id,
@@ -1386,6 +1409,204 @@ export async function issueInvoiceFromOrderAction(input: {
       success: false,
       error: toSafeActionError(error, 'No se pudo facturar el pedido.'),
     };
+  }
+}
+
+// ==========================================
+// 3c. REMISIONES / NOTAS DE ENTREGA — Sprint 20
+// ==========================================
+export interface IssueDeliveryNoteInput {
+  tenantId: number;
+  tenantSlug: string;
+  orderId: number;
+  items: Array<{ orderItemIndex: number; quantity: number }>;
+  notes?: string | null;
+}
+
+/**
+ * Emite una remisión de entrega (total o parcial) desde un pedido CONFIRMADO.
+ *
+ * Invariante kardex: la remisión NO genera movimientos de inventario — el
+ * stock se descarga exclusivamente al facturar. La validación de cantidades
+ * (`despachado + esta ≤ cantidad pedida`) suma las remisiones EMITIDAS
+ * previas dentro de la misma transacción, así que dos remisiones concurrentes
+ * no pueden sobredespachar (el CREATE final y la lectura previa comparten
+ * transacción y la numeración toma advisory lock por documento).
+ */
+export async function issueDeliveryNoteAction(input: IssueDeliveryNoteInput) {
+  try {
+    const parsed = issueDeliveryNoteSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const order = await payload.findByID({
+        collection: 'orders',
+        id: parsed.orderId,
+        depth: 0,
+        req,
+      });
+      if (!order || Number(order.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('El pedido no pertenece a este inquilino.');
+      }
+      if (order.status !== 'confirmed') {
+        throw new Error(
+          `Sólo los pedidos confirmados admiten remisiones (estado actual: "${order.status}").`,
+        );
+      }
+
+      const orderItems = Array.isArray(order.items) ? order.items : [];
+      if (orderItems.length === 0) {
+        throw new Error('El pedido no tiene líneas para despachar.');
+      }
+
+      // Sin índices duplicados: cada línea de remisión despacha UNA línea del pedido
+      const requested = new Map<number, number>();
+      for (const it of parsed.items) {
+        if (requested.has(it.orderItemIndex)) {
+          throw new Error(
+            `La línea ${it.orderItemIndex + 1} del pedido aparece más de una vez en la remisión.`,
+          );
+        }
+        requested.set(it.orderItemIndex, it.quantity);
+      }
+
+      // Despachado previo: suma de las remisiones EMITIDAS (las anuladas no cuentan)
+      const issuedNotes = await payload.find({
+        collection: 'delivery-notes',
+        where: {
+          and: [
+            { order: { equals: order.id } },
+            { status: { equals: 'issued' } },
+          ],
+        },
+        depth: 0,
+        limit: 500,
+        req,
+      });
+      const dispatched = new Map<number, number>();
+      for (const note of issuedNotes.docs) {
+        for (const item of Array.isArray(note.items) ? note.items : []) {
+          const idx = Number(item.orderItemIndex);
+          dispatched.set(idx, (dispatched.get(idx) || 0) + (Number(item.quantity) || 0));
+        }
+      }
+
+      // Validación de capacidad + snapshot de las líneas del pedido
+      const EPS = 0.0001;
+      let totalUSD = 0;
+      const noteItems = [...requested.entries()].map(([index, qty]) => {
+        const orderItem = orderItems[index];
+        if (!orderItem) {
+          throw new Error(`La línea ${index + 1} no existe en el pedido.`);
+        }
+        const ordered = Number(orderItem.quantity) || 0;
+        const alreadyDispatched = dispatched.get(index) || 0;
+        const remaining = Number((ordered - alreadyDispatched).toFixed(4));
+        if (qty > remaining + EPS) {
+          throw new Error(
+            `No hay cantidad suficiente en la línea "${orderItem.description}": pedida ${ordered}, ya despachada ${alreadyDispatched}, disponible ${Math.max(remaining, 0)}.`,
+          );
+        }
+        const unitPrice = Number(orderItem.unitPriceUSD) || 0;
+        const discount = Math.min(Math.max(Number(orderItem.discountPct) || 0, 0), 100);
+        totalUSD += qty * unitPrice * (1 - discount / 100);
+        return {
+          orderItemIndex: index,
+          product:
+            typeof orderItem.product === 'object' && orderItem.product !== null
+              ? orderItem.product.id
+              : (orderItem.product as number | undefined) || undefined,
+          sku: orderItem.sku || undefined,
+          description: orderItem.description,
+          quantity: qty,
+          unitPriceUSD: unitPrice,
+          discountPct: discount,
+        };
+      });
+
+      const rate = Number(order.exchangeRateSnapshot) || 1;
+      totalUSD = Number(totalUSD.toFixed(2));
+
+      const noteNumber = await nextDocumentNumber(
+        payload,
+        'delivery-notes',
+        parsed.tenantId,
+        'REM',
+        req,
+      );
+
+      return payload.create({
+        collection: 'delivery-notes',
+        data: {
+          tenant: parsed.tenantId,
+          noteNumber,
+          order: order.id,
+          customer: typeof order.customer === 'object' ? order.customer.id : order.customer,
+          items: noteItems,
+          status: 'issued',
+          issueDate: new Date().toISOString(),
+          exchangeRateSnapshot: rate,
+          totalUSD,
+          totalVES: Number((totalUSD * rate).toFixed(2)),
+          notes: parsed.notes || undefined,
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/delivery-notes`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/orders/${parsed.orderId}`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo emitir la remisión.') };
+  }
+}
+
+/** Anula una remisión emitida (estado final): admin only. Sin efecto en kardex. */
+export async function voidDeliveryNoteAction(input: {
+  tenantId: number;
+  tenantSlug: string;
+  deliveryNoteId: number;
+}) {
+  try {
+    const parsed = voidDeliveryNoteSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, [
+      'super-admin',
+      'tenant-admin',
+    ]);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const note = await payload.findByID({
+        collection: 'delivery-notes',
+        id: parsed.deliveryNoteId,
+        depth: 0,
+        req,
+      });
+      if (!note || Number(note.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('La remisión no pertenece a este inquilino.');
+      }
+      if (note.status === 'voided') {
+        throw new Error('La remisión ya está anulada.');
+      }
+
+      return payload.update({
+        collection: 'delivery-notes',
+        id: note.id,
+        data: { status: 'voided' },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/delivery-notes`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo anular la remisión.') };
   }
 }
 

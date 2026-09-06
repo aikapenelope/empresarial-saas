@@ -87,6 +87,7 @@ export interface Config {
     'industry-templates': IndustryTemplate;
     quotes: Quote;
     orders: Order;
+    'delivery-notes': DeliveryNote;
     'inventory-counts': InventoryCount;
     'price-history': PriceHistory;
     'audit-log': AuditLog;
@@ -101,6 +102,9 @@ export interface Config {
   collectionsJoins: {
     customers: {
       orders: 'orders';
+    };
+    orders: {
+      deliveryNotes: 'delivery-notes';
     };
   };
   collectionsSelect: {
@@ -124,6 +128,7 @@ export interface Config {
     'industry-templates': IndustryTemplatesSelect<false> | IndustryTemplatesSelect<true>;
     quotes: QuotesSelect<false> | QuotesSelect<true>;
     orders: OrdersSelect<false> | OrdersSelect<true>;
+    'delivery-notes': DeliveryNotesSelect<false> | DeliveryNotesSelect<true>;
     'inventory-counts': InventoryCountsSelect<false> | InventoryCountsSelect<true>;
     'price-history': PriceHistorySelect<false> | PriceHistorySelect<true>;
     'audit-log': AuditLogSelect<false> | AuditLogSelect<true>;
@@ -334,6 +339,14 @@ export interface Order {
    */
   issuedInvoice?: (number | null) | Invoice;
   notes?: string | null;
+  /**
+   * Remisiones de entrega emitidas desde este pedido.
+   */
+  deliveryNotes?: {
+    docs?: (number | DeliveryNote)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -456,6 +469,48 @@ export interface Warehouse {
   location?: string | null;
   isDefault?: boolean | null;
   isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "delivery-notes".
+ */
+export interface DeliveryNote {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  /**
+   * Correlativo REM-##### generado por la Server Action (numeración con lock).
+   */
+  noteNumber: string;
+  order: number | Order;
+  /**
+   * Copia del cliente del pedido para trazabilidad de la remisión.
+   */
+  customer: number | Customer;
+  items: {
+    /**
+     * Índice de la línea del pedido que este ítem despacha.
+     */
+    orderItemIndex: number;
+    product?: (number | null) | Product;
+    sku?: string | null;
+    description: string;
+    quantity: number;
+    unitPriceUSD: number;
+    discountPct?: number | null;
+    id?: string | null;
+  }[];
+  issueDate?: string | null;
+  status: 'issued' | 'voided';
+  exchangeRateSnapshot?: number | null;
+  totalUSD?: number | null;
+  totalVES?: number | null;
+  /**
+   * Se llena si la mercancía despachada se facturó.
+   */
+  invoice?: (number | null) | Invoice;
+  notes?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1193,6 +1248,10 @@ export interface PayloadLockedDocument {
         value: number | Order;
       } | null)
     | ({
+        relationTo: 'delivery-notes';
+        value: number | DeliveryNote;
+      } | null)
+    | ({
         relationTo: 'inventory-counts';
         value: number | InventoryCount;
       } | null)
@@ -1836,6 +1895,38 @@ export interface OrdersSelect<T extends boolean = true> {
   totalVES?: T;
   issuedInvoice?: T;
   notes?: T;
+  deliveryNotes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "delivery-notes_select".
+ */
+export interface DeliveryNotesSelect<T extends boolean = true> {
+  tenant?: T;
+  noteNumber?: T;
+  order?: T;
+  customer?: T;
+  items?:
+    | T
+    | {
+        orderItemIndex?: T;
+        product?: T;
+        sku?: T;
+        description?: T;
+        quantity?: T;
+        unitPriceUSD?: T;
+        discountPct?: T;
+        id?: T;
+      };
+  issueDate?: T;
+  status?: T;
+  exchangeRateSnapshot?: T;
+  totalUSD?: T;
+  totalVES?: T;
+  invoice?: T;
+  notes?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2080,6 +2171,7 @@ export interface TaskCreateCollectionExport {
       | 'industry-templates'
       | 'quotes'
       | 'orders'
+      | 'delivery-notes'
       | 'inventory-counts'
       | 'price-history'
       | 'audit-log'

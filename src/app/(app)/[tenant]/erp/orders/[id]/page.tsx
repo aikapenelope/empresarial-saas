@@ -1,11 +1,12 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ClipboardList } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Truck } from 'lucide-react';
 import { getTenantBySlug, getOrderDetail } from '@/utilities/erpData';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { PrintButton } from '@/components/erp/PrintButton';
+import { IssueDeliveryNoteButton } from '@/components/erp/IssueDeliveryNoteButton';
 import { Badge } from '@/components/erp/Badge';
 import { formatUSD, formatVES } from '@/components/erp/KpiCard';
 
@@ -74,6 +75,20 @@ export default async function OrderDetailPage({ params }: PageProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {order.status === 'confirmed' && (
+            <IssueDeliveryNoteButton
+              tenantId={tenant.id}
+              tenantSlug={tenantSlug}
+              order={{ id: order.id, orderNumber: order.orderNumber }}
+              lines={(Array.isArray(order.items) ? order.items : []).map((it, index) => ({
+                index,
+                description: it.description,
+                sku: it.sku,
+                ordered: Number(it.quantity) || 0,
+                dispatched: data.dispatchedByIndex[index] || 0,
+              }))}
+            />
+          )}
           {invoiceId && (
             <Link
               href={`/${tenantSlug}/erp/invoices/${invoiceId}`}
@@ -125,26 +140,34 @@ export default async function OrderDetailPage({ params }: PageProps) {
                 <th className="p-3">Descripción</th>
                 <th className="p-3">SKU</th>
                 <th className="p-3 text-right">Cant.</th>
+                <th className="p-3 text-right">Despachada</th>
                 <th className="p-3 text-right">Precio (USD)</th>
                 <th className="p-3 text-right">Desc. %</th>
                 <th className="p-3 text-right">Total (USD)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {(Array.isArray(order.items) ? order.items : []).map((it, idx) => (
-                <tr key={idx}>
-                  <td className="p-3 text-white">{it.description}</td>
-                  <td className="p-3 font-mono text-slate-400">{it.sku || '—'}</td>
-                  <td className="p-3 text-right font-mono text-slate-200">{it.quantity}</td>
-                  <td className="p-3 text-right font-mono text-slate-200">{formatUSD(Number(it.unitPriceUSD) || 0)}</td>
-                  <td className="p-3 text-right font-mono text-slate-400">
-                    {Number(it.discountPct) > 0 ? `${it.discountPct}%` : '—'}
-                  </td>
-                  <td className="p-3 text-right font-mono font-bold text-white">
-                    {formatUSD(Number(it.totalUSD) || 0)}
-                  </td>
-                </tr>
-              ))}
+              {(Array.isArray(order.items) ? order.items : []).map((it, idx) => {
+                const ordered = Number(it.quantity) || 0;
+                const dispatched = data.dispatchedByIndex[idx] || 0;
+                return (
+                  <tr key={idx}>
+                    <td className="p-3 text-white">{it.description}</td>
+                    <td className="p-3 font-mono text-slate-400">{it.sku || '—'}</td>
+                    <td className="p-3 text-right font-mono text-slate-200">{ordered}</td>
+                    <td className="p-3 text-right font-mono text-emerald-400">
+                      {dispatched > 0 ? `${dispatched}${dispatched >= ordered ? ' ✓' : ''}` : '—'}
+                    </td>
+                    <td className="p-3 text-right font-mono text-slate-200">{formatUSD(Number(it.unitPriceUSD) || 0)}</td>
+                    <td className="p-3 text-right font-mono text-slate-400">
+                      {Number(it.discountPct) > 0 ? `${it.discountPct}%` : '—'}
+                    </td>
+                    <td className="p-3 text-right font-mono font-bold text-white">
+                      {formatUSD(Number(it.totalUSD) || 0)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -164,6 +187,54 @@ export default async function OrderDetailPage({ params }: PageProps) {
             <span className="font-mono">{formatVES(Number(order.totalVES) || 0)}</span>
           </div>
         </div>
+
+        {/* Remisiones emitidas */}
+        {data.deliveryNotes.length > 0 && (
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden">
+            <div className="p-4 border-b border-slate-800/80 flex items-center gap-2">
+              <Truck className="h-4 w-4 text-indigo-400" />
+              <h2 className="text-sm font-semibold text-white">Remisiones Emitidas</h2>
+              <span className="text-xs text-slate-400 ml-auto">{data.deliveryNotes.length} remisión(es)</span>
+            </div>
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
+                  <th className="p-3">Nro.</th>
+                  <th className="p-3">Fecha</th>
+                  <th className="p-3 text-right">Líneas</th>
+                  <th className="p-3 text-right">Valor (USD)</th>
+                  <th className="p-3 text-center">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {data.deliveryNotes.map((n) => (
+                  <tr key={n.id} className="hover:bg-slate-800/30">
+                    <td className="p-3 font-mono font-bold text-white">
+                      <Link
+                        href={`/${tenantSlug}/erp/delivery-notes/${n.id}`}
+                        className="hover:text-indigo-300 underline decoration-slate-700 underline-offset-2"
+                      >
+                        {n.noteNumber}
+                      </Link>
+                    </td>
+                    <td className="p-3 text-slate-400 text-[11px]">
+                      {n.issueDate ? new Date(n.issueDate).toLocaleDateString('es-VE') : '—'}
+                    </td>
+                    <td className="p-3 text-right font-mono text-slate-200">
+                      {Array.isArray(n.items) ? n.items.length : 0}
+                    </td>
+                    <td className="p-3 text-right font-mono text-slate-200">{formatUSD(Number(n.totalUSD) || 0)}</td>
+                    <td className="p-3 text-center">
+                      <Badge variant={n.status === 'voided' ? 'rose' : 'emerald'} size="sm">
+                        {n.status === 'voided' ? 'Anulada' : 'Emitida'}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Notas */}
         {order.notes && (

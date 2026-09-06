@@ -224,6 +224,25 @@ export const orderTransitionSchema = z.object({
   orderId: idLike,
 });
 
+export const deliveryNoteItemSchema = z.object({
+  orderItemIndex: z.number().int().min(0),
+  quantity: z.number().positive('La cantidad a despachar debe ser mayor a 0.').finite().max(1_000_000),
+});
+
+export const issueDeliveryNoteSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  orderId: idLike,
+  items: z.array(deliveryNoteItemSchema).min(1, 'La remisión requiere al menos una línea.').max(200),
+  notes: clearableText(2000),
+});
+
+export const voidDeliveryNoteSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  deliveryNoteId: idLike,
+});
+
 export const issueOrderInvoiceSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),
