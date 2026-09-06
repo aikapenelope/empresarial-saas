@@ -16,11 +16,14 @@ import { getActiveDb } from '@/utilities/inventoryLedger';
 import { assertNoOpenShiftForRegister } from '@/utilities/cashLedger';
 import {
   cashClosureSchema,
+  convertQuoteSchema,
   createCashRegisterSchema,
   createCustomerSchema,
   createInvoiceSchema,
   createPaymentSchema,
   createProductSchema,
+  createQuoteSchema,
+  createSaleReturnSchema,
   createSupplierSchema,
   createTenantSchema,
   ensureWalkInCustomerSchema,
@@ -28,9 +31,11 @@ import {
   firstZodMessage,
   importStockSchema,
   openCashShiftSchema,
+  updateQuoteStatusSchema,
   updateTenantSettingsSchema,
 } from '@/utilities/erpValidation';
 import { importStockToWarehouse } from '@/utilities/inventoryImport';
+import { returnSaleLines } from '@/utilities/salesLedger';
 
 // ==========================================
 // Infraestructura de seguridad y transacciones
@@ -322,7 +327,7 @@ export interface CreateInvoiceInput {
  */
 async function nextDocumentNumber(
   payload: Payload,
-  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures',
+  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes',
   tenantId: number,
   prefix: string,
   req: PayloadRequest,
@@ -340,9 +345,231 @@ async function nextDocumentNumber(
   return `${prefix}-${String(count.totalDocs + 1).padStart(5, '0')}`;
 }
 
+/**
+ * Núcleo compartido de creación de facturas (usado por createInvoiceAction y por
+ * convertQuoteToInvoiceAction). DEBE ejecutarse dentro de la transacción del
+ * llamador: crea la factura pendiente, y en ventas de contado genera el recibo
+ * automático que la liquida vía allocation (hook de CustomerPayments).
+ */
+async function createInvoiceCore(
+  payload: Payload,
+  user: User,
+  parsed: ReturnType<typeof createInvoiceSchema.parse>,
+  req: PayloadRequest,
+) {
+  const tenant = await payload.findByID({
+    collection: 'tenants',
+    id: parsed.tenantId,
+    depth: 0,
+    req,
+  });
+
+  const customer = await payload.findByID({
+    collection: 'customers',
+    id: parsed.customerId,
+    depth: 0,
+    req,
+  });
+
+  if (!customer || Number(customer.tenant) !== Number(parsed.tenantId)) {
+    throw new Error('El cliente seleccionado no pertenece a este inquilino.');
+  }
+
+  const rateResult = await resolveEffectiveRate(
+    tenant?.currencyConfig
+      ? {
+          manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+          autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+        }
+      : undefined,
+  );
+  const rate = rateResult.rate;
+
+  let subtotalUSD = 0;
+  const formattedItems = parsed.items.map((it) => {
+    const totalItem = it.quantity * it.unitPriceUSD;
+    subtotalUSD += totalItem;
+    return {
+      product: it.productId || undefined,
+      sku: it.sku || undefined,
+      description: it.description,
+      quantity: it.quantity,
+      unitPriceUSD: it.unitPriceUSD,
+      totalUSD: totalItem,
+    };
+  });
+
+  const totalUSD = subtotalUSD;
+  const totalVES = totalUSD * rate;
+  const isCash = parsed.paymentTerms === 'cash';
+
+  // Venta a crédito: validar habilitación y capacidad disponible del cliente
+  // (límite - deuda vigente) ANTES de crear el documento.
+  if (!isCash) {
+    if (customer.creditAllowed === false) {
+      throw new Error(
+        `El cliente "${customer.name}" no tiene crédito habilitado. Registre la venta de contado o habilite su línea de crédito.`,
+      );
+    }
+    const availableCreditUSD =
+      (Number(customer.creditLimitUSD) || 0) - (Number(customer.currentDebtUSD) || 0);
+    if (totalUSD > availableCreditUSD + 0.005) {
+      throw new Error(
+        `Límite de crédito insuficiente para "${customer.name}": disponible ${Math.max(availableCreditUSD, 0).toFixed(2)} USD, requerido ${totalUSD.toFixed(2)} USD.`,
+      );
+    }
+  }
+
+  // Vencimiento contractual: contado vence el mismo día; crédito usa los
+  // creditDays del cliente (cero = vencimiento inmediato).
+  const issueDate = new Date();
+  const dueDate = new Date(
+    issueDate.getTime() + (isCash ? 0 : (customer.creditDays || 0) * 24 * 60 * 60 * 1000),
+  );
+
+  // La factura de contado nace PENDIENTE (issued, con saldo): es el recibo
+  // automático quien la liquida vía su allocation (el hook de CustomerPayments
+  // aplica el pago y flipea el estado a paid). Crearla ya pagada y con saldo
+  // cero haría que applyPaymentAllocations rechazara la imputación y revirtiera todo.
+  const invoiceNumber = await nextDocumentNumber(
+    payload,
+    'invoices',
+    parsed.tenantId,
+    'FAC',
+    req,
+  );
+
+  const invDoc = await payload.create({
+    collection: 'invoices',
+    data: {
+      tenant: parsed.tenantId,
+      invoiceNumber,
+      customer: parsed.customerId,
+      issueDate: issueDate.toISOString(),
+      dueDate: dueDate.toISOString(),
+      paymentTerms: parsed.paymentTerms,
+      status: 'issued',
+      warehouse: parsed.warehouseId || undefined,
+      exchangeRateSnapshot: rate,
+      items: formattedItems,
+      totalUSD,
+      totalVES,
+      balanceUSD: totalUSD,
+      balanceVES: totalVES,
+      notes: parsed.notes || undefined,
+    },
+    req,
+  });
+
+  if (!isCash || !parsed.cashMethod) {
+    return invDoc;
+  }
+
+  // Venta de contado: capturar el recibo en el ledger de cobranzas en la misma
+  // transacción. Si se indicó caja registradora, debe estar abierta y pertenecer
+  // al inquilino.
+  if (parsed.cashRegisterId) {
+    const register = await payload.findByID({
+      collection: 'cash-registers',
+      id: parsed.cashRegisterId,
+      depth: 0,
+      req,
+    });
+
+    if (!register || Number(register.tenant) !== Number(parsed.tenantId)) {
+      throw new Error('La caja registradora indicada no pertenece a este inquilino.');
+    }
+    if (!register.active || register.currentStatus !== 'open') {
+      throw new Error(
+        'La caja registradora indicada no tiene un turno abierto. Seleccione una caja abierta o continúe sin turno.',
+      );
+    }
+  }
+
+  const isUSDMethod =
+    parsed.cashMethod === 'cash_usd' ||
+    parsed.cashMethod === 'zelle' ||
+    parsed.cashMethod === 'binance';
+
+  const paymentNumber = await nextDocumentNumber(
+    payload,
+    'customer-payments',
+    parsed.tenantId,
+    'RC',
+    req,
+  );
+
+  await payload.create({
+    collection: 'customer-payments',
+    data: {
+      tenant: parsed.tenantId,
+      paymentNumber,
+      customer: parsed.customerId,
+      paymentDate: new Date().toISOString(),
+      status: 'confirmed',
+      cashRegister: parsed.cashRegisterId || undefined,
+      methods: [
+        {
+          method: parsed.cashMethod,
+          currency: isUSDMethod ? 'USD' : 'VES',
+          amount: isUSDMethod ? totalUSD : totalVES,
+          exchangeRate: rate,
+          amountUSD: totalUSD,
+        },
+      ],
+      totalUSD,
+      allocations: [
+        {
+          invoice: invDoc.id,
+          allocatedAmountUSD: totalUSD,
+        },
+      ],
+      notes: `Cobro automático de la venta de contado ${invoiceNumber}`,
+    },
+    req,
+  });
+
+  return invDoc;
+}
+
 export async function createInvoiceAction(input: CreateInvoiceInput) {
   try {
     const parsed = createInvoiceSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, (req) =>
+      createInvoiceCore(payload, user, parsed, req),
+    );
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/customers`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo emitir la factura.') };
+  }
+}
+
+export interface CreateQuoteInput {
+  tenantId: number;
+  tenantSlug: string;
+  customerId: number;
+  items: Array<{
+    productId?: number;
+    sku?: string;
+    description: string;
+    quantity: number;
+    unitPriceUSD: number;
+  }>;
+  validUntil?: string;
+  notes?: string;
+}
+
+export async function createQuoteAction(input: CreateQuoteInput) {
+  try {
+    const parsed = createQuoteSchema.parse(input);
     const user = await requireErpTenantAccess(parsed.tenantId);
     const payload = await getPayload({ config });
 
@@ -354,17 +581,6 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
         req,
       });
 
-      const customer = await payload.findByID({
-        collection: 'customers',
-        id: parsed.customerId,
-        depth: 0,
-        req,
-      });
-
-      if (!customer || Number(customer.tenant) !== Number(parsed.tenantId)) {
-        throw new Error('El cliente seleccionado no pertenece a este inquilino.');
-      }
-
       const rateResult = await resolveEffectiveRate(
         tenant?.currencyConfig
           ? {
@@ -375,164 +591,176 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
       );
       const rate = rateResult.rate;
 
-      let subtotalUSD = 0;
-      const formattedItems = parsed.items.map((it) => {
-        const totalItem = it.quantity * it.unitPriceUSD;
-        subtotalUSD += totalItem;
-        return {
-          product: it.productId || undefined,
-          sku: it.sku || undefined,
-          description: it.description,
-          quantity: it.quantity,
-          unitPriceUSD: it.unitPriceUSD,
-          totalUSD: totalItem,
-        };
-      });
-
-      const totalUSD = subtotalUSD;
-      const totalVES = totalUSD * rate;
-      const isCash = parsed.paymentTerms === 'cash';
-
-      // Venta a crédito: validar habilitación y capacidad disponible del cliente
-      // (límite - deuda vigente) ANTES de crear el documento.
-      if (!isCash) {
-        if (customer.creditAllowed === false) {
-          throw new Error(
-            `El cliente "${customer.name}" no tiene crédito habilitado. Registre la venta de contado o habilite su línea de crédito.`,
-          );
-        }
-        const availableCreditUSD =
-          (Number(customer.creditLimitUSD) || 0) - (Number(customer.currentDebtUSD) || 0);
-        if (totalUSD > availableCreditUSD + 0.005) {
-          throw new Error(
-            `Límite de crédito insuficiente para "${customer.name}": disponible ${Math.max(availableCreditUSD, 0).toFixed(2)} USD, requerido ${totalUSD.toFixed(2)} USD.`,
-          );
-        }
-      }
-
-      // Vencimiento contractual: contado vence el mismo día; crédito usa los
-      // creditDays del cliente (cero = vencimiento inmediato).
-      const issueDate = new Date();
-      const dueDate = new Date(
-        issueDate.getTime() + (isCash ? 0 : (customer.creditDays || 0) * 24 * 60 * 60 * 1000),
-      );
-
-      // La factura de contado nace PENDIENTE (issued, con saldo): es el recibo
-      // automático quien la liquida vía su allocation (el hook de CustomerPayments
-      // aplica el pago y flipea el estado a paid). Crearla ya pagada y con saldo
-      // cero haría que applyPaymentAllocations rechazara la imputación y revirtiera todo.
-      const invoiceNumber = await nextDocumentNumber(
+      const quoteNumber = await nextDocumentNumber(
         payload,
-        'invoices',
+        'quotes',
         parsed.tenantId,
-        'FAC',
+        'COT',
         req,
       );
 
-      const invDoc = await payload.create({
-        collection: 'invoices',
+      return payload.create({
+        collection: 'quotes',
         data: {
           tenant: parsed.tenantId,
-          invoiceNumber,
+          quoteNumber,
           customer: parsed.customerId,
-          issueDate: issueDate.toISOString(),
-          dueDate: dueDate.toISOString(),
-          paymentTerms: parsed.paymentTerms,
-          status: 'issued',
-          warehouse: parsed.warehouseId || undefined,
+          items: parsed.items.map((it) => ({
+            product: it.productId || undefined,
+            sku: it.sku || undefined,
+            description: it.description,
+            quantity: it.quantity,
+            unitPriceUSD: it.unitPriceUSD,
+          })),
+          issueDate: new Date().toISOString(),
+          validUntil: parsed.validUntil || undefined,
+          status: 'draft',
           exchangeRateSnapshot: rate,
-          items: formattedItems,
-          totalUSD,
-          totalVES,
-          balanceUSD: totalUSD,
-          balanceVES: totalVES,
           notes: parsed.notes || undefined,
         },
         req,
       });
-
-      if (!isCash) {
-        return invDoc;
-      }
-
-      // Venta de contado: capturar el recibo en el ledger de cobranzas en la misma
-      // transacción, de modo que el dinero entre en los totales del turno de caja.
-      // Si se indicó caja registradora, debe estar abierta y pertenecer al inquilino.
-      if (!parsed.cashMethod) {
-        return invDoc;
-      }
-
-      if (parsed.cashRegisterId) {
-        const register = await payload.findByID({
-          collection: 'cash-registers',
-          id: parsed.cashRegisterId,
-          depth: 0,
-          req,
-        });
-
-        if (!register || Number(register.tenant) !== Number(parsed.tenantId)) {
-          throw new Error('La caja registradora indicada no pertenece a este inquilino.');
-        }
-        if (!register.active || register.currentStatus !== 'open') {
-          throw new Error(
-            'La caja registradora indicada no tiene un turno abierto. Seleccione una caja abierta o continúe sin turno.',
-          );
-        }
-      }
-
-      const isUSDMethod =
-        parsed.cashMethod === 'cash_usd' ||
-        parsed.cashMethod === 'zelle' ||
-        parsed.cashMethod === 'binance';
-
-      const paymentNumber = await nextDocumentNumber(
-        payload,
-        'customer-payments',
-        parsed.tenantId,
-        'RC',
-        req,
-      );
-
-      await payload.create({
-        collection: 'customer-payments',
-        data: {
-          tenant: parsed.tenantId,
-          paymentNumber,
-          customer: parsed.customerId,
-          paymentDate: new Date().toISOString(),
-          status: 'confirmed',
-          cashRegister: parsed.cashRegisterId || undefined,
-          methods: [
-            {
-              method: parsed.cashMethod,
-              currency: isUSDMethod ? 'USD' : 'VES',
-              amount: isUSDMethod ? totalUSD : totalVES,
-              exchangeRate: rate,
-              amountUSD: totalUSD,
-            },
-          ],
-          totalUSD,
-          allocations: [
-            {
-              invoice: invDoc.id,
-              allocatedAmountUSD: totalUSD,
-            },
-          ],
-          notes: `Cobro automático de la venta de contado ${invoiceNumber}`,
-        },
-        req,
-      });
-
-      return invDoc;
     });
 
-    revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
-    revalidatePath(`/${parsed.tenantSlug}/erp/customers`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);
     revalidatePath(`/${parsed.tenantSlug}/erp`);
 
     return { success: true, data: doc };
   } catch (error: unknown) {
-    return { success: false, error: toSafeActionError(error, 'No se pudo emitir la factura.') };
+    return { success: false, error: toSafeActionError(error, 'No se pudo crear la cotización.') };
+  }
+}
+
+export interface UpdateQuoteStatusInput {
+  tenantId: number;
+  tenantSlug: string;
+  quoteId: number;
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+}
+
+export async function updateQuoteStatusAction(input: UpdateQuoteStatusInput) {
+  try {
+    const parsed = updateQuoteStatusSchema.parse(input);
+    await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const quote = await payload.findByID({
+      collection: 'quotes',
+      id: parsed.quoteId,
+      depth: 0,
+    });
+
+    if (!quote || Number(quote.tenant) !== Number(parsed.tenantId)) {
+      return { success: false, error: 'La cotización no pertenece a este inquilino.' };
+    }
+
+    const doc = await payload.update({
+      collection: 'quotes',
+      id: parsed.quoteId,
+      data: { status: parsed.status },
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo actualizar la cotización.') };
+  }
+}
+
+export interface ConvertQuoteInput {
+  tenantId: number;
+  tenantSlug: string;
+  quoteId: number;
+  paymentTerms: 'cash' | 'credit';
+  cashMethod?:
+    | 'cash_usd'
+    | 'cash_ves'
+    | 'pos_ves'
+    | 'pago_movil'
+    | 'transfer_ves'
+    | 'zelle'
+    | 'binance';
+  cashRegisterId?: number;
+  warehouseId?: number;
+}
+
+/**
+ * Conversión transaccional de cotización a factura: reutiliza createInvoiceCore
+ * (numeración, snapshot de tasa, validación de crédito, recibo de contado y
+ * descarga de kardex vía el plugin de ventas) y marca la cotización como
+ * `converted` con el vínculo a la factura generada. Todo en UNA transacción.
+ */
+export async function convertQuoteToInvoiceAction(input: ConvertQuoteInput) {
+  try {
+    const parsed = convertQuoteSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const quote = await payload.findByID({
+        collection: 'quotes',
+        id: parsed.quoteId,
+        depth: 0,
+        req,
+      });
+
+      if (!quote || Number(quote.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('La cotización no pertenece a este inquilino.');
+      }
+      if (quote.status === 'converted') {
+        throw new Error('La cotización ya fue convertida a factura.');
+      }
+      if (quote.status === 'rejected' || quote.status === 'expired') {
+        throw new Error(`No se puede convertir una cotización en estado "${quote.status}".`);
+      }
+
+      const invoiceParsed = createInvoiceSchema.parse({
+        tenantId: parsed.tenantId,
+        tenantSlug: parsed.tenantSlug,
+        customerId: quote.customer,
+        paymentTerms: parsed.paymentTerms,
+        cashMethod: parsed.paymentTerms === 'cash' ? parsed.cashMethod : undefined,
+        cashRegisterId: parsed.cashRegisterId,
+        warehouseId: parsed.warehouseId,
+        items: (quote.items || []).map((item) => ({
+          productId:
+            typeof item.product === 'object' && item.product !== null
+              ? item.product.id
+              : (item.product as number | undefined) || undefined,
+          sku: item.sku || undefined,
+          description: item.description,
+          quantity: Number(item.quantity),
+          unitPriceUSD: Number(item.unitPriceUSD),
+        })),
+        notes: `Conversión de la cotización ${quote.quoteNumber}`,
+      });
+
+      const invoice = await createInvoiceCore(payload, user, invoiceParsed, req);
+
+      await payload.update({
+        collection: 'quotes',
+        id: quote.id,
+        data: {
+          status: 'converted',
+          convertedInvoice: invoice.id,
+        },
+        req,
+      });
+
+      return invoice;
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo convertir la cotización a factura.'),
+    };
   }
 }
 
@@ -696,6 +924,69 @@ export async function createPaymentAction(input: CreatePaymentInput) {
     return { success: true, data: doc };
   } catch (error: unknown) {
     return { success: false, error: toSafeActionError(error, 'No se pudo registrar el cobro.') };
+  }
+}
+
+export interface CreateSaleReturnInput {
+  tenantId: number;
+  tenantSlug: string;
+  invoiceId: number;
+  lines: Array<{ productId: number; quantity: number }>;
+  reason?: string;
+}
+
+/**
+ * Devolución parcial de mercancía sobre una factura vigente (Sprint 10).
+ * Valida contra el Kardex inmutable que `devuelto + solicitado ≤ vendido` por
+ * producto y reingresa al MISMO almacén de salida (FIFO). Transaccional: todo o
+ * nada. La anulación total (voided) sigue revirtiendo el remanente vía
+ * revertSaleFromInventory (idempotencia por saldos).
+ */
+export async function createSaleReturnAction(input: CreateSaleReturnInput) {
+  try {
+    const parsed = createSaleReturnSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const invoice = await payload.findByID({
+        collection: 'invoices',
+        id: parsed.invoiceId,
+        depth: 0,
+        req,
+      });
+
+      if (!invoice || Number(invoice.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('La factura no pertenece a este inquilino.');
+      }
+
+      const summary = await returnSaleLines({
+        invoice,
+        lines: parsed.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+        reason: parsed.reason,
+        req,
+      });
+
+      const failed = summary.results.filter((r) => r.status === 'error');
+      if (failed.length > 0) {
+        throw new Error(
+          failed.map((f) => f.message || 'Línea inválida.').join(' '),
+        );
+      }
+
+      return summary;
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/inventory`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo registrar la devolución.'),
+    };
   }
 }
 

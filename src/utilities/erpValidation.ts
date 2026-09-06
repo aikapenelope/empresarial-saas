@@ -116,6 +116,55 @@ export const openCashShiftSchema = z.object({
   notes: z.string().trim().max(1000).optional(),
 });
 
+export const quoteItemSchema = z.object({
+  productId: idLike.optional(),
+  sku: z.string().trim().max(100).optional(),
+  description: z.string().trim().min(1, 'Cada línea requiere descripción.').max(500),
+  quantity: z.number().positive('La cantidad debe ser mayor a 0.').finite().max(1_000_000),
+  unitPriceUSD: z.number().min(0, 'El precio no puede ser negativo.').finite().max(10_000_000),
+});
+
+export const createQuoteSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  customerId: idLike,
+  items: z.array(quoteItemSchema).min(1, 'La cotización requiere al menos una línea.').max(200),
+  validUntil: z.string().datetime({ offset: true }).optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export const updateQuoteStatusSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  quoteId: idLike,
+  status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'expired']),
+});
+
+export const convertQuoteSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  quoteId: idLike,
+  paymentTerms: z.enum(['cash', 'credit']),
+  cashMethod: z
+    .enum(['cash_usd', 'cash_ves', 'pos_ves', 'pago_movil', 'transfer_ves', 'zelle', 'binance'])
+    .optional(),
+  cashRegisterId: idLike.optional(),
+  warehouseId: idLike.optional(),
+});
+
+export const saleReturnLineSchema = z.object({
+  productId: idLike,
+  quantity: z.number().positive('La cantidad a devolver debe ser mayor a 0.').finite().max(1_000_000),
+});
+
+export const createSaleReturnSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  invoiceId: idLike,
+  lines: z.array(saleReturnLineSchema).min(1, 'Indica al menos un producto a devolver.').max(200),
+  reason: z.string().trim().max(1000).optional(),
+});
+
 export const stockImportRowSchema = z.object({
   sku: z.string().trim().min(1).max(100),
   quantity: z.number().finite('Cantidad no numérica.'),

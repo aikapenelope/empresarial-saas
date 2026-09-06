@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  FileText,
   Users,
   Package,
   Wallet,
@@ -45,6 +46,11 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
           name: 'Clientes & Cartera CxC',
           href: `/${tenantSlug}/erp/customers`,
           icon: Users,
+        },
+        {
+          name: 'Cotizaciones',
+          href: `/${tenantSlug}/erp/quotes`,
+          icon: FileText,
         },
       ],
     },
