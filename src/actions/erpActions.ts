@@ -44,6 +44,7 @@ import {
   createOrderSchema,
   issueDeliveryNoteSchema,
   issueOrderInvoiceSchema,
+  alertActionSchema,
   orderTransitionSchema,
   updateCustomerSchema,
   voidDeliveryNoteSchema,
@@ -1607,6 +1608,95 @@ export async function voidDeliveryNoteAction(input: {
     return { success: true, data: doc };
   } catch (error: unknown) {
     return { success: false, error: toSafeActionError(error, 'No se pudo anular la remisión.') };
+  }
+}
+
+// ==========================================
+// 3d. CENTRO DE ALERTAS — Sprint 22
+// ==========================================
+/**
+ * Marca una alerta como reconocida por el operador actual. Las alertas las
+ * genera el job evaluateAlerts; las acciones humanas van con user +
+ * overrideAccess:false para que el RBAC de la colección aplique.
+ */
+export async function acknowledgeAlertAction(input: {
+  tenantId: number;
+  tenantSlug: string;
+  alertId: number;
+}) {
+  try {
+    const parsed = alertActionSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const alert = await payload.findByID({
+        collection: 'alerts',
+        id: parsed.alertId,
+        depth: 0,
+        req,
+      });
+      if (!alert || Number(alert.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('La alerta no pertenece a este inquilino.');
+      }
+
+      return payload.update({
+        collection: 'alerts',
+        id: alert.id,
+        data: {
+          acknowledgedAt: new Date().toISOString(),
+          acknowledgedBy: user.id,
+        },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/alerts`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo reconocer la alerta.') };
+  }
+}
+
+/** Marca una alerta como resuelta (estado manual; el evaluador la reactiva si la condición reaparece). */
+export async function resolveAlertAction(input: {
+  tenantId: number;
+  tenantSlug: string;
+  alertId: number;
+}) {
+  try {
+    const parsed = alertActionSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const doc = await withTransaction(payload, user, async (req) => {
+      const alert = await payload.findByID({
+        collection: 'alerts',
+        id: parsed.alertId,
+        depth: 0,
+        req,
+      });
+      if (!alert || Number(alert.tenant) !== Number(parsed.tenantId)) {
+        throw new Error('La alerta no pertenece a este inquilino.');
+      }
+      if (alert.resolvedAt) {
+        throw new Error('La alerta ya está resuelta.');
+      }
+
+      return payload.update({
+        collection: 'alerts',
+        id: alert.id,
+        data: { resolvedAt: new Date().toISOString() },
+        req,
+      });
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/alerts`);
+
+    return { success: true, data: doc };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo resolver la alerta.') };
   }
 }
 

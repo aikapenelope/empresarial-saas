@@ -18,6 +18,7 @@ import {
   ShoppingCart,
   ClipboardList,
   TrendingUp,
+  BellRing,
 } from 'lucide-react';
 import { cn } from '@/utilities/cn';
 
@@ -26,6 +27,8 @@ interface SidebarProps {
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
   userRole?: string | null;
+  /** Alertas activas sin reconocer — badge en el ítem de Alertas (Sprint 22). */
+  alertBadge?: number;
 }
 
 /**
@@ -33,9 +36,9 @@ interface SidebarProps {
  * capa de datos son la autoridad real; esto es UX: cada rol ve solo su operación.
  */
 const ROLE_NAV: Record<string, string[]> = {
-  vendor: ['dashboard', 'pos', 'quotes', 'orders', 'delivery-notes', 'vendors', 'customers', 'receivables'],
-  cashier: ['dashboard', 'pos', 'invoices', 'orders', 'delivery-notes', 'customers', 'cash-registers'],
-  employee: ['dashboard', 'invoices', 'customers', 'inventory', 'quotes', 'orders', 'delivery-notes'],
+  vendor: ['dashboard', 'alerts', 'pos', 'quotes', 'orders', 'delivery-notes', 'vendors', 'customers', 'receivables'],
+  cashier: ['dashboard', 'alerts', 'pos', 'invoices', 'orders', 'delivery-notes', 'customers', 'cash-registers'],
+  employee: ['dashboard', 'alerts', 'invoices', 'customers', 'inventory', 'quotes', 'orders', 'delivery-notes'],
   supervisor: [
     'dashboard',
     'pos',
@@ -45,6 +48,7 @@ const ROLE_NAV: Record<string, string[]> = {
     'quotes',
     'orders',
     'delivery-notes',
+    'alerts',
     'receivables',
     'cash-registers',
     'purchases',
@@ -54,7 +58,13 @@ const ROLE_NAV: Record<string, string[]> = {
 
 const ALL_NAV = '*';
 
-export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile, userRole }: SidebarProps) {
+export function Sidebar({
+  tenantSlug,
+  isMobileOpen,
+  onCloseMobile,
+  userRole,
+  alertBadge,
+}: SidebarProps) {
   const pathname = usePathname();
 
   const navigation = [
@@ -79,6 +89,13 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile, userRole }: S
           href: `/${tenantSlug}/erp/customers`,
           routeKey: 'customers',
           icon: Users,
+        },
+        {
+          name: 'Alertas',
+          href: `/${tenantSlug}/erp/alerts`,
+          routeKey: 'alerts',
+          icon: BellRing,
+          badgeCount: alertBadge,
         },
         {
           name: 'Cartera por Antigüedad',
@@ -249,6 +266,11 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile, userRole }: S
                       )}
                     />
                     <span>{item.name}</span>
+                    {'badgeCount' in item && typeof item.badgeCount === 'number' && item.badgeCount > 0 && (
+                      <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white">
+                        {item.badgeCount > 99 ? '99+' : item.badgeCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

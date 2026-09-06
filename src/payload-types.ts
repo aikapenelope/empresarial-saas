@@ -88,6 +88,7 @@ export interface Config {
     quotes: Quote;
     orders: Order;
     'delivery-notes': DeliveryNote;
+    alerts: Alert;
     'inventory-counts': InventoryCount;
     'price-history': PriceHistory;
     'audit-log': AuditLog;
@@ -129,6 +130,7 @@ export interface Config {
     quotes: QuotesSelect<false> | QuotesSelect<true>;
     orders: OrdersSelect<false> | OrdersSelect<true>;
     'delivery-notes': DeliveryNotesSelect<false> | DeliveryNotesSelect<true>;
+    alerts: AlertsSelect<false> | AlertsSelect<true>;
     'inventory-counts': InventoryCountsSelect<false> | InventoryCountsSelect<true>;
     'price-history': PriceHistorySelect<false> | PriceHistorySelect<true>;
     'audit-log': AuditLogSelect<false> | AuditLogSelect<true>;
@@ -144,8 +146,12 @@ export interface Config {
     defaultIDType: number;
   };
   fallbackLocale: null;
-  globals: {};
-  globalsSelect: {};
+  globals: {
+    'payload-jobs-stats': PayloadJobsStat;
+  };
+  globalsSelect: {
+    'payload-jobs-stats': PayloadJobsStatsSelect<false> | PayloadJobsStatsSelect<true>;
+  };
   locale: null;
   widgets: {
     collections: CollectionsWidget;
@@ -154,6 +160,7 @@ export interface Config {
   jobs: {
     tasks: {
       seedIndustryTemplate: TaskSeedIndustryTemplate;
+      evaluateAlerts: TaskEvaluateAlerts;
       createCollectionExport: TaskCreateCollectionExport;
       createCollectionImport: TaskCreateCollectionImport;
       inline: {
@@ -890,6 +897,33 @@ export interface Quote {
   createdAt: string;
 }
 /**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alerts".
+ */
+export interface Alert {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  type: 'low_stock' | 'inventory_diff' | 'rate_change' | 'overdue_invoice' | 'vendor_overdue';
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  /**
+   * Slug de la colección referida (products, invoices, inventory-counts…).
+   */
+  refCollection?: string | null;
+  /**
+   * ID del documento referido; 0 para alertas a nivel de inquilino.
+   */
+  refId: number;
+  acknowledgedAt?: string | null;
+  acknowledgedBy?: (number | null) | User;
+  /**
+   * Vacía = alerta activa. El evaluador reactiva la fila si la condición reaparece.
+   */
+  resolvedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Conteo físico por almacén con snapshot del sistema y ajustes por Kardex al completar.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1120,7 +1154,8 @@ export interface PayloadJob {
     | {
         executedAt: string;
         completedAt: string;
-        taskSlug: 'inline' | 'seedIndustryTemplate' | 'createCollectionExport' | 'createCollectionImport';
+        taskSlug:
+          'inline' | 'seedIndustryTemplate' | 'evaluateAlerts' | 'createCollectionExport' | 'createCollectionImport';
         taskID: string;
         input?:
           | {
@@ -1153,10 +1188,20 @@ export interface PayloadJob {
         id?: string | null;
       }[]
     | null;
-  taskSlug?: ('inline' | 'seedIndustryTemplate' | 'createCollectionExport' | 'createCollectionImport') | null;
+  taskSlug?:
+    ('inline' | 'seedIndustryTemplate' | 'evaluateAlerts' | 'createCollectionExport' | 'createCollectionImport') | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
+  meta?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1250,6 +1295,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'delivery-notes';
         value: number | DeliveryNote;
+      } | null)
+    | ({
+        relationTo: 'alerts';
+        value: number | Alert;
       } | null)
     | ({
         relationTo: 'inventory-counts';
@@ -1932,6 +1981,23 @@ export interface DeliveryNotesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "alerts_select".
+ */
+export interface AlertsSelect<T extends boolean = true> {
+  tenant?: T;
+  type?: T;
+  severity?: T;
+  message?: T;
+  refCollection?: T;
+  refId?: T;
+  acknowledgedAt?: T;
+  acknowledgedBy?: T;
+  resolvedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "inventory-counts_select".
  */
 export interface InventoryCountsSelect<T extends boolean = true> {
@@ -2080,6 +2146,7 @@ export interface PayloadJobsSelect<T extends boolean = true> {
   queue?: T;
   waitUntil?: T;
   processing?: T;
+  meta?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2117,6 +2184,34 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs-stats".
+ */
+export interface PayloadJobsStat {
+  id: number;
+  stats?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs-stats_select".
+ */
+export interface PayloadJobsStatsSelect<T extends boolean = true> {
+  stats?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "collections_widget".
  */
 export interface CollectionsWidget {
@@ -2139,6 +2234,19 @@ export interface TaskSeedIndustryTemplate {
     success: boolean;
     message: string;
     templateName: string;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskEvaluateAlerts".
+ */
+export interface TaskEvaluateAlerts {
+  input?: unknown;
+  output: {
+    tenants: number;
+    created: number;
+    updated: number;
+    resolved: number;
   };
 }
 /**
@@ -2172,6 +2280,7 @@ export interface TaskCreateCollectionExport {
       | 'quotes'
       | 'orders'
       | 'delivery-notes'
+      | 'alerts'
       | 'inventory-counts'
       | 'price-history'
       | 'audit-log'

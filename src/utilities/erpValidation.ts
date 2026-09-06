@@ -243,6 +243,16 @@ export const voidDeliveryNoteSchema = z.object({
   deliveryNoteId: idLike,
 });
 
+// ==========================================
+// Alertas (Sprint 22)
+// ==========================================
+
+export const alertActionSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  alertId: idLike,
+});
+
 export const issueOrderInvoiceSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),
@@ -507,6 +517,30 @@ export const kardexFiltersSchema = z.object({
     ])
     .optional()
     .catch(undefined),
+  from: dateOnly.optional().catch(undefined),
+  to: dateOnly.optional().catch(undefined),
+});
+
+// Filtros de la vista global de auditoría (URL → RSC): valores malformados
+// se descartan, igual que en el kardex.
+export const auditFiltersSchema = z.object({
+  page: z.coerce.number().int().positive().catch(1),
+  collection: z
+    .enum([
+      'invoices',
+      'customer-payments',
+      'purchase-invoices',
+      'supplier-payments',
+      'products',
+      'cash-closures',
+      'quotes',
+      'orders',
+      'delivery-notes',
+      'tenants',
+    ])
+    .optional()
+    .catch(undefined),
+  operation: z.enum(['create', 'update', 'delete']).optional().catch(undefined),
   from: dateOnly.optional().catch(undefined),
   to: dateOnly.optional().catch(undefined),
 });

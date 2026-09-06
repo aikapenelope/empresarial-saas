@@ -17,6 +17,8 @@ interface AppShellProps {
     source: string;
     lastUpdated?: string;
   };
+  /** Alertas activas sin reconocer — badge en la navegación (Sprint 22). */
+  activeAlertCount?: number;
   userRole?: string | null;
   children: React.ReactNode;
 }
@@ -24,6 +26,7 @@ interface AppShellProps {
 export function AppShell({
   currentTenant,
   availableTenants,
+  activeAlertCount,
   rates,
   userRole,
   children,
@@ -35,6 +38,7 @@ export function AppShell({
       {/* Sidebar */}
       <Sidebar
         tenantSlug={currentTenant.slug}
+        alertBadge={activeAlertCount}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
         userRole={userRole}

@@ -19,6 +19,7 @@ import type {
   SupplierPayment,
   Order,
   DeliveryNote,
+  Alert,
   PriceHistory,
   User,
 } from '@/payload-types';
@@ -841,6 +842,178 @@ export async function getRatesPageData(tenantId: number): Promise<RatesPageData>
     canEdit: user.role === 'super-admin' || user.role === 'tenant-admin',
     priceHistory,
     invoiceHistory,
+  };
+}
+
+export interface AlertsPageData {
+  active: Alert[];
+  resolved: Alert[];
+  counts: { active: number; unacknowledged: number };
+}
+
+/**
+ * Centro de alertas (Sprint 22): activas primero (severidad crítica arriba),
+ * resueltas al final para el histórico inmediato.
+ */
+export async function getAlertsPageData(tenantId: number): Promise<AlertsPageData> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const res = await payload.find({
+    collection: 'alerts',
+    where: { tenant: { equals: tenantId } },
+    depth: 1,
+    sort: '-createdAt',
+    limit: 300,
+    user,
+    overrideAccess: false,
+  });
+  const alerts = res.docs as Alert[];
+
+  const severityRank: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+  const active = alerts
+    .filter((a) => !a.resolvedAt)
+    .sort(
+      (a, b) =>
+        (severityRank[a.severity] ?? 3) - (severityRank[b.severity] ?? 3) ||
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  const resolved = alerts
+    .filter((a) => Boolean(a.resolvedAt))
+    .sort(
+      (a, b) => new Date(b.resolvedAt as string).getTime() - new Date(a.resolvedAt as string).getTime(),
+    );
+
+  return {
+    active,
+    resolved: resolved.slice(0, 20),
+    counts: {
+      active: active.length,
+      unacknowledged: active.filter((a) => !a.acknowledgedAt).length,
+    },
+  };
+}
+
+/** Contador de alertas activas sin reconocer — badge de navegación (Sprint 22). */
+export async function getActiveAlertCount(tenantId: number): Promise<number> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const res = await payload.find({
+    collection: 'alerts',
+    where: {
+      and: [
+        { tenant: { equals: tenantId } },
+        { resolvedAt: { exists: false } },
+        { acknowledgedAt: { exists: false } },
+      ],
+    },
+    limit: 0,
+    depth: 0,
+    user,
+    overrideAccess: false,
+  });
+  return res.totalDocs;
+}
+
+export interface AuditLogPageData {
+  docs: Alert[] | never[];
+  auditEntries: Array<{
+    id: number;
+    actorName: string;
+    actorRole: string | null;
+    collection: string;
+    docId: number | null;
+    operation: string;
+    diff: Record<string, unknown> | null;
+    createdAt: string;
+  }>;
+  totalDocs: number;
+  totalPages: number;
+  page: number;
+}
+
+/**
+ * Vista global de auditoría (Sprint 22). Sólo super-admin/tenant-admin — el
+ * acceso de colección ya lo restringe, y aquí se revalida el rol por si el
+ * llamador viniera por una vía sin access control.
+ */
+export async function getAuditLogData(
+  tenantId: number,
+  filters: {
+    page: number;
+    collection?: string;
+    operation?: string;
+    from?: string;
+    to?: string;
+  },
+): Promise<AuditLogPageData> {
+  const user = await requireErpTenantAccess(tenantId);
+  if (user.role !== 'super-admin' && user.role !== 'tenant-admin') {
+    throw new ErpAccessError(403, 'Prohibido: la auditoría es exclusiva de administradores.');
+  }
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  if (filters.collection) and.push({ collection: { equals: filters.collection } });
+  if (filters.operation) and.push({ operation: { equals: filters.operation } });
+  // Mismos bordes de hora de negocio que el kardex (Venezuela, UTC-4)
+  if (filters.from) {
+    and.push({
+      createdAt: { greater_than_equal: new Date(`${filters.from}T00:00:00-04:00`).toISOString() },
+    });
+  }
+  if (filters.to) {
+    const toEndExclusive = new Date(`${filters.to}T00:00:00-04:00`);
+    toEndExclusive.setUTCDate(toEndExclusive.getUTCDate() + 1);
+    and.push({ createdAt: { less_than: toEndExclusive.toISOString() } });
+  }
+
+  const res = await payload.find({
+    collection: 'audit-log',
+    where: { and },
+    depth: 1,
+    sort: '-createdAt',
+    page: filters.page,
+    limit: 25,
+    user,
+    overrideAccess: false,
+  });
+
+  const auditEntries = res.docs.map((doc) => {
+    const entry = doc as unknown as {
+      id: number;
+      actor?: { name?: string } | number | null;
+      actorRole?: string | null;
+      collection: string;
+      docId?: number | null;
+      operation: string;
+      diff?: Record<string, unknown> | null;
+      createdAt: string;
+    };
+    return {
+      id: entry.id,
+      actorName:
+        typeof entry.actor === 'object' && entry.actor !== null
+          ? entry.actor.name || `#${(entry.actor as { id?: number }).id ?? ''}`
+          : entry.actor
+            ? `#${entry.actor}`
+            : 'Sistema',
+      actorRole: entry.actorRole ?? null,
+      collection: entry.collection,
+      docId: entry.docId ?? null,
+      operation: entry.operation,
+      diff: entry.diff ?? null,
+      createdAt: entry.createdAt,
+    };
+  });
+
+  return {
+    docs: [],
+    auditEntries,
+    totalDocs: res.totalDocs,
+    totalPages: res.totalPages,
+    page: res.page || 1,
   };
 }
 
