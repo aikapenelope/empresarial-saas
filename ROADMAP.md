@@ -246,6 +246,93 @@ Cada sprint concluye con:
 
 ---
 
+
+---
+
+# 🎨 FASE 4 — Capa de Presentación Completa (UI de Operación, Corrección y Mantenimiento)
+
+> **Resultado de la auditoría de UI al cierre de la Fase 3:** 14 rutas, 21 vistas y 14 modales cubren el ciclo de ingreso completo (vender, cobrar, producir, caja, onboarding de datos), pero faltan los flujos de **detalle y corrección** (sin vista de factura con líneas/cuotas, sin anular desde UI, sin editar registros), el **ciclo de egreso** (CxP sin UI de captura) y el **pulido de experiencia** (kardex invisible, nav sin roles, sin toasts, sin E2E). Cada sprint sigue las convenciones §2.1 y los patrones verificados en Context7 (Payload Local API en RSC con `getPayload`; `payload.auth({ headers })` para sesión; Server Actions con `revalidatePath`; estados pendientes con `useTransition`/`useActionState`/`useFormStatus`; streaming con `loading.tsx`/`Suspense` para el contenido dinámico que lee cookies).
+
+---
+
+### 🧾 Sprint 13: Detalle y Ciclo de Corrección de Facturas
+> **Objetivo:** Ver y corregir el documento más importante del sistema: detalle completo con líneas, cuotas, pagos aplicados y kardex, más anulación con reversión visible.
+
+- [ ] **Ruta dinámica `erp/invoices/[id]/page.tsx`:** cabecera (cliente, estado, totales bimonetarios, vencimientos), líneas con producto/SKU, **plan de cuotas con estado por cuota**, pagos aplicados (allocations con método y referencia), movimientos de kardex vinculados (`sale_out`/`sale_return`) y audit trail del documento.
+- [ ] **Acción de anulación:** `voidInvoiceAction` (tenant-admin+) — status `voided` dispara la reversión de kardex ya implementada (`revertSaleFromInventory` por saldos); confirmación con advertencia de impacto; feedback con `useTransition`.
+- [ ] **Impresión:** hoja imprimible de factura (CSS `@media print` sobre la vista de detalle) — sin librerías PDF en v1.
+- [ ] **Streaming:** `loading.tsx` para el segmento `erp/invoices` (y patrón replicable al resto).
+- [ ] **Migración de feedback:** migrar los modales existentes a `useActionState`/`useFormStatus` (estados pendientes nativos) manteniendo `revalidatePath` server-side.
+- **Entregable:** PR `feat/sprint-13-invoice-detail`.
+
+---
+
+### 🛒 Sprint 14: CxP — Compras, Recepción y Pagos a Proveedores
+> **Objetivo:** UI completa para el ciclo de egreso; el backend (hooks de recepción→kardex y balances) existe desde el Sprint 3.
+
+- [ ] **Server Actions nuevas:** `createPurchaseInvoiceAction` (proveedor, líneas con producto/costo, vencimiento, almacén de recepción), `receivePurchaseGoodsAction` (marca `receptionStatus: received` → el hook existente genera `purchase_in` y actualiza costo ponderado), `createSupplierPaymentAction` (multimétodo + allocations a facturas de compra, espejo de cobranzas).
+- [ ] **Ruta `erp/purchases/page.tsx`:** lista de facturas de compra con estado de recepción/pago, filtros por proveedor y vencimientos; modal de compra; botón de recepción con confirmación; modal de pago a proveedor.
+- [ ] **Ruta `erp/suppliers/[id]/page.tsx`:** estado de cuenta del proveedor (deuda, aging, facturas, pagos) + edición de datos del proveedor.
+- [ ] **Auditoría:** las acciones nuevas quedan cubiertas por auditPlugin automáticamente.
+- **Entregable:** PR `feat/sprint-14-purchases-ui`.
+
+---
+
+### 📊 Sprint 15: Kardex Visible + Movimientos Manuales
+> **Objetivo:** Que el usuario VEA el inventario en movimiento y pueda corregirlo (transferencias y ajustes con motivo).
+
+- [ ] **Server Actions:** `transferStockAction` (origen ≠ destino, valida stock, crea `transfer`), `adjustStockAction` (entrada/salida manual con motivo; valida saldo suficiente en salidas) — reutilizan el `beforeValidate` del kardex.
+- [ ] **Ruta `erp/inventory/kardex/page.tsx`:** ledger completo con filtros (producto, almacén, tipo de movimiento, rango de fechas) y paginación server-side; enlace por producto desde la vista de inventario.
+- [ ] **Modal de movimiento manual** (entrada/salida/transferencia con motivo) desde la vista de inventario.
+- [ ] **Trazabilidad:** cada movimiento muestra su referencia (VENTA-xxxx, DEVOL-xxxx, COMPRA-xxxx, CONTEO-#) con enlace al documento fuente.
+- **Entregable:** PR `feat/sprint-15-kardex-manual`.
+
+---
+
+### ✏️ Sprint 16: Detalle y Edición de Registros + Administración de Precios
+> **Objetivo:** Completar el ciclo "ver y corregir": editar clientes, productos (con tiers), proveedores y cotizaciones desde el ERP.
+
+- [ ] **Server Actions de edición:** `updateCustomerAction`, `updateProductAction` (el cambio de `priceUSD` escribe `price-history` automáticamente vía pricingPlugin), `updateQuoteAction` (solo draft/sent).
+- [ ] **Edit modals:** reutilizar los modales de creación en modo edición (prop `initial` + acción de update), con validación Zod espejada.
+- [ ] **Detalle de cliente:** `erp/customers/[id]/page.tsx` — cuenta, facturas, pagos, cuotas, aging y statement WhatsApp/imprimible.
+- [ ] **Administración de tiers en ERP:** editor de `priceTiers` por producto + consumo del reporte `POST /api/pricing/report` (tabla de precios sugeridos VES con la tasa vigente).
+- [ ] **Detalle de cotización:** vista con líneas y estado, imprimible.
+- **Entregable:** PR `feat/sprint-16-edit-detail`.
+
+---
+
+### 👥 Sprint 17: Usuarios, Navegación por Rol y Pulido de Experiencia
+> **Objetivo:** Gestionar el equipo desde la UI y que cada rol vea solo su operación.
+
+- [ ] **Server Action `inviteUserAction`** (super-admin/tenant-admin): crea usuario con rol y membresía al inquilino (`payload.create users` + array `tenants`); flujo en `erp/settings`.
+- [ ] **Sidebar filtrado por rol:** vendor → POS/Cotizaciones/Mi canal; cajero → POS/Cajas/Clientes; tenant-admin → todo. Los guards server-side ya existen; esto es UX.
+- [ ] **Sistema de toasts** (`sonner`, dependencia liviana): centralizar feedback de las ~14 acciones reemplazando errores inline.
+- [ ] **Comprobante adjunto en cobros:** subir evidencia a `media` desde `PaymentModal` (Server Action con `FormData`) y asociarla al pago.
+- [ ] **Paleta de comandos (⌘K):** navegación rápida a rutas + búsqueda de clientes/productos/facturas.
+- **Entregable:** PR `feat/sprint-17-users-ux`.
+
+---
+
+### ⚡ Sprint 18: Rendimiento, Paginación y Pruebas E2E
+> **Objetivo:** Cierre no funcional de la capa de presentación (ítem pendiente del Sprint 6 original).
+
+- [ ] **Paginación server-side** en listas grandes (facturas, clientes, productos, kardex): `limit` + botón "cargar más" o cursor, manteniendo los agregados sin truncar.
+- [ ] **Core Web Vitals:** auditoría Lighthouse en Vercel (LCP/CLS/INP), optimizar bundles de vistas cliente (`next/dynamic` para modales pesados) y revisar First Load JS.
+- [ ] **Pruebas E2E con Playwright** sobre los flujos críticos: venta de contado en POS con caja abierta (recibo + kardex), cobro FIFO, anulación con reversión, conversión de cotización, importación de inventario, conteo cíclico con ajustes, aislamiento multi-tenant (usuario B no ve inquilino A).
+- [ ] **CI:** ejecutar E2E contra preview de Vercel en cada PR.
+- **Entregable:** PR `feat/sprint-18-e2e-perf`.
+
+---
+
+### ✅ Criterios de Cierre de la Fase 4
+1. Ninguna operación de negocio requiere el admin de Payload: todo se ve, se corrige y se anula desde el ERP.
+2. Cada documento tiene detalle imprimible con su trazabilidad (líneas, cuotas, pagos, kardex, auditoría).
+3. El ciclo de egreso (compra → recepción → pago) opera completo desde la UI.
+4. Cada rol ve solo su operación en la navegación y las listas paginan sin truncar agregados.
+5. Flujos críticos cubiertos por E2E y Core Web Vitals medidos en verde.
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.
