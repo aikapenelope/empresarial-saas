@@ -42,19 +42,14 @@ export const Users: CollectionConfig = {
     delete: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
   },
   fields: [
+    // Sin campo `password` declarado: las colecciones auth gestionan credenciales
+    // de forma nativa (salt/hash). Payload hashea `data.password` en create/update
+    // sin necesidad del campo (igual que el template oficial de Payload).
     {
       name: 'name',
       label: 'Nombre Completo',
       type: 'text',
       required: true,
-    },
-    {
-      name: 'password',
-      type: 'text',
-      hidden: true,
-      access: {
-        update: ({ req: { user } }) => user?.role === 'super-admin',
-      },
     },
     {
       name: 'role',

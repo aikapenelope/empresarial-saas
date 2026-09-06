@@ -4,36 +4,38 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "payload": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload",
-    "generate:types": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload generate:types",
-    "generate:importmap": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts payload generate:importmap",
-    "migrate:create": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts IS_PAYLOAD_MIGRATION=true payload migrate:create",
-    "migrate": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts IS_PAYLOAD_MIGRATION=true payload migrate",
-    "migrate:status": "cross-env PAYLOAD_CONFIG_PATH=src/payload.config.ts IS_PAYLOAD_MIGRATION=true payload migrate:status"
+    "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
+    "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
+    "lint": "cross-env NODE_OPTIONS=--no-deprecation next lint",
+    "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
+    "generate:types": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
+    "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
+    "migrate:create": "cross-env NODE_OPTIONS=--no-deprecation IS_PAYLOAD_MIGRATION=true payload migrate:create",
+    "migrate": "cross-env NODE_OPTIONS=--no-deprecation IS_PAYLOAD_MIGRATION=true payload migrate",
+    "migrate:status": "cross-env NODE_OPTIONS=--no-deprecation IS_PAYLOAD_MIGRATION=true payload migrate:status"
   },
   "packageManager": "pnpm@10.27.0",
   "dependencies": {
-    "@payloadcms/db-postgres": "^3.88.0",
-    "@payloadcms/email-nodemailer": "^3.88.0",
-    "@payloadcms/next": "^3.88.0",
+    "@payloadcms/db-postgres": "3.88.0",
+    "@payloadcms/email-nodemailer": "3.88.0",
+    "@payloadcms/next": "3.88.0",
     "@payloadcms/plugin-import-export": "3.88.0",
-    "@payloadcms/plugin-multi-tenant": "^3.88.0",
-    "@payloadcms/richtext-lexical": "^3.88.0",
-    "@payloadcms/storage-s3": "^3.88.0",
-    "@payloadcms/translations": "^3.88.0",
-    "@payloadcms/ui": "^3.88.0",
+    "@payloadcms/plugin-multi-tenant": "3.88.0",
+    "@payloadcms/richtext-lexical": "3.88.0",
+    "@payloadcms/storage-s3": "3.88.0",
+    "@payloadcms/translations": "3.88.0",
+    "@payloadcms/ui": "3.88.0",
     "clsx": "^2.1.1",
+    "dotenv": "16.4.7",
+    "graphql": "^16.8.1",
     "lucide-react": "^1.32.0",
     "next": "15.4.11",
-    "payload": "^3.88.0",
+    "payload": "3.88.0",
     "pg": "^8.23.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sharp": "^0.35.3",
+    "sharp": "0.34.2",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.5.4"
@@ -57,7 +59,8 @@
     },
     "onlyBuiltDependencies": [
       "esbuild",
-      "sharp"
+      "sharp",
+      "unrs-resolver"
     ]
   }
 }

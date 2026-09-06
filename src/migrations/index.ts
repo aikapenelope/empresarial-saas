@@ -13,6 +13,7 @@ import * as migration_20260906_041000_cxp_number_uniques from './20260906_041000
 import * as migration_20260906_053000_add_orders from './20260906_053000_add_orders';
 import * as migration_20260906_061500_add_delivery_notes from './20260906_061500_add_delivery_notes';
 import * as migration_20260906_070000_add_alerts from './20260906_070000_add_alerts';
+import * as migration_20260906_080000_drop_users_password_column from './20260906_080000_drop_users_password_column';
 
 export const migrations = [
   {
@@ -89,5 +90,10 @@ export const migrations = [
     up: migration_20260906_070000_add_alerts.up,
     down: migration_20260906_070000_add_alerts.down,
     name: '20260906_070000_add_alerts'
+  },
+  {
+    up: migration_20260906_080000_drop_users_password_column.up,
+    down: migration_20260906_080000_drop_users_password_column.down,
+    name: '20260906_080000_drop_users_password_column'
   },
 ];
