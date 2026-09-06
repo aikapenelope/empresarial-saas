@@ -41,7 +41,7 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
   );
   const [creditAllowed, setCreditAllowed] = useState(Boolean(initial?.creditAllowed));
   const [creditLimitUSD, setCreditLimitUSD] = useState(Number(initial?.creditLimitUSD) || 0);
-  const [creditDays, setCreditDays] = useState(Number(initial?.creditDays) || 15);
+  const [creditDays, setCreditDays] = useState(initial?.creditDays == null ? 15 : Number(initial.creditDays));
   const [priceTier, setPriceTier] = useState<'retail' | 'wholesale' | 'vendor' | 'promo'>(
     (initial?.priceTier as 'retail') || 'retail',
   );
@@ -59,7 +59,7 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
       setStatus((initial.status as 'recurring') || 'first_time');
       setCreditAllowed(Boolean(initial.creditAllowed));
       setCreditLimitUSD(Number(initial.creditLimitUSD) || 0);
-      setCreditDays(Number(initial.creditDays) || 15);
+      setCreditDays(initial.creditDays == null ? 15 : Number(initial.creditDays));
       setPriceTier((initial.priceTier as 'retail') || 'retail');
     } else {
       setName('');

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { createQuoteAction, updateQuoteAction } from '@/actions/erpActions';
+import { effectivePriceForTier } from '@/utilities/priceTiers';
 import { formatUSD, formatVES } from '../KpiCard';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 
@@ -52,11 +53,27 @@ export function QuoteModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Tier del cliente seleccionado con la MISMA utilidad que InvoiceModal y
+  // POSView: líneas nuevas/seleccionadas parten del precio efectivo del tier
+  // (fallback retail), no del priceUSD base.
+  const tierFor = (id: number) => customers.find((c) => c.id === id)?.priceTier || 'retail';
+  const initialTier = tierFor(initial?.customerId || customers[0]?.id || 0);
+
   const [customerId, setCustomerId] = useState<number>(initial?.customerId || customers[0]?.id || 0);
   const [validUntil, setValidUntil] = useState<string>(
     initial?.validUntil ? initial.validUntil.slice(0, 10) : '',
   );
   const [notes, setNotes] = useState(initial?.notes || '');
+
+  const customerTier = tierFor(customerId);
+  const priceFor = (product: {
+    priceUSD?: number | null;
+    priceTiers?: Array<{ tier: string; priceUSD?: number | null }> | null;
+  }) => effectivePriceForTier(product, customerTier);
+
+  // Tier vigente en el último render/carga: sirve para distinguir líneas
+  // auto-precidas de las editadas manualmente al cambiar de cliente.
+  const prevTierRef = useRef<string>(initialTier);
 
   const [items, setItems] = useState<QuoteLine[]>(
     initial?.items?.length
@@ -73,7 +90,7 @@ export function QuoteModal({
             sku: products[0]?.sku || '',
             description: products[0]?.name || 'Concepto Cotizado',
             quantity: 1,
-            unitPriceUSD: products[0]?.priceUSD || 0,
+            unitPriceUSD: products[0] ? effectivePriceForTier(products[0], initialTier) : 0,
           },
         ],
   );
@@ -106,7 +123,8 @@ export function QuoteModal({
             ],
       );
     } else {
-      setCustomerId(customers[0]?.id || 0);
+      const defaultCustomerId = customers[0]?.id || 0;
+      setCustomerId(defaultCustomerId);
       setValidUntil('');
       setNotes('');
       setItems([
@@ -115,11 +133,34 @@ export function QuoteModal({
           sku: products[0]?.sku || '',
           description: products[0]?.name || 'Concepto Cotizado',
           quantity: 1,
-          unitPriceUSD: products[0]?.priceUSD || 0,
+          unitPriceUSD: products[0] ? effectivePriceForTier(products[0], tierFor(defaultCustomerId)) : 0,
         },
       ]);
     }
+    prevTierRef.current = tierFor(initial?.customerId || customers[0]?.id || 0);
   }, [initial, isOpen]);
+
+  // Cambio de cliente: sólo se re-precian las líneas cuyo precio sigue siendo
+  // el efectivo del tier ANTERIOR (auto-gestionadas). Las editadas manualmente
+  // (precio distinto al efectivo previo) se conservan intactas.
+  useEffect(() => {
+    const prevTier = prevTierRef.current;
+    if (prevTier === customerTier) return;
+    prevTierRef.current = customerTier;
+    setItems((current) =>
+      current.map((line) => {
+        if (!line.productId) return line;
+        const prod = products.find((p) => p.id === line.productId);
+        if (!prod) return line;
+        const prevPrice = effectivePriceForTier(prod, prevTier);
+        const nextPrice = effectivePriceForTier(prod, customerTier);
+        if (Math.abs(line.unitPriceUSD - prevPrice) < 0.005 && Math.abs(nextPrice - prevPrice) > 0.005) {
+          return { ...line, unitPriceUSD: nextPrice };
+        }
+        return line;
+      }),
+    );
+  }, [customerId, customerTier, products]);
 
   const handleAddItem = () => {
     const prod = products[0];
@@ -130,7 +171,7 @@ export function QuoteModal({
         sku: prod?.sku || '',
         description: prod?.name || 'Concepto',
         quantity: 1,
-        unitPriceUSD: prod?.priceUSD || 0,
+        unitPriceUSD: prod ? priceFor(prod) : 0,
       },
     ]);
   };
@@ -149,7 +190,7 @@ export function QuoteModal({
       productId: prod.id,
       sku: prod.sku,
       description: prod.name,
-      unitPriceUSD: prod.priceUSD,
+      unitPriceUSD: priceFor(prod),
     };
     setItems(newItems);
   };

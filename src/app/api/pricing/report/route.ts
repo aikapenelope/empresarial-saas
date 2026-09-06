@@ -28,6 +28,17 @@ export async function POST(request: Request) {
 
     const payload = await getPayload({ config });
 
+    // La tasa efectiva respeta la configuración del inquilino autorizado
+    // (tasa manual / auto-sync), igual que las páginas ERP y la creación de
+    // cotizaciones — no la tasa global por defecto.
+    const tenant = await payload.findByID({
+      collection: 'tenants',
+      id: tenantId,
+      depth: 0,
+      user,
+      overrideAccess: false,
+    });
+
     const [productsRes, rateResult] = await Promise.all([
       payload.find({
         collection: 'products',
@@ -38,7 +49,14 @@ export async function POST(request: Request) {
         user,
         overrideAccess: false,
       }),
-      resolveEffectiveRate(),
+      resolveEffectiveRate(
+        tenant.currencyConfig
+          ? {
+              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+            }
+          : undefined,
+      ),
     ]);
 
     const rate = rateResult.rate;
