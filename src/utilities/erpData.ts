@@ -910,3 +910,18 @@ export async function getCustomerDetail(
     payments: paymentsRes.docs as CustomerPayment[],
   };
 }
+
+export async function getUsersOfTenant(tenantId: number): Promise<User[]> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+  const res = await payload.find({
+    collection: 'users',
+    where: { 'tenants.tenant': { equals: tenantId } },
+    pagination: false,
+    depth: 0,
+    sort: 'name',
+    user,
+    overrideAccess: false,
+  });
+  return res.docs as User[];
+}

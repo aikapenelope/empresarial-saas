@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
   title: 'Empresarial SaaS · Cendaro ERP',
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="es">
       <body className="antialiased bg-slate-950 text-slate-50 min-h-screen">
         {children}
+        <Toaster theme="dark" position="top-right" richColors closeButton />
       </body>
     </html>
   );

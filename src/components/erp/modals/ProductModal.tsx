@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
+import { toast } from 'sonner';
 import { createProductAction, updateProductAction } from '@/actions/erpActions';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 
@@ -127,6 +128,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
     setLoading(false);
 
     if (res.success) {
+      toast.success(isEdit ? 'Producto actualizado.' : 'Producto registrado.');
       if (!isEdit) {
         setName('');
         setSku('');

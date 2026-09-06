@@ -1,10 +1,14 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
-import { getTenantBySlug } from '@/utilities/erpData';
+import {
+  getTenantBySlug,
+  getUsersOfTenant,
+} from '@/utilities/erpData';
 import { getLiveExchangeRates, resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { requireErpTenantAccess, ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { SettingsView } from '@/components/erp/SettingsView';
+import { UsersPanel } from '@/components/erp/UsersPanel';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -26,13 +30,22 @@ export default async function SettingsPage({ params }: PageProps) {
     notFound();
   }
 
+  let actorRole: string = 'employee';
   try {
-    await requireErpTenantAccess(tenant.id);
+    const actor = await requireErpTenantAccess(tenant.id);
+    actorRole = actor.role;
   } catch (error: unknown) {
     if (error instanceof ErpAccessError) {
       return <ErpAccessDenied status={error.status} />;
     }
     throw error;
+  }
+
+  let users: Awaited<ReturnType<typeof getUsersOfTenant>> = [];
+  try {
+    users = await getUsersOfTenant(tenant.id);
+  } catch {
+    users = []; // lectura de usuarios no bloquea la configuración
   }
 
   const [liveRates, effectiveRateData] = await Promise.all([
@@ -48,11 +61,19 @@ export default async function SettingsPage({ params }: PageProps) {
   ]);
 
   return (
-    <SettingsView
-      tenant={tenant}
-      effectiveRate={effectiveRateData.rate}
-      bcvRate={liveRates.bcv}
-      rateSource={effectiveRateData.source}
-    />
+    <div className="space-y-6">
+      <SettingsView
+        tenant={tenant}
+        effectiveRate={effectiveRateData.rate}
+        bcvRate={liveRates.bcv}
+        rateSource={effectiveRateData.source}
+      />
+      <UsersPanel
+        tenantId={tenant.id}
+        tenantSlug={tenantSlug}
+        users={users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role }))}
+        canManage={actorRole === 'super-admin' || actorRole === 'tenant-admin'}
+      />
+    </div>
   );
 }

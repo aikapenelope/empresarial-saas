@@ -10,6 +10,7 @@ import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import {
   ErpAccessError,
   requireErpTenantAccess,
+  requireErpUser,
   requireSuperAdmin,
 } from '@/utilities/erpAuth';
 import { getActiveDb } from '@/utilities/inventoryLedger';
@@ -31,6 +32,7 @@ import {
   ensureWalkInCustomerSchema,
   executeProductionSchema,
   firstZodMessage,
+  inviteUserSchema,
   importStockSchema,
   receivePurchaseGoodsSchema,
   completeInventoryCountSchema,
@@ -92,6 +94,10 @@ async function withTransaction<T>(
 
 /** Roles con permiso de crear/actualizar catálogos y operaciones restringidas (RBAC de colecciones). */
 const ERP_OPERATOR_ROLES: Array<User['role']> = ['super-admin', 'tenant-admin', 'supervisor'];
+
+/** Prefijo `alt` con el que uploadReceiptAction marca los comprobantes de cobro;
+ *  deleteOrphanReceiptAction sólo borra media con esta marca. */
+const RECEIPT_ALT_PREFIX = 'Comprobante de pago';
 
 /** Traduce un error interno a un mensaje seguro para el cliente, registrando el detalle. */
 function toSafeActionError(error: unknown, fallback: string): string {
@@ -1012,6 +1018,7 @@ export interface CreatePaymentInput {
   tenantSlug: string;
   customerId: number;
   invoiceId?: number;
+  receiptMediaId?: number;
   amountUSD: number;
   method: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance';
   referenceNumber?: string;
@@ -1046,6 +1053,28 @@ export async function createPaymentAction(input: CreatePaymentInput) {
       const isUSDMethod =
         parsed.method === 'cash_usd' || parsed.method === 'zelle' || parsed.method === 'binance';
       const amountNative = isUSDMethod ? amountUSD : amountUSD * rate;
+
+      // Aislamiento multi-inquilino: el comprobante adjunto debe pertenecer al
+      // inquilino del cobro — un ID foráneo expondría un archivo ajeno.
+      // Además, el mismo advisory lock `receipt-media:<id>` que usa
+      // deleteOrphanReceiptAction serializa adjunción vs limpieza: la
+      // verificación de referencias y el INSERT del cobro ocurren atómicamente
+      // respecto a cualquier borrado concurrente (el FK es ON DELETE SET NULL).
+      if (parsed.receiptMediaId) {
+        const db = getActiveDb(req);
+        await db.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${`receipt-media:${parsed.receiptMediaId}`}))`,
+        );
+        const receipt = await payload.findByID({
+          collection: 'media',
+          id: parsed.receiptMediaId,
+          depth: 0,
+          req,
+        });
+        if (!receipt || Number(receipt.tenant) !== Number(parsed.tenantId)) {
+          throw new Error('El comprobante indicado no pertenece a este inquilino.');
+        }
+      }
 
       // Semántica de imputación: el pago SIEMPRE afecta el balance. Con factura
       // específica se valida pertenencia y saldo; sin factura se reparte FIFO por
@@ -1147,6 +1176,7 @@ export async function createPaymentAction(input: CreatePaymentInput) {
               exchangeRate: rate,
               amountUSD,
               reference: parsed.referenceNumber || undefined,
+              ...(parsed.receiptMediaId ? { receipt: parsed.receiptMediaId } : {}),
             },
           ],
           totalUSD: amountUSD,
@@ -2037,7 +2067,210 @@ export async function updateQuoteAction(input: UpdateQuoteInput) {
   }
 }
 
+export interface InviteUserInput {
+  tenantId: number;
+  tenantSlug: string;
+  email: string;
+  name: string;
+  password: string;
+  role: 'super-admin' | 'tenant-admin' | 'vendor' | 'cashier' | 'employee' | 'supervisor';
+}
+
+/**
+ * Invita un usuario al inquilino (Sprint 17). RBAC estricto:
+ *  - tenant-admin: solo puede crear usuarios para SU inquilino y solo con roles
+ *    operativos (vendor/cashier/employee/supervisor) — nunca escalables a admin.
+ *  - super-admin: cualquier rol, cualquier inquilino del que sea miembro (o el indicado).
+ */
+export async function inviteUserAction(input: InviteUserInput) {
+  try {
+    const parsed = inviteUserSchema.parse(input);
+    const actor = await requireErpTenantAccess(parsed.tenantId);
+    const payload = await getPayload({ config });
+
+    if (actor.role !== 'super-admin') {
+      if (parsed.role === 'super-admin' || parsed.role === 'tenant-admin') {
+        throw new Error(
+          'Prohibido: solo un super-administrador puede crear cuentas administrativas.',
+        );
+      }
+    }
+
+    // El campo `tenants` (tenantsArrayField del plugin multi-tenant) sólo es
+    // escribible por super-admin a nivel de field access. Para el tenant-admin
+    // usamos overrideAccess:true con autorización explícita EQUIVALENTE:
+    // requireErpTenantAccess ya verificó su membresía y rol, la única membresía
+    // asignada es la del inquilino verificado (parsed.tenantId) y los roles
+    // administrativos están bloqueados arriba — jamás un inquilino del input
+    // libre. El super-admin mantiene overrideAccess:false y el control nativo.
+    const doc = await payload.create({
+      collection: 'users',
+      data: {
+        email: parsed.email,
+        name: parsed.name,
+        password: parsed.password,
+        role: parsed.role,
+        tenants: [{ tenant: parsed.tenantId }],
+      },
+      user: actor,
+      overrideAccess: actor.role === 'super-admin' ? false : true,
+      // Flag interno: habilita el create de colección para tenant-admin SÓLO
+      // por esta vía (Users.create lo exige); un POST REST directo no lo lleva.
+      context: { viaInviteUserAction: true },
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/settings`);
+
+    return { success: true, data: { id: doc.id, email: doc.email } };
+  } catch (error: unknown) {
+    return { success: false, error: toSafeActionError(error, 'No se pudo invitar al usuario.') };
+  }
+}
+
+/**
+ * Sube el comprobante digital de un cobro a la colección media (Sprint 17).
+ * Firma FormData: Next.js serializa File en Server Actions nativamente.
+ * Devuelve el id de media para adjuntarlo a methods[0].receipt.
+ */
+export async function uploadReceiptAction(formData: FormData): Promise<{
+  success: boolean;
+  mediaId?: number;
+  error?: string;
+}> {
+  try {
+    const payload = await getPayload({ config });
+
+    const file = formData.get('file');
+    const tenantId = Number(formData.get('tenantId'));
+    if (!(file instanceof File)) {
+      return { success: false, error: 'Archivo requerido.' };
+    }
+    if (!tenantId) {
+      return { success: false, error: 'Inquilino requerido.' };
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      return { success: false, error: 'El comprobante no puede superar 8 MB.' };
+    }
+    // Valida tipo y tamaño ANTES de materializar el buffer: rechazar temprano
+    // evita consumir memoria del serverless con cargas no soportadas.
+    const ALLOWED_RECEIPT_TYPES = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+    ] as const;
+    if (!ALLOWED_RECEIPT_TYPES.includes(file.type as (typeof ALLOWED_RECEIPT_TYPES)[number])) {
+      return { success: false, error: 'Formato no soportado (usá JPG, PNG, WebP o PDF).' };
+    }
+
+    // Aislamiento multi-inquilino: se verifica membresía ANTES de escribir el
+    // archivo. Con ella verificada, el overrideAccess privilegiado de la
+    // creación de media queda autorizado explícitamente para este inquilino.
+    const actor = await requireErpTenantAccess(tenantId);
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    const doc = await payload.create({
+      collection: 'media',
+      data: {
+        tenant: tenantId,
+        alt: `${RECEIPT_ALT_PREFIX} — ${file.name}`,
+      },
+      file: {
+        data: buffer,
+        mimetype: file.type || 'application/octet-stream',
+        name: file.name,
+        size: file.size,
+      },
+      user: actor,
+      overrideAccess: true,
+    });
+
+    return { success: true, mediaId: doc.id };
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) return { success: false, error: error.message };
+    console.error('[uploadReceipt]', error);
+    return { success: false, error: 'No se pudo subir el comprobante.' };
+  }
+}
+
+/**
+ * Limpieza compensatoria del flujo cobro+comprobante: si la creación del cobro
+ * falla DESPUÉS de subir el recibo, se elimina el archivo huérfano.
+ *
+ * Acotado y seguro por diseño:
+ * - Sólo comprobantes del flujo (alt con el prefijo que pone uploadReceiptAction):
+ *   imágenes de productos u otros media del inquilino NO se tocan.
+ * - Sólo roles operativos (los mismos que crean cobros).
+ * - Transaccional con advisory lock `receipt-media:<id>` COMPARTIDO con
+ *   createPaymentAction: la verificación de referencias y el borrado son
+ *   atómicos respecto a la adjunción del recibo por un cobro concurrente —
+ *   imposible que el FK ON DELETE SET NULL desadjunte un cobro ya confirmado.
+ */
+export async function deleteOrphanReceiptAction(tenantId: number, mediaId: number): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const actor = await requireErpTenantAccess(tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    await withTransaction(payload, actor, async (req) => {
+      // Serializa adjunción (cobro) vs limpieza (aquí) del mismo media.
+      const db = getActiveDb(req);
+      await db.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`receipt-media:${mediaId}`}))`,
+      );
+
+      const media = await payload.findByID({
+        collection: 'media',
+        id: mediaId,
+        depth: 0,
+        req,
+      });
+      if (!media || Number(media.tenant) !== Number(tenantId)) {
+        throw new Error('El comprobante no pertenece a este inquilino.');
+      }
+      if (!media.alt || !String(media.alt).startsWith(RECEIPT_ALT_PREFIX)) {
+        throw new Error('El archivo no es un comprobante de cobro: no se puede borrar por esta vía.');
+      }
+
+      const referenced = await payload.find({
+        collection: 'customer-payments',
+        where: { 'methods.receipt': { equals: mediaId } },
+        limit: 1,
+        depth: 0,
+        req,
+      });
+      if (referenced.totalDocs > 0) {
+        throw new Error('El comprobante está referenciado por un cobro.');
+      }
+
+      // Escritura privilegiada con autorización explícita equivalente:
+      // pertenencia al inquilino, marcador de comprobante y ausencia de
+      // referencias ya verificadas bajo lock.
+      await payload.delete({
+        collection: 'media',
+        id: mediaId,
+        req,
+        overrideAccess: true,
+      });
+    });
+
+    return { success: true };
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) return { success: false, error: error.message };
+    console.error('[deleteOrphanReceipt]', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'No se pudo limpiar el comprobante huérfano.',
+    };
+  }
+}
+
 // ==========================================
+// 5. CAJAS REGISTRADORAS & ARQUEOS CIEGOS
+// ==========================================// ==========================================
 // 5. CAJAS REGISTRADORAS & ARQUEOS CIEGOS
 // ==========================================// ==========================================
 // 5. CAJAS REGISTRADORAS & ARQUEOS CIEGOS

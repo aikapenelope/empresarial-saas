@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
+import { toast } from 'sonner';
 import { openCashShiftAction } from '@/actions/erpActions';
 import { Loader2, DollarSign } from 'lucide-react';
 
@@ -70,6 +71,7 @@ export function OpenShiftModal({
     setLoading(false);
 
     if (res.success) {
+      toast.success('Turno abierto. La caja está habilitada para vender.');
       onClose();
     } else {
       setError(res.error || 'Error al abrir el turno de caja');

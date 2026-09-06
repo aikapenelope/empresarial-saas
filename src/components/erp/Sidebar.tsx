@@ -23,9 +23,33 @@ interface SidebarProps {
   tenantSlug: string;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
+  userRole?: string | null;
 }
 
-export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProps) {
+/**
+ * Visibilidad de navegación por rol (Sprint 17). Los guards server-side de la
+ * capa de datos son la autoridad real; esto es UX: cada rol ve solo su operación.
+ */
+const ROLE_NAV: Record<string, string[]> = {
+  vendor: ['dashboard', 'pos', 'quotes', 'vendors', 'customers'],
+  cashier: ['dashboard', 'pos', 'invoices', 'customers', 'cash-registers'],
+  employee: ['dashboard', 'invoices', 'customers', 'inventory', 'quotes'],
+  supervisor: [
+    'dashboard',
+    'pos',
+    'invoices',
+    'customers',
+    'inventory',
+    'quotes',
+    'cash-registers',
+    'purchases',
+    'vendors',
+  ],
+};
+
+const ALL_NAV = '*';
+
+export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile, userRole }: SidebarProps) {
   const pathname = usePathname();
 
   const navigation = [
@@ -35,27 +59,32 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
         {
           name: 'Dashboard Ejecutivo',
           href: `/${tenantSlug}/erp`,
+          routeKey: 'dashboard',
           icon: LayoutDashboard,
           exact: true,
         },
         {
           name: 'Facturación & Ventas',
           href: `/${tenantSlug}/erp/invoices`,
+          routeKey: 'invoices',
           icon: Receipt,
         },
         {
           name: 'Clientes & Cartera CxC',
           href: `/${tenantSlug}/erp/customers`,
+          routeKey: 'customers',
           icon: Users,
         },
         {
           name: 'Cotizaciones',
           href: `/${tenantSlug}/erp/quotes`,
+          routeKey: 'quotes',
           icon: FileText,
         },
         {
           name: 'Vendedores & Comisiones',
           href: `/${tenantSlug}/erp/vendors`,
+          routeKey: 'vendors',
           icon: Trophy,
         },
       ],
@@ -66,6 +95,7 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
         {
           name: 'Catálogo, Stock & BOM',
           href: `/${tenantSlug}/erp/inventory`,
+          routeKey: 'inventory',
           icon: Package,
         },
       ],
@@ -76,11 +106,13 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
         {
           name: 'Punto de Venta (POS)',
           href: `/${tenantSlug}/erp/pos`,
+          routeKey: 'pos',
           icon: ShoppingCart,
         },
         {
           name: 'Cajas & Arqueos',
           href: `/${tenantSlug}/erp/cash-registers`,
+          routeKey: 'cash-registers',
           icon: Wallet,
         },
       ],
@@ -106,16 +138,32 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
         {
           name: 'Plantillas Industriales',
           href: `/${tenantSlug}/erp/templates`,
+          routeKey: 'templates',
           icon: Layers,
         },
         {
           name: 'Ajustes de Empresa',
           href: `/${tenantSlug}/erp/settings`,
+          routeKey: 'settings',
           icon: Settings,
         },
       ],
     },
   ];
+
+  // Filtrado por rol (UX; la autoridad real es la capa de datos server-side)
+  const allowed = userRole ? ROLE_NAV[userRole] || ALL_NAV : ALL_NAV;
+  const filteredNavigation = navigation
+    .map((group) => ({
+      ...group,
+      items: allowed === ALL_NAV
+        ? group.items
+        : group.items.filter((item) => {
+            const key = (item as { routeKey?: string }).routeKey;
+            return key && (allowed as string[]).includes(key);
+          }),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const sidebarContent = (
     <div className="flex h-full flex-col justify-between bg-slate-950 border-r border-slate-800/80">
@@ -140,13 +188,13 @@ export function Sidebar({ tenantSlug, isMobileOpen, onCloseMobile }: SidebarProp
 
         {/* Navigation Sections */}
         <nav className="p-4 space-y-6 overflow-y-auto max-h-[calc(100vh-8rem)]">
-          {navigation.map((group) => (
+          {filteredNavigation.map((group) => (
             <div key={group.group} className="space-y-1">
               <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
                 {group.group}
               </p>
               {group.items.map((item) => {
-                const isActive = item.exact
+                const isActive = (item as { exact?: boolean }).exact
                   ? pathname === item.href
                   : pathname === item.href || pathname?.startsWith(`${item.href}/`);
                 const Icon = item.icon;

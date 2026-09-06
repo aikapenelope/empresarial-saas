@@ -82,8 +82,9 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
 
   // Puerta de autorización del ERP: sesión válida + pertenencia al inquilino
   // (el control se re-aplica en cada consulta de la capa de datos).
+  let actor: Awaited<ReturnType<typeof requireErpTenantAccess>> | null = null;
   try {
-    await requireErpTenantAccess(tenant.id);
+    actor = await requireErpTenantAccess(tenant.id);
   } catch (error: unknown) {
     if (error instanceof ErpAccessError) {
       return <ErpAccessDenied status={error.status} />;
@@ -119,6 +120,7 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
       currentTenant={tenant}
       availableTenants={availableTenants}
       rates={rates}
+      userRole={actor?.role}
     >
       {children}
     </AppShell>

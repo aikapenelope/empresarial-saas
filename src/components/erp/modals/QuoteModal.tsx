@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal } from './Modal';
+import { toast } from 'sonner';
 import { createQuoteAction, updateQuoteAction } from '@/actions/erpActions';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
 import { formatUSD, formatVES } from '../KpiCard';
@@ -244,6 +245,7 @@ export function QuoteModal({
     setLoading(false);
 
     if (res.success) {
+      toast.success(isEdit ? 'Cotización actualizada.' : 'Cotización creada.');
       if (!isEdit) {
         setNotes('');
         setValidUntil('');

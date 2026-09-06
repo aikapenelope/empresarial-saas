@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import type { Tenant } from '@/payload-types';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { CommandPalette } from './CommandPalette';
 
 interface AppShellProps {
   currentTenant: Tenant;
@@ -16,6 +17,7 @@ interface AppShellProps {
     source: string;
     lastUpdated?: string;
   };
+  userRole?: string | null;
   children: React.ReactNode;
 }
 
@@ -23,6 +25,7 @@ export function AppShell({
   currentTenant,
   availableTenants,
   rates,
+  userRole,
   children,
 }: AppShellProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -34,6 +37,7 @@ export function AppShell({
         tenantSlug={currentTenant.slug}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
+        userRole={userRole}
       />
 
       {/* Main Content Column */}
@@ -45,6 +49,8 @@ export function AppShell({
           isMobileMenuOpen={isMobileMenuOpen}
           onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
+
+        <CommandPalette tenantSlug={currentTenant.slug} tenantId={currentTenant.id} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {children}

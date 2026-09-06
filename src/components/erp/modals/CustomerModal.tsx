@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
+import { toast } from 'sonner';
 import { createCustomerAction, updateCustomerAction } from '@/actions/erpActions';
 import { Loader2 } from 'lucide-react';
 
@@ -114,6 +115,7 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
     setLoading(false);
 
     if (res.success) {
+      toast.success(isEdit ? 'Cliente actualizado.' : 'Cliente registrado.');
       if (!isEdit) {
         // Reset solo en creación
         setName('');
