@@ -1050,6 +1050,20 @@ export async function createPaymentAction(input: CreatePaymentInput) {
         parsed.method === 'cash_usd' || parsed.method === 'zelle' || parsed.method === 'binance';
       const amountNative = isUSDMethod ? amountUSD : amountUSD * rate;
 
+      // Aislamiento multi-inquilino: el comprobante adjunto debe pertenecer al
+      // inquilino del cobro — un ID foráneo expondría un archivo ajeno.
+      if (parsed.receiptMediaId) {
+        const receipt = await payload.findByID({
+          collection: 'media',
+          id: parsed.receiptMediaId,
+          depth: 0,
+          req,
+        });
+        if (!receipt || Number(receipt.tenant) !== Number(parsed.tenantId)) {
+          throw new Error('El comprobante indicado no pertenece a este inquilino.');
+        }
+      }
+
       // Semántica de imputación: el pago SIEMPRE afecta el balance. Con factura
       // específica se valida pertenencia y saldo; sin factura se reparte FIFO por
       // vencimiento entre las facturas abiertas del cliente. Nunca se confirma un
@@ -2070,6 +2084,13 @@ export async function inviteUserAction(input: InviteUserInput) {
       }
     }
 
+    // El campo `tenants` (tenantsArrayField del plugin multi-tenant) sólo es
+    // escribible por super-admin a nivel de field access. Para el tenant-admin
+    // usamos overrideAccess:true con autorización explícita EQUIVALENTE:
+    // requireErpTenantAccess ya verificó su membresía y rol, la única membresía
+    // asignada es la del inquilino verificado (parsed.tenantId) y los roles
+    // administrativos están bloqueados arriba — jamás un inquilino del input
+    // libre. El super-admin mantiene overrideAccess:false y el control nativo.
     const doc = await payload.create({
       collection: 'users',
       data: {
@@ -2080,7 +2101,7 @@ export async function inviteUserAction(input: InviteUserInput) {
         tenants: [{ tenant: parsed.tenantId }],
       },
       user: actor,
-      overrideAccess: false,
+      overrideAccess: actor.role === 'super-admin' ? false : true,
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/settings`);
@@ -2102,7 +2123,6 @@ export async function uploadReceiptAction(formData: FormData): Promise<{
   error?: string;
 }> {
   try {
-    const actor = await requireErpUser();
     const payload = await getPayload({ config });
 
     const file = formData.get('file');
@@ -2116,6 +2136,11 @@ export async function uploadReceiptAction(formData: FormData): Promise<{
     if (file.size > 8 * 1024 * 1024) {
       return { success: false, error: 'El comprobante no puede superar 8 MB.' };
     }
+
+    // Aislamiento multi-inquilino: se verifica membresía ANTES de escribir el
+    // archivo. Con ella verificada, el overrideAccess privilegiado de la
+    // creación de media queda autorizado explícitamente para este inquilino.
+    const actor = await requireErpTenantAccess(tenantId);
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -2140,6 +2165,61 @@ export async function uploadReceiptAction(formData: FormData): Promise<{
     if (error instanceof ErpAccessError) return { success: false, error: error.message };
     console.error('[uploadReceipt]', error);
     return { success: false, error: 'No se pudo subir el comprobante.' };
+  }
+}
+
+/**
+ * Limpieza compensatoria del flujo cobro+comprobante: si la creación del cobro
+ * falla DESPUÉS de subir el recibo, se elimina el archivo huérfano. Sólo borra
+ * si el media pertenece al inquilino verificado y NO está referenciado por
+ * ningún cobro (métodos[].receipt) — autorización explícita alrededor de una
+ * escritura privilegiada.
+ */
+export async function deleteOrphanReceiptAction(tenantId: number, mediaId: number): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const actor = await requireErpTenantAccess(tenantId);
+    const payload = await getPayload({ config });
+
+    const media = await payload.findByID({
+      collection: 'media',
+      id: mediaId,
+      depth: 0,
+      user: actor,
+      overrideAccess: false,
+    });
+    if (!media || Number(media.tenant) !== Number(tenantId)) {
+      return { success: false, error: 'El comprobante no pertenece a este inquilino.' };
+    }
+
+    const referenced = await payload.find({
+      collection: 'customer-payments',
+      where: { 'methods.receipt': { equals: mediaId } },
+      limit: 1,
+      depth: 0,
+      user: actor,
+      overrideAccess: false,
+    });
+    if (referenced.totalDocs > 0) {
+      return { success: false, error: 'El comprobante está referenciado por un cobro.' };
+    }
+
+    await payload.delete({
+      collection: 'media',
+      id: mediaId,
+      user: actor,
+      // Escritura privilegiada con autorización explícita equivalente:
+      // pertenencia al inquilino y ausencia de referencias ya verificadas.
+      overrideAccess: true,
+    });
+
+    return { success: true };
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) return { success: false, error: error.message };
+    console.error('[deleteOrphanReceipt]', error);
+    return { success: false, error: 'No se pudo limpiar el comprobante huérfano.' };
   }
 }
 

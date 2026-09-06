@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload';
+import { getUserTenantIds } from '../utilities/inventoryLedger';
 
 export const Users: CollectionConfig = {
   slug: 'users',
@@ -13,7 +14,17 @@ export const Users: CollectionConfig = {
     defaultColumns: ['name', 'email', 'role', 'createdAt'],
   },
   access: {
-    read: ({ req: { user } }) => Boolean(user),
+    // Aislamiento multi-inquilino: cada usuario sólo ve miembros de SUS
+    // inquilinos (emails, roles, membresías); super-admin ve toda la plataforma.
+    read: ({ req: { user } }) => {
+      if (!user) return false;
+      if (user.role === 'super-admin') return true;
+      const tenantIds = getUserTenantIds(user);
+      if (tenantIds.length === 0) return false;
+      return {
+        'tenants.tenant': { in: tenantIds },
+      };
+    },
     create: ({ req: { user } }) =>
       Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
     update: ({ req: { user } }) => {

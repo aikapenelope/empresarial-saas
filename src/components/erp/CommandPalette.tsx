@@ -6,6 +6,8 @@ import { Search, CornerDownLeft } from 'lucide-react';
 
 interface CommandPaletteProps {
   tenantSlug: string;
+  /** Inquilino de la sesión: obligatorio para aislar las búsquedas REST. */
+  tenantId: number;
 }
 
 interface SearchResults {
@@ -17,7 +19,7 @@ interface SearchResults {
  * Paleta de comandos ⌘K (Sprint 17): navegación rápida a rutas del ERP y
  * búsqueda en vivo de clientes/productos vía REST (cookie de sesión incluida).
  */
-export function CommandPalette({ tenantSlug }: CommandPaletteProps) {
+export function CommandPalette({ tenantSlug, tenantId }: CommandPaletteProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -56,8 +58,10 @@ export function CommandPalette({ tenantSlug }: CommandPaletteProps) {
       try {
         const q = encodeURIComponent(query.trim());
         const [custRes, prodRes] = await Promise.all([
-          fetch(`/api/customers?depth=0&limit=5&where[name][like]=${q}`, { credentials: 'include' }),
-          fetch(`/api/products?depth=0&limit=5&where[name][like]=${q}`, { credentials: 'include' }),
+          // Aislamiento multi-inquilino: el acceso de colección sólo exige
+          // sesión, así que la restricción por tenant va en la consulta.
+          fetch(`/api/customers?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include' }),
+          fetch(`/api/products?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include' }),
         ]);
         if (custRes.ok && prodRes.ok) {
           const cust = await custRes.json();

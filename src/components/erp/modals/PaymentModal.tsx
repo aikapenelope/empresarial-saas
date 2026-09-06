@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useTransition } from 'react';
 import { Modal } from './Modal';
 import { toast } from 'sonner';
-import { createPaymentAction, uploadReceiptAction } from '@/actions/erpActions';
+import {
+  createPaymentAction,
+  deleteOrphanReceiptAction,
+  uploadReceiptAction,
+} from '@/actions/erpActions';
 import { formatUSD, formatVES } from '../KpiCard';
 import { Loader2 } from 'lucide-react';
 
@@ -112,6 +116,12 @@ export function PaymentModal({
         referenceNumber: referenceNumber || undefined,
         notes: notes || undefined,
       });
+
+      if (!res.success && receiptMediaId) {
+        // Flujo coordinado cobro+comprobante: si el cobro falla, el recibo ya
+        // subido se elimina para no dejar archivos huérfanos en cada intento.
+        await deleteOrphanReceiptAction(tenantId, receiptMediaId);
+      }
 
       if (res.success) {
         toast.success('Cobro registrado correctamente.');
