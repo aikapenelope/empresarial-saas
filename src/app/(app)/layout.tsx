@@ -13,8 +13,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body className="antialiased bg-slate-950 text-slate-50 min-h-screen">
+    <html lang="es" className="dark">
+      <body className="antialiased min-h-screen">
         {children}
         <Toaster theme="dark" position="top-right" richColors closeButton />
       </body>
