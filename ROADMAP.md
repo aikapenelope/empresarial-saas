@@ -388,7 +388,7 @@ Cada sprint concluye con:
 ---
 
 ### 🧭 Alcance a decidir (fuera de Fase 5)
-- **Contenedores de importación + parseo AI de packing list** (`containers` en Cendaro): funcionalidad genuina de Cendaro (no excluida), pero grande y con dependencia de IA. Si entra, sería Sprint 24 sobre un `containersPlugin` (import → recepción al kardex ya existente).
+- **Contenedores de importación + parseo AI de packing list** (`containers` en Cendaro): funcionalidad genuina de Cendaro (no excluida), pero grande y con dependencia de IA. **Decisión (Fase 7):** se implementará como `containersPlugin` in-repo con opción `enabled` (se apaga y se prende por instalación), siguiendo el patrón de `salesInventoryPlugin`; diferido hasta que el negocio lo pida.
 
 ### ✅ Criterios de Cierre de la Fase 5
 1. Ciclo completo pedido → remisión → factura operable desde la UI, sin tocar el admin de Payload.
@@ -461,6 +461,29 @@ Cada sprint concluye con:
 - [ ] Monitorear el release de Payload que incluya [#17638](https://github.com/payloadcms/payload/pull/17638) (3.89+).
 - [ ] Al publicarse: actualizar `payload`/`@payloadcms/*` + `next`/`react` al combo exacto del template de ese release; retirar cualquier pin temporal; regresión completa (admin no autenticado, login, ERP smoke).
 - **Entregable:** PR `feat/upgrade-payload-fix-17545`.
+
+---
+
+# 🚀 Fase 7: Higiene de UI + Documentos Rápidos (Cotizaciones & Remisiones)
+
+> **Objetivo:** Cerrar la deuda de lint introducida por el combo Next 16 y habilitar el ciclo comercial veloz: armar una cotización en segundos y enviarla por email (Resend, adaptador oficial de Payload) o compartirla por WhatsApp con enlace público.
+
+### 🧹 Sprint 27 (PR `refactor/modals-render-state-sync`): Sync de estado en render
+
+- [x] Hook `useSyncOnKeyChange` (patrón oficial de React *"adjusting state when props change"*) reemplazando los 10 `useEffect` señalados por `react-hooks/set-state-in-effect` (eslint-plugin-react-hooks@7).
+- [x] Limpieza de warnings del lint plano (imports/vars no usados, directivas `eslint-disable` obsoletas, `tenantId` en deps del CommandPalette).
+- [x] Override de la regla retirado de `eslint.config.mjs`: **0 errores / 0 warnings**.
+- **Criterio de cierre:** `eslint .` limpio, `tsc --noEmit` y `next build` en verde.
+
+### 📨 Sprint 28 (PR `feat/quick-quotes-resend-whatsapp`): Cotización rápida + Resend + WhatsApp
+
+- [x] **Email por Resend:** adaptador oficial `@payloadcms/email-resend` condicionado a `RESEND_API_KEY` (fallback: nodemailer/SMTP actual). El envío corre en `after()` de Next.js (invariante §3 de serverless).
+- [x] **Compartición por capacidad:** campo `shareToken` (24 bytes CSPRND, único, no editable por UI/REST) en `quotes` y `delivery-notes` + migración `20260906_090000_add_share_tokens`.
+- [x] **Página pública `/share/{quote|delivery-note}/{token}`**: documento de solo lectura imprimible (PDF por el navegador), `noindex`, layout propio sin sesión.
+- [x] **Botones de compartición** (email / WhatsApp / copiar enlace) en cotizaciones y remisiones; el email marca la cotización `draft → sent`.
+- [x] **Cotización rápida** (`/erp/quotes/quick` + Sidebar + CommandPalette): producto por SKU/nombre con datalist nativo, Enter agrega la línea al precio efectivo del tier, totales USD/VES en vivo y panel de envío inmediato tras guardar.
+- [ ] Aplicar la migración de `share_token` tras el merge.
+- **Criterio de cierre:** flujo completo en preview — crear cotización rápida → enviar email con `RESEND_API_KEY` → abrir enlace público → compartir por WhatsApp.
 
 ### ✅ Criterios de Cierre de la Fase 6
 1. `/admin` operable end-to-end desde la UI oficial de Payload (creación de primer usuario incluida).

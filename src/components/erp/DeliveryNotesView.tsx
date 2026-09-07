@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { formatUSD, formatVES } from './KpiCard';
 import { Badge } from './Badge';
 import { voidDeliveryNoteAction } from '@/actions/erpActions';
+import { ShareDocButtons } from './ShareDocButtons';
 import type { DeliveryNote } from '@/payload-types';
 
 interface DeliveryNotesViewProps {
@@ -55,6 +56,11 @@ export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotes
     typeof n.customer === 'object' && n.customer !== null
       ? (n.customer as { name: string }).name
       : 'Cliente';
+
+  const customerEmail = (n: DeliveryNote) =>
+    typeof n.customer === 'object' && n.customer !== null
+      ? ((n.customer as { email?: string | null }).email ?? '')
+      : '';
 
   return (
     <div className="space-y-6">
@@ -170,6 +176,13 @@ export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotes
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-1.5 flex-wrap">
+                          <ShareDocButtons
+                            collection="delivery-notes"
+                            tenantId={tenantId}
+                            documentId={n.id}
+                            docLabel={n.noteNumber || `REM-${n.id}`}
+                            defaultEmail={customerEmail(n)}
+                          />
                           <Link
                             href={`/${tenantSlug}/erp/delivery-notes/${n.id}`}
                             className="inline-flex items-center gap-1 text-slate-400 hover:text-white text-[11px] font-semibold px-2 py-1"
