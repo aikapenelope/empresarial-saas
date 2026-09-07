@@ -577,18 +577,18 @@ Cada sprint concluye con:
 - [x] **Ola 1 de vistas migradas (el modelo replicable):** CRM `CustomersView` (con barra de utilización de crédito por cliente), `AccountsReceivableView` (barra apilada de composición de cartera por bucket), `InvoicesView` y `InventoryView` (barra de cobertura de stock contra mínimo) + detalle `customers/[id]` (salud de crédito: utilización + porción vencida).
 - [x] **Criterio de cierre:** `tsc --noEmit`, `eslint .` y `next build` en verde local.
 
-### 📊 Ola 2 (propuesta): componentes únicos por dominio — análisis
+### 📊 Ola 2 (Sprint 36 — PR `feat/ui-views-wave2-s36`): componentes únicos por dominio
 
-El objetivo es que cada módulo tenga UNA pieza visual distintiva bajo el mismo sistema (no más monotemático). Candidaturas priorizadas:
+Cada módulo tiene ahora UNA pieza visual distintiva bajo el mismo sistema, más la migración mecánica del ciclo completo:
 
-1. **POS** — vista de mostrador: targets de tacto XL, ticket lateral fijo, teclado numérico; densidad distinta a todo el ERP.
-2. **Kardex** — timeline vertical de movimientos (feed con iconos por tipo) en vez de tabla plana.
-3. **Cajas** — donut de mix de métodos de pago (zelle/pago móvil/efectivo) por cierre + guard turnos.
-4. **Tasas** — línea de tendencia BCV/Binance/paralelo (recharts) con la fuente efectiva resaltada.
-5. **Auditoría** — feed de actividad con avatar-inicial del actor y diff colapsable (Dialog).
-6. **Alertas** — feed por severidad con `Badge dot` y contador vivo en el sidebar.
-7. **Cotizaciones** — mini-funnel cotización→factura (Progress) en el header de la vista.
-8. **Resto de vistas** (Suppliers, Purchases, Orders, DeliveryNotes, Quotes, Counts, Import, Rates, CashRegisters, Vendors, Settings, Audit, Alerts, UsersPanel): replicar el patrón Ola 1 (ErpPageHeader + KpiCard + Table shadcn) — mecánico, sin diseño nuevo.
+1. **Cotizaciones — Embudo Comercial** (`QuoteFunnel`): composición por estado + tasa de conversión (aceptadas+convertidas/total), server-compatible.
+2. **Kardex — Timeline vertical** (`KardexTimeline`): feed legible con rail por dirección (entrada/salida/transferencia), badge de tipo, montajes firmados y enlace a factura; reemplaza la tabla plana de 8 columnas (Sprint 21).
+3. **Cajas — Mix de Métodos** (`MethodMixCard`): donut recharts monocromo (--chart-N) con la recaudación agregada de arqueos homogeneizada a USD (efectivo USD/VES, POS, pago móvil, Zelle/Binance). La página ahora pasa `effectiveRate`.
+4. **Tasas — Spread entre Fuentes** (`RateSpreadCard`): desviación BCV/Binance/Paralelo contra la tasa efectiva, con la fuente vigente resaltada (server-compatible).
+5. **Auditoría — Feed de actividad**: avatar-inicial del actor + "quién hizo qué a cuál documento" en lenguaje natural, en vez de tabla plana (Sprint 22).
+6. **Alertas — Feed por severidad**: tarjetas con acento por severidad (crítica/advertencia/info) y acciones inline.
+7. **Vistas migradas al patrón Ola 1** (ErpPageHeader + KpiCard + Table shadcn + Input/Button/Select): Quotes, Orders, DeliveryNotes, Suppliers, Vendors (Select shadcn para filtro), Purchases, CashRegisters, Counts, Rates, Alerts, Audit, Kardex (página RSC).
+8. **Pendiente Ola 3:** POS (rediseño dedicado de mostrador: targets XL, ticket fijo, teclado numérico), Settings, InventoryImport, UsersPanel, PricingReportCard, QuickQuoteBuilder y el interior de los modales (hoy bimodales vía puente slate).
 
 ---
 
