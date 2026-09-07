@@ -89,3 +89,10 @@ Reglas derivadas:
   2. Terminar el turno de inmediato.
 - **Responsabilidad del Usuario:** El usuario revisa los builds remotos y los comentarios de Devin en GitHub, y solicitará los ajustes pertinentes en turnos posteriores.
 
+### 5.1 Protocolo de PR de Un Solo Push (Memoria — decisión del usuario, NO revocar)
+A partir de la Fase 8, el ciclo de cada sprint es: **implementar → validación local en verde → UN push → abrir el PR → terminar el turno.**
+- **Prohibido iterar fixes contra el preview/producción del PR** (no volver a pushear "correcciones" tras ver el deploy). Cada push dispara un build de Vercel y el plan gratuito tiene cuota diaria limitada — el usuario la paga.
+- La validación local (`tsc --noEmit`, `eslint`, `next build`) corre ANTES del push, una sola vez, y debe estar en verde.
+- Los hallazgos de Devin Review (o del usuario) se acumulan y se reparan **por rondas agrupadas**, solo cuando el usuario lo pida (patrón PRs #26-#28, #30, #38).
+- Excepción única: un fix trivial que rompe el build puede pushearse, máximo uno por PR y sin pasos adicionales.
+

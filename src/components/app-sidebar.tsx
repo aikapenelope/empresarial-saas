@@ -1,6 +1,7 @@
 "use client";
 
-import { LogoIcon } from "@/components/logo";
+import Link from "next/link";
+import { PlusIcon, SearchIcon, StoreIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 	Sidebar,
@@ -11,43 +12,65 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	useSidebar,
 } from "@/components/ui/sidebar";
 import { NavGroup } from "@/components/nav-group";
-import { footerNavLinks, navGroups } from "@/components/app-shared";
-import { LatestChange } from "@/components/latest-change";
-import { PlusIcon, SearchIcon } from "lucide-react";
+import { buildNavGroups } from "@/components/app-shared";
 
-export function AppSidebar() {
+interface AppSidebarProps {
+	tenantName: string;
+	tenantSlug: string;
+	userRole?: string | null;
+	activeAlertCount?: number;
+	onOpenCommandPalette: () => void;
+}
+
+export function AppSidebar({
+	tenantName,
+	tenantSlug,
+	userRole,
+	activeAlertCount,
+	onOpenCommandPalette,
+}: AppSidebarProps) {
+	const navGroups = buildNavGroups(tenantSlug, userRole, activeAlertCount);
+	// FIX móvil: cerrar el drawer al elegir cualquier destino del sidebar.
+	const { isMobile, setOpenMobile } = useSidebar();
+	const closeMobile = () => {
+		if (isMobile) setOpenMobile(false);
+	};
+
 	return (
-		<Sidebar collapsible="icon" variant="floating">
+		<Sidebar collapsible="icon" variant="floating" className="no-print">
 			<SidebarHeader className="h-14 justify-center">
-				<SidebarMenuButton asChild>
-					<a href="#link">
-						<LogoIcon />
-						<span className="font-medium">Efferd</span>
-					</a>
+				<SidebarMenuButton asChild tooltip="Ir a empresas">
+					<Link href="/" onClick={closeMobile}>
+						<StoreIcon />
+						<span className="font-medium">{tenantName}</span>
+					</Link>
 				</SidebarMenuButton>
 			</SidebarHeader>
 			<SidebarContent>
 				<SidebarGroup>
 					<SidebarMenuItem className="flex items-center gap-2">
 						<SidebarMenuButton
+							asChild
 							className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-							tooltip="Add product"
+							tooltip="Nueva venta"
 						>
-							<PlusIcon
-							/>
-							<span>Add product</span>
+							<Link href={`/${tenantSlug}/erp/pos`} onClick={closeMobile}>
+								<PlusIcon />
+								<span>Nueva venta</span>
+							</Link>
 						</SidebarMenuButton>
 						<Button
-							aria-label="Search store"
+							aria-label="Buscar (Ctrl+K)"
 							className="size-8 group-data-[collapsible=icon]:opacity-0"
 							size="icon"
 							variant="outline"
+							onClick={onOpenCommandPalette}
 						>
-							<SearchIcon
-							/>
-							<span className="sr-only">Search store</span>
+							<SearchIcon />
+							<span className="sr-only">Buscar</span>
 						</Button>
 					</SidebarMenuItem>
 				</SidebarGroup>
@@ -56,23 +79,15 @@ export function AppSidebar() {
 				))}
 			</SidebarContent>
 			<SidebarFooter>
-				<LatestChange />
-				<SidebarMenu className="mt-2">
-					{footerNavLinks.map((item) => (
-						<SidebarMenuItem key={item.title}>
-							<SidebarMenuButton
-								asChild
-								className="text-muted-foreground"
-								isActive={item.isActive}
-								size="sm"
-							>
-								<a href={item.path}>
-									{item.icon}
-									<span>{item.title}</span>
-								</a>
-							</SidebarMenuButton>
-						</SidebarMenuItem>
-					))}
+				<SidebarMenu>
+					<SidebarMenuItem>
+						<SidebarMenuButton asChild size="sm" tooltip="Ver empresas" className="text-muted-foreground">
+							<Link href="/" onClick={closeMobile}>
+								<StoreIcon />
+								<span>Ver empresas</span>
+							</Link>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
 				</SidebarMenu>
 			</SidebarFooter>
 		</Sidebar>

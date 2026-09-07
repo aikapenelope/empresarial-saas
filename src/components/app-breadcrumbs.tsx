@@ -1,31 +1,45 @@
-import type { ReactNode } from "react";
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
+	BreadcrumbLink,
 	BreadcrumbList,
 	BreadcrumbPage,
+	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { buildNavGroups, resolveActiveNavItem } from "@/components/app-shared";
 
-/** Current page segment shown in the header — pass a nav item or `{ title, icon? }`. */
-export type AppBreadcrumbPage = {
-	title: string;
-	icon?: ReactNode;
-};
+interface AppBreadcrumbsProps {
+	tenantName: string;
+	tenantSlug: string;
+	userRole?: string | null;
+}
 
-export function AppBreadcrumbs({ page }: { page?: AppBreadcrumbPage | null }) {
-	if (!page?.title) {
-		return null;
-	}
+export function AppBreadcrumbs({ tenantName, tenantSlug, userRole }: AppBreadcrumbsProps) {
+	const pathname = usePathname();
+	const groups = buildNavGroups(tenantSlug, userRole);
+
+	const current = resolveActiveNavItem(pathname, groups.flatMap((group) => group.items));
 
 	return (
 		<Breadcrumb>
 			<BreadcrumbList>
 				<BreadcrumbItem>
-					<BreadcrumbPage className="flex items-center gap-2 [&>svg]:size-3.5">
-						{page.icon}
-						{page.title}
-					</BreadcrumbPage>
+					<BreadcrumbLink asChild>
+						<Link href={`/${tenantSlug}/erp`}>{tenantName}</Link>
+					</BreadcrumbLink>
 				</BreadcrumbItem>
+				{current && (
+					<>
+						<BreadcrumbSeparator />
+						<BreadcrumbItem>
+							<BreadcrumbPage>{current.title}</BreadcrumbPage>
+						</BreadcrumbItem>
+					</>
+				)}
 			</BreadcrumbList>
 		</Breadcrumb>
 	);
