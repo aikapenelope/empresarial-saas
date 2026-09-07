@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -15,8 +16,9 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { LogOutIcon, StoreIcon } from "lucide-react";
+import { LogOutIcon, MoonIcon, StoreIcon, SunIcon } from "lucide-react";
 
 const ROLE_LABEL: Record<string, string> = {
 	"super-admin": "Super Administrador",
@@ -35,6 +37,16 @@ interface NavUserProps {
 
 export function NavUser({ userName, userEmail, userRole }: NavUserProps) {
 	const router = useRouter();
+	const { resolvedTheme, setTheme } = useTheme();
+	// resolvedTheme sólo existe en el cliente: hasta montar se muestra un
+	// ítem neutro para evitar hydration mismatch. useSyncExternalStore es el
+	// detector de hidratación canónico (sin setState dentro del efecto).
+	const mounted = React.useSyncExternalStore(
+		() => () => {},
+		() => true,
+		() => false,
+	);
+	const isDark = mounted ? resolvedTheme === 'dark' : null;
 
 	const handleLogout = async () => {
 		// Endpoint REST oficial de Payload para cerrar la sesión del token.
@@ -89,6 +101,12 @@ export function NavUser({ userName, userEmail, userRole }: NavUserProps) {
 				</DropdownMenuLabel>
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
+					<DropdownMenuItem
+						onClick={() => setTheme(isDark ? 'light' : 'dark')}
+					>
+						{isDark ? <SunIcon /> : <MoonIcon />}
+						Cambiar a modo {isDark === false ? 'oscuro' : 'claro'}
+					</DropdownMenuItem>
 					<DropdownMenuItem asChild>
 						<Link href="/">
 							<StoreIcon />

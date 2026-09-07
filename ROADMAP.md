@@ -547,10 +547,10 @@ Cada sprint concluye con:
 
 ### ☀️ Sprint 33 — Modo claro con toggle + migración progresiva (PR `feat/ui-light-mode`)
 
-- [ ] `next-themes` restringido a `light|dark` (sin `system`), script anti-flash, toggle en `NavUser`; retirar el `html.dark` fijo.
-- [ ] Tokens `:root` light; revisión de contraste AA en ambos modos.
-- [ ] Migración progresiva de vistas a primitivas (Table/Badge/Card/DropdownMenu) y retiro por partes del puente `indigo-*`; CWV.
-- **Criterio de cierre:** dos modos completos (claro por defecto para el público definido, negro), toggle persistente, sin flash; puente retirado a medida que las vistas migren.
+- [x] `next-themes` restringido a `light|dark` (sin `system`), anti-flash nativo, toggle claro/negro en `NavUser` (con guard de hidratación); retirado el `html.dark` fijo. **Modo por defecto: oscuro** (decisión del usuario: "primero créalo bien con el modo oscuro").
+- [x] Tokens `:root` light + puente `indigo-*` bimodal (valores por modo para contraste AA); Toaster sincronizado al tema.
+- [ ] Migración progresiva de vistas a primitivas (Table/Badge/Card/DropdownMenu) y retiro por partes del puente `indigo-*`: **tarea continua** de pulido (no bloquea el cierre de la Fase 8); CWV incluidos.
+- **Criterio de cierre:** dos modos completos y operables desde el menú de usuario, persistentes y sin flash; la migración de vistas avanza por partes.
 
 
 
