@@ -1,7 +1,13 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import React from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/utilities/cn';
 
 interface ModalProps {
@@ -13,6 +19,13 @@ interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
+/**
+ * Wrapper del Dialog oficial de shadcn con la API pública histórica del ERP
+ * (isOpen/onClose/title/description/maxWidth): los 22 modales del sistema no
+ * cambiaron al migrar el contenedor. Escape, cierre por overlay, bloqueo de
+ * scroll y botón de cierre los provee el Dialog de Radix/shadcn de forma
+ * nativa (el Modal artesanal los reimplementaba a mano).
+ */
 export function Modal({
   isOpen,
   onClose,
@@ -21,61 +34,35 @@ export function Modal({
   children,
   maxWidth = 'lg',
 }: ModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
-  const maxWidthStyles = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-xl',
-    '2xl': 'max-w-2xl',
-  };
+  const maxWidthClass = {
+    sm: 'sm:max-w-sm',
+    md: 'sm:max-w-md',
+    lg: 'sm:max-w-lg',
+    xl: 'sm:max-w-xl',
+    '2xl': 'sm:max-w-2xl',
+  }[maxWidth];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
-        onClick={onClose}
-      />
-
-      {/* Modal Card */}
-      <div
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
         className={cn(
-          'relative w-full rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-100 shadow-2xl animate-in zoom-in-95 duration-200 overflow-y-auto max-h-[90vh]',
-          maxWidthStyles[maxWidth],
+          // Formularios largos (tablas de líneas, adjuntos): scroll interno
+          // con techo del 90% del viewport, igual que el modal anterior.
+          'max-h-[90dvh] overflow-y-auto',
+          maxWidthClass,
         )}
       >
-        <div className="flex items-start justify-between border-b border-slate-800/80 pb-4 mb-4">
-          <div>
-            <h2 className="text-base font-bold text-white tracking-tight">{title}</h2>
-            {description && <p className="text-xs text-slate-400 mt-0.5">{description}</p>}
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
-            aria-label="Cerrar modal"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div>{children}</div>
-      </div>
-    </div>
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold tracking-tight">{title}</DialogTitle>
+          {description && <DialogDescription>{description}</DialogDescription>}
+        </DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
   );
 }

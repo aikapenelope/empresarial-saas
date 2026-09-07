@@ -520,8 +520,8 @@ Cada sprint concluye con:
 - [x] Deps: `class-variance-authority`, `radix-ui`, `recharts 3.8`, `tw-animate-css`.
 - [x] Registry `@efferd` registrado e instalado el bloque `@efferd/dashboard-4` con dependencias transitivas: 17 primitivas shadcn en `src/components/ui/` (button, card, badge, input, select, separator, skeleton, tooltip, dropdown-menu, breadcrumb, kbd, collapsible, sheet, sidebar, item, chart, avatar) + App Shell 4 completo + Dashboard 4 completo + `formater`.
 - [x] Ajustes post-instalación: `custom-sidebar-trigger` reubicado (path del CLI), `use-mobile` al patrón canónico de React (lint 0/0).
-- [ ] Pendiente en este sprint: `Modal` artesanal → wrapper sobre `Dialog` (misma API pública, 22 modales sin tocar).
-- **Criterio de cierre:** tsc/lint/build verdes ✓ — `Dialog` wrapper pendiente.
+- [x] `Modal` artesanal → wrapper sobre `Dialog` de shadcn (misma API pública `isOpen/onClose/title/description/maxWidth`; los 22 modales intactos; escape/overlay/scroll-lock/botón de cierre nativos de Radix).
+- **Criterio de cierre:** tsc/lint/build verdes ✓ — **Sprint 29 cerrado**.
 
 ### 🧭 Sprint 30 — App Shell 4 (PR `feat/app-shell-4`)
 
