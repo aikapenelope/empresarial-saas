@@ -14,56 +14,30 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@/components/ui/item";
-import { PackagePlusIcon, TruckIcon, SettingsIcon, DownloadIcon, ChevronRightIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
+import Link from "next/link";
 
-const actions = [
-	{
-		title: "Add product",
-		description: "Create a new SKU.",
-		href: "#",
-		icon: (
-			<PackagePlusIcon aria-hidden="true" />
-		),
-	},
-	{
-		title: "Review unfulfilled",
-		description: "Orders waiting to ship.",
-		href: "#",
-		icon: (
-			<TruckIcon aria-hidden="true" />
-		),
-	},
-	{
-		title: "Store settings",
-		description: "Payments, checkouts etc.",
-		href: "#",
-		icon: (
-			<SettingsIcon aria-hidden="true" />
-		),
-	},
-	{
-		title: "Export sales",
-		description: "CSV for accountings.",
-		href: "#",
-		icon: (
-			<DownloadIcon aria-hidden="true" />
-		),
-	},
-] as const;
+export interface QuickAction {
+	title: string;
+	description: string;
+	href: string;
+	icon: LucideIcon;
+}
 
-export function QuickActions() {
+export function QuickActions({ actions }: { actions: readonly QuickAction[] }) {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>Quick actions</CardTitle>
-				<CardDescription>Shortcuts to same destinations.</CardDescription>
+				<CardTitle>Acciones rápidas</CardTitle>
+				<CardDescription>Accesos directos a las operaciones del día.</CardDescription>
 			</CardHeader>
 			<CardContent>
 				<ItemGroup className="gap-0">
 					{actions.map((a) => (
 						<Item asChild key={a.title} size="sm">
-							<a href={a.href}>
-								<ItemMedia variant="icon">{a.icon}</ItemMedia>
+							<Link href={a.href}>
+								<ItemMedia variant="icon"><a.icon aria-hidden="true" /></ItemMedia>
 								<ItemContent>
 									<ItemTitle>{a.title}</ItemTitle>
 									<ItemDescription className="line-clamp-1">
@@ -73,7 +47,7 @@ export function QuickActions() {
 								<ItemActions>
 									<ChevronRightIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
 								</ItemActions>
-							</a>
+							</Link>
 						</Item>
 					))}
 				</ItemGroup>

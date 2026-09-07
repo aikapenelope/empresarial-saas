@@ -25,10 +25,9 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Delta, DeltaIcon, DeltaValue } from "@/components/delta";
-import { revenueChartDemo } from "@/components/revenue-chart-data";
 import { ArrowRightIcon } from "lucide-react";
 
-/** Matches `<Select>`; chart uses the last N days of `revenueChartDemo`. */
+/** Matches `<Select>`; el gráfico usa los últimos N días de la serie `data`. */
 type PeriodDays = 7 | 14 | 30 | 60 | 90;
 
 // Recharts XAxis: `interval` is tick skip index (0 = all, 1 = every other, …).
@@ -40,27 +39,24 @@ const xAxisIntervalByPeriod: Record<PeriodDays, number> = {
 	90: 6,
 };
 
-type RevenueRow = {
+export type RevenueRow = {
 	date: string;
 	revenue: number;
 };
 
 const chartConfig = {
 	revenue: {
-		label: "Revenue",
+		label: "Ingresos",
 		color: "var(--chart-1)",
 	},
 } satisfies ChartConfig;
 
-export function RevenueChart() {
+export function RevenueChart({ data }: { data: RevenueRow[] }) {
 	const chartUid = useId().replace(/:/g, "");
 	const idAreaGradient = `revenue-area-grad-${chartUid}`;
-	const [periodDays, setPeriodDays] = useState<PeriodDays>(60);
+	const [periodDays, setPeriodDays] = useState<PeriodDays>(30);
 
-	const chartRows = useMemo(
-		() => revenueChartDemo.slice(-periodDays),
-		[periodDays]
-	);
+	const chartRows = useMemo(() => data.slice(-periodDays), [data, periodDays]);
 
 	// Footer delta: first → last point in the active series (not calendar MoM).
 	const growthPct = useMemo(() => {
@@ -83,7 +79,7 @@ export function RevenueChart() {
 	return (
 		<Card className="md:col-span-2 lg:col-span-4">
 			<CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<CardTitle className="text-balance">Revenue</CardTitle>
+				<CardTitle className="text-balance">Ingresos</CardTitle>
 				<Select
 					onValueChange={(v) => {
 						setPeriodDays(Number(v) as PeriodDays);
@@ -91,7 +87,7 @@ export function RevenueChart() {
 					value={String(periodDays)}
 				>
 					<SelectTrigger
-						aria-label="Revenue time range"
+						aria-label="Rango de tiempo de ingresos"
 						className="w-full min-w-36 sm:w-fit"
 						size="sm"
 					>
