@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { Loader2, TrendingUp } from 'lucide-react';
 
 interface PricingReportEntry {

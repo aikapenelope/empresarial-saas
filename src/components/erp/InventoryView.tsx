@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   Package,
   Search,
   Plus,
@@ -11,9 +10,27 @@ import {
   Play,
   Upload,
   ClipboardList,
-  ArrowRightLeft,} from 'lucide-react';
-import { formatUSD } from './KpiCard';
+  ArrowRightLeft,
+  Boxes,
+  Wheat,
+  Factory,
+  TriangleAlert,
+} from 'lucide-react';
+import { formatUSD } from './format';
 import { Badge } from './Badge';
+import { KpiCard } from './KpiCard';
+import { ErpPageHeader } from './ErpPageHeader';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { ProductModal } from './modals/ProductModal';
 import { StockMovementModal } from './modals/StockMovementModal';
 import { PricingReportCard } from './PricingReportCard';
@@ -30,6 +47,13 @@ interface InventoryViewProps {
   manufacturedCount: number;
   lowStockCount: number;
 }
+
+const TYPE_FILTERS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'raw_material', label: 'Insumos' },
+  { value: 'manufactured', label: 'BOM / Fabricados' },
+  { value: 'low_stock', label: 'Alerta Stock' },
+] as const;
 
 export function InventoryView({
   tenantId,
@@ -79,217 +103,161 @@ export function InventoryView({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Inventario & Producción</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            Control de Inventario & Fórmulas BOM
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Gestión multialmacén de materias primas, productos terminados y trazabilidad de recetas de fabricación.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {boms.length > 0 && (
-            <button
-              onClick={() => handleOpenProduction()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
-            >
-              <FlaskConical className="h-3.5 w-3.5 text-indigo-400" />
-              <span>+ Fabricar Lote (BOM)</span>
-            </button>
-          )}
-          <button
-            onClick={() => setIsMovementModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <ArrowRightLeft className="h-3.5 w-3.5 text-indigo-400" />
-            <span>Movimiento Manual</span>
-          </button>
-          <Link
-            href={`/${tenantSlug}/erp/inventory/kardex`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <span>Kardex</span>
-          </Link>
-          <Link
-            href={`/${tenantSlug}/erp/inventory/counts`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <ClipboardList className="h-3.5 w-3.5 text-amber-400" />
-            <span>Conteos</span>
-          </Link>
-          <Link
-            href={`/${tenantSlug}/erp/inventory/import`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <Upload className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Importar Inventario</span>
-          </Link>
-          <button
-            onClick={() => setIsProductModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors shadow-sm shadow-indigo-500/20"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>+ Nuevo Artículo</span>
-          </button>
-        </div>
-      </div>
+      <ErpPageHeader
+        title="Control de Inventario & Fórmulas BOM"
+        description="Gestión multialmacén de materias primas, productos terminados y trazabilidad de recetas de fabricación."
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Inventario & Producción"
+        actions={
+          <>
+            {boms.length > 0 && (
+              <Button variant="outline" size="sm" onClick={() => handleOpenProduction()}>
+                <FlaskConical className="h-3.5 w-3.5" aria-hidden="true" />
+                Fabricar Lote (BOM)
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setIsMovementModalOpen(true)}>
+              <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              Movimiento Manual
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/${tenantSlug}/erp/inventory/kardex`}>Kardex</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/${tenantSlug}/erp/inventory/counts`}>
+                <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
+                Conteos
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/${tenantSlug}/erp/inventory/import`}>
+                <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                Importar
+              </Link>
+            </Button>
+            <Button size="sm" onClick={() => setIsProductModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Nuevo Artículo
+            </Button>
+          </>
+        }
+      />
 
       {/* Métricas de Inventario */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Total Artículos</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">{products.length}</span>
-            <span className="text-xs text-slate-400">ítems activos</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Materias Primas</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-amber-400">{rawMaterialsCount}</span>
-            <span className="text-xs text-slate-400">insumos base</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Manufacturados (BOM)</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-indigo-400">{manufacturedCount}</span>
-            <span className="text-xs text-slate-400">productos con receta</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Stock Crítico</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-rose-400">{lowStockCount}</span>
-            <span className="text-xs text-slate-400">bajo mínimo</span>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard
+          title="Total Artículos"
+          valueUSD={String(products.length)}
+          icon={Boxes}
+          description="Ítems activos"
+        />
+        <KpiCard
+          title="Materias Primas"
+          valueUSD={String(rawMaterialsCount)}
+          icon={Wheat}
+          tone="warning"
+          description="Insumos base"
+        />
+        <KpiCard
+          title="Manufacturados (BOM)"
+          valueUSD={String(manufacturedCount)}
+          icon={Factory}
+          description="Productos con receta"
+        />
+        <KpiCard
+          title="Stock Crítico"
+          valueUSD={String(lowStockCount)}
+          icon={TriangleAlert}
+          tone="destructive"
+          description="Bajo mínimo"
+        />
       </div>
 
       {/* Barra de Filtros y Búsqueda */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-500" />
-          <input
+          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <Input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por artículo o SKU..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/80 pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="pl-9"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <button
-            onClick={() => setTypeFilter('all')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              typeFilter === 'all'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-          >
-            Todos ({products.length})
-          </button>
-          <button
-            onClick={() => setTypeFilter('raw_material')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              typeFilter === 'raw_material'
-                ? 'bg-amber-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-          >
-            Insumos ({rawMaterialsCount})
-          </button>
-          <button
-            onClick={() => setTypeFilter('manufactured')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              typeFilter === 'manufactured'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-          >
-            BOM / Fabricados ({manufacturedCount})
-          </button>
-          <button
-            onClick={() => setTypeFilter('low_stock')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              typeFilter === 'low_stock'
-                ? 'bg-rose-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
-          >
-            Alerta Stock ({lowStockCount})
-          </button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {TYPE_FILTERS.map((f) => (
+            <Button
+              key={f.value}
+              size="sm"
+              variant={typeFilter === f.value ? 'default' : 'outline'}
+              onClick={() => setTypeFilter(f.value)}
+            >
+              {f.value === 'all'
+                ? `${f.label} (${products.length})`
+                : f.value === 'raw_material'
+                  ? `${f.label} (${rawMaterialsCount})`
+                  : f.value === 'manufactured'
+                    ? `${f.label} (${manufacturedCount})`
+                    : `${f.label} (${lowStockCount})`}
+            </Button>
+          ))}
         </div>
       </div>
 
       {/* Tabla de Artículos */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Catálogo Maestro de Artículos</h2>
-          <span className="text-xs text-slate-400">{filteredProducts.length} ítems mostrados</span>
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Catálogo Maestro de Artículos</h2>
+          <span className="text-xs text-muted-foreground">{filteredProducts.length} ítems mostrados</span>
         </div>
 
         {filteredProducts.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-xs space-y-3">
-            <Package className="h-8 w-8 mx-auto text-slate-600" />
+          <div className="p-12 text-center text-muted-foreground text-xs space-y-3">
+            <Package className="h-8 w-8 mx-auto text-muted-foreground/50" aria-hidden="true" />
             <p>No se encontraron artículos registrados con los filtros seleccionados.</p>
-            <button
-              onClick={() => setIsProductModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500"
-            >
-              + Registrar Primer Artículo
-            </button>
+            <Button size="sm" onClick={() => setIsProductModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Registrar Primer Artículo
+            </Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Artículo / Descripción</th>
-                  <th className="p-3">SKU</th>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">U.M.</th>
-                  <th className="p-3 text-right">Costo CPP (USD)</th>
-                  <th className="p-3 text-right">Precio Venta (USD)</th>
-                  <th className="p-3 text-right">Existencia Actual</th>
-                  <th className="p-3 text-center">Estado Stock</th>
-                  <th className="p-3 text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Artículo / Descripción</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>U.M.</TableHead>
+                  <TableHead className="text-right">Costo CPP (USD)</TableHead>
+                  <TableHead className="text-right">Precio Venta (USD)</TableHead>
+                  <TableHead className="text-right">Existencia Actual</TableHead>
+                  <TableHead className="text-center">Estado Stock</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredProducts.map((p) => {
                   const current = Number(p.currentStock) || 0;
                   const min = Number(p.minStockAlert) || 0;
                   const isLow = min > 0 && current <= min;
+                  // Cobertura visual contra el mínimo: 100% = exactamente el mínimo;
+                  // de ahí en adelante la barra se llena con excedente (cap 3x).
+                  const coveragePct =
+                    min > 0 ? Math.min(100, (current / min) * 100) : 100;
 
                   return (
-                    <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3">
-                        <div className="font-semibold text-white">{p.name}</div>
-                        <div className="text-[10px] text-slate-400">
+                    <TableRow key={p.id}>
+                      <TableCell>
+                        <div className="font-semibold text-foreground">{p.name}</div>
+                        <div className="text-[10px] text-muted-foreground">
                           {p.productType === 'manufactured' ? 'Producto elaborado con fórmula BOM' : 'Artículo estándar'}
                         </div>
-                      </td>
-                      <td className="p-3 font-mono text-slate-300 font-medium">{p.sku}</td>
-                      <td className="p-3">
+                      </TableCell>
+                      <TableCell className="font-mono font-medium text-muted-foreground">{p.sku}</TableCell>
+                      <TableCell>
                         <Badge
                           variant={
                             p.productType === 'raw_material'
@@ -306,37 +274,46 @@ export function InventoryView({
                               ? 'Manufacturado'
                               : 'Estándar'}
                         </Badge>
-                      </td>
-                      <td className="p-3 uppercase font-mono text-slate-400">{p.unitOfMeasure}</td>
-                      <td className="p-3 text-right font-mono text-slate-300">
+                      </TableCell>
+                      <TableCell className="uppercase font-mono text-muted-foreground">{p.unitOfMeasure}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
                         {formatUSD(Number(p.costUSD) || 0)}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-white">
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold">
                         {formatUSD(Number(p.priceUSD) || 0)}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold">
-                        <span className={isLow ? 'text-rose-400' : 'text-emerald-400'}>
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold">
+                        <span className={isLow ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>
                           {current} {p.unitOfMeasure}
                         </span>
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant={isLow ? 'rose' : 'emerald'} size="sm">
+                        {min > 0 && (
+                          <Progress
+                            value={coveragePct}
+                            className={`mt-1.5 h-1 ${isLow ? '[&>div]:bg-rose-500' : '[&>div]:bg-emerald-500'}`}
+                            aria-label={`Cobertura de stock de ${p.name}: ${coveragePct.toFixed(0)}% del mínimo`}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={isLow ? 'rose' : 'emerald'} size="sm" dot>
                           {isLow ? `Bajo Mínimo (${min})` : 'Óptimo'}
                         </Badge>
-                      </td>
-                      <td className="p-3 text-center">
-                        <button
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
                           onClick={() => setEditingProduct(p)}
-                          className="text-indigo-400 hover:text-indigo-300 font-semibold text-[11px]"
                         >
                           Editar
-                        </button>
-                      </td>
-                    </tr>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
@@ -346,13 +323,13 @@ export function InventoryView({
 
       {/* Recetas y Fórmulas BOM */}
       {boms.length > 0 && (
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur space-y-4 p-5">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+        <div className="rounded-xl border border-border bg-card overflow-hidden space-y-4 p-5">
+          <div className="flex items-center justify-between border-b border-border pb-3">
             <div className="flex items-center gap-2">
-              <FlaskConical className="h-4 w-4 text-indigo-400" />
-              <h2 className="text-sm font-semibold text-white">Fórmulas & Recetas BOM (Bill of Materials)</h2>
+              <FlaskConical className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-foreground">Fórmulas & Recetas BOM (Bill of Materials)</h2>
             </div>
-            <span className="text-xs text-slate-400">{boms.length} recetas configuradas</span>
+            <span className="text-xs text-muted-foreground">{boms.length} recetas configuradas</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -365,40 +342,37 @@ export function InventoryView({
               return (
                 <div
                   key={bom.id}
-                  className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 space-y-3"
+                  className="rounded-lg border border-border bg-muted/30 p-4 space-y-3"
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-bold text-xs text-white">{bom.name}</h3>
-                      <p className="text-[11px] text-indigo-400">
+                      <h3 className="font-bold text-xs text-foreground">{bom.name}</h3>
+                      <p className="text-[11px] text-muted-foreground">
                         Rinde: {bom.outputQuantity} unidades de {productName}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={bom.isActive ? 'emerald' : 'slate'} size="sm">
+                      <Badge variant={bom.isActive ? 'emerald' : 'slate'} size="sm" dot={bom.isActive === true}>
                         {bom.isActive ? 'Activa' : 'Inactiva'}
                       </Badge>
-                      <button
-                        onClick={() => handleOpenProduction(bom.id)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold transition-colors shadow-sm"
-                      >
-                        <Play className="h-3 w-3" />
-                        <span>Fabricar</span>
-                      </button>
+                      <Button size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => handleOpenProduction(bom.id)}>
+                        <Play className="h-3 w-3" aria-hidden="true" />
+                        Fabricar
+                      </Button>
                     </div>
                   </div>
 
                   {bom.instructions && (
-                    <p className="text-[11px] text-slate-400 italic bg-slate-900/60 p-2 rounded border border-slate-800/60 leading-relaxed">
+                    <p className="text-[11px] text-muted-foreground italic bg-muted/50 p-2 rounded border border-border leading-relaxed">
                       {bom.instructions}
                     </p>
                   )}
 
                   <div className="text-[11px] space-y-1">
-                    <span className="font-semibold text-slate-300 uppercase tracking-wider text-[10px]">
+                    <span className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">
                       Insumos Requeridos:
                     </span>
-                    <ul className="divide-y divide-slate-800/60">
+                    <ul className="divide-y divide-border">
                       {bom.items?.map((item, idx) => {
                         const rawName =
                           typeof item.rawMaterial === 'object' && item.rawMaterial !== null
@@ -410,9 +384,9 @@ export function InventoryView({
                             : '';
 
                         return (
-                          <li key={idx} className="py-1 flex items-center justify-between text-slate-400">
+                          <li key={idx} className="py-1 flex items-center justify-between text-muted-foreground">
                             <span>{rawName}</span>
-                            <span className="font-mono text-slate-200 font-medium">
+                            <span className="font-mono text-foreground font-medium">
                               {item.quantity} {uom}{' '}
                               {Number(item.scrapFactorPercent) > 0 &&
                                 `(+${item.scrapFactorPercent}% merma)`}
@@ -423,7 +397,7 @@ export function InventoryView({
                     </ul>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-800 flex justify-between text-[11px] font-mono text-slate-400">
+                  <div className="pt-2 border-t border-border flex justify-between text-[11px] font-mono text-muted-foreground">
                     <span>Mano de Obra: {formatUSD(Number(bom.laborCostUSD) || 0)}</span>
                     <span>Costos Indirectos: {formatUSD(Number(bom.indirectCostsUSD) || 0)}</span>
                   </div>

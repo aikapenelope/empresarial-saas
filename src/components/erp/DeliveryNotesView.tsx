@@ -9,7 +9,7 @@ import {
   Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { voidDeliveryNoteAction } from '@/actions/erpActions';
 import { ShareDocButtons } from './ShareDocButtons';

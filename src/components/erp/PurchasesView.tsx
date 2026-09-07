@@ -10,7 +10,7 @@ import {
   Wallet,
   Loader2,
 } from 'lucide-react';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { PurchaseInvoiceModal } from './modals/PurchaseInvoiceModal';
 import { ReceiveWarehouseModal } from './modals/ReceiveWarehouseModal';

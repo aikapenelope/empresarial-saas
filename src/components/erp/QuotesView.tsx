@@ -11,7 +11,7 @@ import {
   Calendar,
   Zap,
 } from 'lucide-react';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { QuoteModal } from './modals/QuoteModal';
 import { ConvertQuoteModal } from './modals/ConvertQuoteModal';

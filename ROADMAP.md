@@ -563,6 +563,35 @@ Cada sprint concluye con:
 
 ---
 
+# 🧩 Fase 9: Migración de Vistas al Design System + Componentes con Personalidad
+
+> **Objetivo:** Que TODA la operación (no solo el dashboard) respire el design system shadcn monocromo, con KPIs vivos (delta + sparkline) y componentes visuales únicos por dominio. El admin de Payload sigue intocable.
+
+### 🎨 Sprint 35 — Fundación + Ola 1 de vistas (PR `feat/ui-views-migration-s35`)
+
+- [x] **Puente bimodal completado (globals.css):** la escala `slate-*` heredada (tablas, headers, KPIs artesanales) se mapea a la neutra monocroma en ambos modos — misma decisión central que el puente `indigo-*` de S32, retirable por partes. Fix escopado de `text-white` bajo `.erp-views` (AppShell) para modo claro, con exención de botones/enlaces.
+- [x] **Primitivas shadcn añadidas por CLI oficial:** `ui/table.tsx`, `ui/progress.tsx`.
+- [x] **`Badge` del ERP re-implementado** sobre tokens bimodales (misma API: emerald/amber/rose/indigo/blue/slate) + prop `dot` estilo Dashboard 4. Impacto inmediato en 22 archivos sin tocarlos.
+- [x] **`KpiCard` re-implementada** sobre Card de shadcn con props nuevas: `deltaPct`/`deltaLabel` (Delta oficial de Efferd), `sparkline` (MiniSparkline recharts con tokens `--chart-N`), `tone` (positive/warning/destructive). Los formatters `formatUSD/formatVES` se movieron a `erp/format.ts` (módulo neutro consumible desde RSC; 32 imports re-dirigidos).
+- [x] **`ErpPageHeader` canónico:** breadcrumb + título + descripción + slot de acciones; elimina el header artesanal duplicado por vista.
+- [x] **Ola 1 de vistas migradas (el modelo replicable):** CRM `CustomersView` (con barra de utilización de crédito por cliente), `AccountsReceivableView` (barra apilada de composición de cartera por bucket), `InvoicesView` y `InventoryView` (barra de cobertura de stock contra mínimo) + detalle `customers/[id]` (salud de crédito: utilización + porción vencida).
+- [x] **Criterio de cierre:** `tsc --noEmit`, `eslint .` y `next build` en verde local.
+
+### 📊 Ola 2 (propuesta): componentes únicos por dominio — análisis
+
+El objetivo es que cada módulo tenga UNA pieza visual distintiva bajo el mismo sistema (no más monotemático). Candidaturas priorizadas:
+
+1. **POS** — vista de mostrador: targets de tacto XL, ticket lateral fijo, teclado numérico; densidad distinta a todo el ERP.
+2. **Kardex** — timeline vertical de movimientos (feed con iconos por tipo) en vez de tabla plana.
+3. **Cajas** — donut de mix de métodos de pago (zelle/pago móvil/efectivo) por cierre + guard turnos.
+4. **Tasas** — línea de tendencia BCV/Binance/paralelo (recharts) con la fuente efectiva resaltada.
+5. **Auditoría** — feed de actividad con avatar-inicial del actor y diff colapsable (Dialog).
+6. **Alertas** — feed por severidad con `Badge dot` y contador vivo en el sidebar.
+7. **Cotizaciones** — mini-funnel cotización→factura (Progress) en el header de la vista.
+8. **Resto de vistas** (Suppliers, Purchases, Orders, DeliveryNotes, Quotes, Counts, Import, Rates, CashRegisters, Vendors, Settings, Audit, Alerts, UsersPanel): replicar el patrón Ola 1 (ErpPageHeader + KpiCard + Table shadcn) — mecánico, sin diseño nuevo.
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.

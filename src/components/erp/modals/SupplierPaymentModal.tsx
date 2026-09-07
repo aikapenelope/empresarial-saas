@@ -4,7 +4,7 @@ import React, { useState, useTransition } from 'react';
 import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { createSupplierPaymentAction } from '@/actions/erpActions';
-import { formatUSD } from '../KpiCard';
+import { formatUSD } from '../format';
 import { Loader2 } from 'lucide-react';
 
 interface SupplierPaymentModalProps {

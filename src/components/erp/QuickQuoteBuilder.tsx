@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { createQuoteAction } from '@/actions/erpActions';
 import { ensureShareUrlAction, sendDocumentEmailAction } from '@/actions/shareActions';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 
 /**
  * Sprint 28: armado veloz de cotizaciones. Producto por SKU/nombre (datalist

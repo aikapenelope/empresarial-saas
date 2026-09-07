@@ -6,7 +6,7 @@ import { Modal } from './Modal';
 import { toast } from 'sonner';
 import { createQuoteAction, updateQuoteAction } from '@/actions/erpActions';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
-import { formatUSD, formatVES } from '../KpiCard';
+import { formatUSD, formatVES } from '../format';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 
 interface QuoteModalProps {

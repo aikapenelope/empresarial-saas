@@ -6,7 +6,7 @@ import { getTenantBySlug, getInvoiceDetail } from '@/utilities/erpData';
 import { ErpAccessError, requireErpTenantAccess } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { PrintButton, VoidInvoiceButton } from '@/components/erp/InvoiceDetailActions';
-import { formatUSD, formatVES } from '@/components/erp/KpiCard';
+import { formatUSD, formatVES } from '@/components/erp/format';
 import { Badge } from '@/components/erp/Badge';
 import type { User } from '@/payload-types';
 

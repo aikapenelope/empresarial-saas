@@ -12,7 +12,7 @@ import {
   History,
   Calendar,
 } from 'lucide-react';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { CashRegisterModal } from './modals/CashRegisterModal';
 import { CashClosureModal } from './modals/CashClosureModal';

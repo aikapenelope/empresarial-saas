@@ -13,7 +13,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { createInvoiceAction, ensureWalkInCustomerAction } from '@/actions/erpActions';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
 import { Badge } from './Badge';
 
