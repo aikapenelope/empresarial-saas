@@ -493,6 +493,71 @@ Cada sprint concluye con:
 
 ---
 
+# 🎨 Fase 8: Rediseño Visual Completo del ERP — shadcn/ui + Efferd (App Shell 4 + Dashboard 4)
+
+> **Objetivo:** Reemplazar la UI artesanal del ERP por un design system profesional: **shadcn/ui** como base (código propio en el repo), paleta **Cendaro Blue** (paridad visual con el ERP de referencia), y los bloques gratuitos de **Efferd** — **App Shell 4** (sidebar inset colapsable + breadcrumbs) y **Dashboard 4** (KPIs con delta, gráfico de ingresos, ranking por categoría, acciones rápidas) — conectados a datos reales.
+>
+> **Reglas no negociables:**
+> 1. **El admin de Payload NO se toca** (`src/app/(payload)/**` queda idéntico). Todo el esfuerzo es sobre `(app)` y componentes `src/components/erp`.
+> 2. **Modo oscuro primero** (dark por defecto, bien hecho); el modo claro entra al final (Sprint 33). Sólo existen dos modos: claro y negro.
+> 3. **Público objetivo:** usuarios de 40-50 años en monitores de resolución modesta → fuente base 16px, filas de tabla altas, targets de clic grandes, densidad baja, contraste AA.
+> 4. Cada sprint es un PR independiente y mergeable; `tsc --noEmit`, `eslint` y `next build` en verde en cada uno.
+> 5. El `IconPlaceholder` de Efferd se resuelve a **lucide-react** (el icon set que ya usamos); las páginas `(share)` conservan su layout propio.
+
+### 📋 Análisis del estado actual (inventario verificado en repo)
+
+- **27 rutas** en `(app)`: 21 páginas ERP + home público + cotización rápida; `(share)` aparte con layout propio.
+- **38 componentes ERP** (vistas + shell) y **22 modales** sobre el `Modal` artesanal propio.
+- **Shell actual:** `AppShell` (client) + `Sidebar` plano de ~20 ítems con `ROLE_NAV` por rol + `Header` con CurrencyTicker + `CommandPalette` (⌘K). Home público con hero oscuro propio.
+- **Design system actual:** primitivas artesanales (`Badge`, `KpiCard`, `Modal`, tablas a mano con clases Tailwind), un solo tema oscuro slate/indigo. Cendaro, en cambio, corre shadcn/ui + Tailwind v4 oklch + claro/oscuro.
+- **Bloques Efferd descargados y verificados** (registry `efferd.com/r/new-york/…`): App Shell 4 = `SidebarProvider` + sidebar floating colapsable a iconos + `SidebarInset` con header de breadcrumbs + nav agrupada (`navGroups` con label/items/subItems) + `NavUser` con dropdown + footer. Dashboard 4 = grid de 4 stats con Delta + RevenueChart (área) + RefundReturnRateChart + CategoryRankChart (pie) + QuickActions (shadcn `Item`). Dependencias: primitivas shadcn (button, card, badge, input, select, separator, skeleton, table, tabs, tooltip, dropdown-menu, dialog, breadcrumb, kbd, collapsible, sidebar, item, chart) + `formater` de Efferd + recharts.
+- **Mapeo Dashboard 4 → nuestros datos:** Stats (ingresos facturados 30d vs previos · nº facturas · ticket promedio · tasa cotización→factura) · RevenueChart (facturación diaria USD) · RefundReturnRateChart (devoluciones/tasa efectiva de cobro) · CategoryRankChart (ventas por categoría, real desde invoices) · QuickActions (Nueva factura · Abrir POS · Cotización rápida · Registrar pago).
+
+### 🧱 Sprint 29 — Fundación del design system (PR `feat/design-system-base`)
+
+- [ ] `tailwind.config.ts` completo con tokens semánticos (background, card, primary, muted, accent, destructive/success/warning + soft, border-subtle, ring, sidebar-*, chart-1..5, radios, sombras Cendaro) vía CSS variables.
+- [ ] `globals.css` con el `theme.css` de Cendaro traducido a Tailwind v3 (`:root` dark-first; el bloque light llega en S33). Fuente base 16px.
+- [ ] Deps: `class-variance-authority`, `radix-ui`, `recharts`, `tw-animate-css`. (`tailwind-merge` y `lucide-react` ya están.)
+- [ ] Primitivas shadcn portadas a `src/components/ui/` (código propio, adaptado Tailwind v3): button, card, badge, input, label, select, separator, skeleton, table, tabs, tooltip, dropdown-menu, dialog, breadcrumb, kbd, collapsible, sidebar, item, chart + `formater` de Efferd.
+- [ ] `Modal` artesanal → wrapper sobre `Dialog` (misma API pública para no romper los 22 modales en este sprint).
+- **Criterio de cierre:** build verde con las primitivas disponibles; nada visible cambia todavía.
+
+### 🧭 Sprint 30 — App Shell 4 (PR `feat/app-shell-4`)
+
+- [ ] Portar App Shell 4: `AppSidebar` (floating, colapsable a iconos) + `AppHeader` (breadcrumbs reales por ruta + CurrencyTicker + trigger ⌘K + theme slot) + `NavUser` (dropdown con usuario/rol/empresa y salida).
+- [ ] `navGroups` real agrupada con `ROLE_NAV` existente: **Operación** (POS, Facturas, Cotizaciones, Cotización rápida, Pedidos, Remisiones) · **Inventario** (Inventario, Kardex, Conteos, Importación) · **Finanzas** (Cartera, Compras, Cajas, Tasas) · **Administración** (Clientes, Proveedores, Vendedores, Plantillas, Alertas, Auditoría, Ajustes).
+- [ ] Integrar `CommandPalette` existente al header (⌘K); sustituir `IconPlaceholder` por lucide.
+- [ ] Migrar `(app)/layout.tsx` al shell nuevo; home público y login al nuevo look; `(share)` intacto.
+- **Criterio de cierre:** las 21 rutas navegables en el shell nuevo, colapso de sidebar y móvil operativos, dark por defecto.
+
+### 📊 Sprint 31 — Dashboard 4 con datos reales (PR `feat/dashboard-4`)
+
+- [ ] Portar los 5 componentes del Dashboard 4 alimentados con Server Data real (Local API, `overrideAccess:false`, tenant del usuario): stats con Delta, RevenueChart (recharts área), Refund/Return, CategoryRank, QuickActions con rutas reales.
+- [ ] `[tenant]/erp/page.tsx` pasa del stack de `KpiCard`s al dashboard nuevo; KPIs y quick actions antiguos retirados al no tener referencias.
+- **Criterio de cierre:** dashboard con datos vivos del inquilino, sin datos mock.
+
+### 🖥️ Sprint 32 — Migración de vistas (PR `feat/ui-migration-views`)
+
+- [ ] Las ~20 vistas (tablas, badges de estado, headers, filtros) migradas a primitivas: `Table`, `Badge`, `Card`, `DropdownMenu` por fila, `Tabs`, `Select`; densidad baja y targets grandes para el público definido.
+- [ ] Detalles de factura/pedido/remisión al nuevo look (print styles preservados).
+- **Criterio de cierre:** cero referencias a `Badge`/`KpiCard`/tablas artesanales viejas; lint 0/0.
+
+### ☀️ Sprint 33 — Modo claro + pulido (PR `feat/ui-light-mode`)
+
+- [ ] `next-themes` restringido a `light|dark` (clase en `<html>`, sin `system`), script anti-flash, toggle claro/negro en `NavUser`.
+- [ ] Tokens `:root` light de Cendaro (con las variantes soft AA); revisión de contraste AA en ambos modos.
+- [ ] Pulido final: CWV de Sprint 18, focus states, empty states.
+- **Criterio de cierre:** dos modos completos (claro por defecto, negro), toggle persistente, sin flash.
+
+### ✅ Criterios de Cierre de la Fase 8
+1. `src/app/(payload)/**` sin un solo cambio (verificable con `git diff main -- src/app/\(payload\)`).
+2. Shell y dashboard 1:1 con los bloques Efferd elegidos, con navegación y datos reales del ERP.
+3. Design system shadcn propio en `src/components/ui/` — sin dependencia runtime de terceros salvo radix/recharts.
+4. Modo oscuro primero; modo claro completo al cierre; dos modos, nada más.
+5. Legibilidad validada para monitores modestos (16px base, filas altas, contraste AA).
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.
