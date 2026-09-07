@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { toast } from 'sonner';
 import { openCashShiftAction } from '@/actions/erpActions';
@@ -33,8 +34,10 @@ export function OpenShiftModal({
   const [openingFloatVES, setOpeningFloatVES] = useState<number>(0);
   const [notes, setNotes] = useState('');
 
-  // Al abrir el modal: seleccionar la caja pedida (o la primera cerrada) y resetear el fondo
-  useEffect(() => {
+  // Al abrir el modal: seleccionar la caja pedida (o la primera cerrada) y
+  // resetear el fondo. Ajuste de estado en render (patrón oficial de React)
+  // en lugar de useEffect.
+  useSyncOnKeyChange(`${isOpen}:${defaultCashRegisterId ?? 'none'}`, () => {
     if (!isOpen) return;
     setError(null);
     setOpeningFloatUSD(0);
@@ -46,8 +49,7 @@ export function OpenShiftModal({
         cashRegisters[0]?.id ??
         0,
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, defaultCashRegisterId]);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

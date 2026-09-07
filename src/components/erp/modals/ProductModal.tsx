@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { toast } from 'sonner';
 import { createProductAction, updateProductAction } from '@/actions/erpActions';
@@ -57,7 +58,8 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
   // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
   // cambia el registro seleccionado. Con initial null (modo creación) restaura
   // los defaults para que un "Nuevo" no herede valores de una edición previa.
-  useEffect(() => {
+  // Ajuste de estado en render (patrón oficial de React) en lugar de useEffect.
+  useSyncOnKeyChange(`${isOpen}:${initial?.id ?? 'new'}`, () => {
     if (initial) {
       setName(initial.name || '');
       setSku(initial.sku || '');
@@ -84,7 +86,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
       setMinStockAlert(0);
       setTiers([]);
     }
-  }, [initial, isOpen]);
+  });
 
   const handleGenerateSku = () => {
     const prefix = productType === 'raw_material' ? 'MP' : productType === 'manufactured' ? 'PT' : 'ART';

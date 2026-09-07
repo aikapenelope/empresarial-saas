@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { executeProductionOrderAction } from '@/actions/erpActions';
 import { Loader2, FlaskConical } from 'lucide-react';
@@ -45,11 +46,13 @@ export function ProductionModal({
   const [sourceWarehouseId, setSourceWarehouseId] = useState<number>(warehouses[0]?.id || 1);
   const [targetWarehouseId, setTargetWarehouseId] = useState<number>(warehouses[0]?.id || 1);
 
-  useEffect(() => {
+  // Fija el BOM pedido cuando cambia el default (ajuste de estado en render,
+  // patrón oficial de React, en lugar de useEffect).
+  useSyncOnKeyChange(defaultBomId ?? 0, () => {
     if (defaultBomId) {
       setBomId(defaultBomId);
     }
-  }, [defaultBomId]);
+  });
 
   const selectedBom = boms.find((b) => b.id === bomId);
   const productName =

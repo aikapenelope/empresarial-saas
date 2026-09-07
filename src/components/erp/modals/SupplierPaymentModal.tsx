@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useTransition } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { createSupplierPaymentAction } from '@/actions/erpActions';
 import { formatUSD } from '../KpiCard';
@@ -54,32 +55,36 @@ export function SupplierPaymentModal({
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
 
-  // Reset al abrir: si vino desde "Pagar" de una factura, fija proveedor + monto = saldo
-  useEffect(() => {
-    if (!isOpen) return;
-    setError(null);
-    setReferenceNumber('');
-    setNotes('');
-    setMethod('transfer_ves');
+  // Reset al abrir: si vino desde "Pagar" de una factura, fija proveedor + monto
+  // = saldo. Ajuste de estado en render (patrón oficial de React) en lugar de
+  // useEffect.
+  useSyncOnKeyChange(
+    `${isOpen}:${defaultSupplierId ?? 'none'}:${defaultPurchaseInvoiceId ?? 'none'}`,
+    () => {
+      if (!isOpen) return;
+      setError(null);
+      setReferenceNumber('');
+      setNotes('');
+      setMethod('transfer_ves');
 
-    const targetInvoice = defaultPurchaseInvoiceId
-      ? purchaseInvoices.find((i) => i.id === defaultPurchaseInvoiceId)
-      : undefined;
+      const targetInvoice = defaultPurchaseInvoiceId
+        ? purchaseInvoices.find((i) => i.id === defaultPurchaseInvoiceId)
+        : undefined;
 
-    setPurchaseInvoiceId(targetInvoice ? targetInvoice.id : undefined);
-    setSupplierId(
-      defaultSupplierId ??
-        (targetInvoice
-          ? typeof targetInvoice.supplier === 'object'
-            ? (targetInvoice.supplier as { id: number }).id
-            : Number(targetInvoice.supplier)
-          : suppliers[0]?.id ?? 0),
-    );
-    setAmountUSD(
-      targetInvoice ? Number(Number(targetInvoice.balanceUSD).toFixed(2)) : 0,
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, defaultSupplierId, defaultPurchaseInvoiceId]);
+      setPurchaseInvoiceId(targetInvoice ? targetInvoice.id : undefined);
+      setSupplierId(
+        defaultSupplierId ??
+          (targetInvoice
+            ? typeof targetInvoice.supplier === 'object'
+              ? (targetInvoice.supplier as { id: number }).id
+              : Number(targetInvoice.supplier)
+            : suppliers[0]?.id ?? 0),
+      );
+      setAmountUSD(
+        targetInvoice ? Number(Number(targetInvoice.balanceUSD).toFixed(2)) : 0,
+      );
+    },
+  );
 
   // Facturas abiertas del proveedor seleccionado
   const openInvoices = purchaseInvoices.filter(

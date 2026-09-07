@@ -10,7 +10,6 @@ import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import {
   ErpAccessError,
   requireErpTenantAccess,
-  requireErpUser,
   requireSuperAdmin,
 } from '@/utilities/erpAuth';
 import { getActiveDb } from '@/utilities/inventoryLedger';

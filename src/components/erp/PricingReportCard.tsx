@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Badge } from './Badge';
 import { formatUSD, formatVES } from './KpiCard';
-import { Loader2, TrendingUp, X } from 'lucide-react';
+import { Loader2, TrendingUp } from 'lucide-react';
 
 interface PricingReportEntry {
   sku: string;

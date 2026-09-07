@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { createOrderAction, updateOrderAction } from '@/actions/erpActions';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
@@ -104,7 +105,8 @@ export function OrderModal({
   // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
   // cambia el pedido seleccionado. Con initial null (modo creación) restaura
   // los defaults para que un "Nuevo" no herede valores de una edición previa.
-  useEffect(() => {
+  // Ajuste de estado en render (patrón oficial de React) en lugar de useEffect.
+  useSyncOnKeyChange(`${isOpen}:${initial?.id ?? 'new'}`, () => {
     if (initial) {
       setCustomerId(initial.customerId || customers[0]?.id || 0);
       setNotes(initial.notes || '');
@@ -126,8 +128,7 @@ export function OrderModal({
       setItems([blankLine(products)]);
     }
     prevTierRef.current = tierFor(initial?.customerId || customers[0]?.id || 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial, isOpen]);
+  });
 
   // Cambio de cliente: sólo se re-precian las líneas auto-gestionadas (precio
   // igual al efectivo del tier anterior); las editadas manualmente se conservan.
@@ -148,7 +149,6 @@ export function OrderModal({
         return line;
       }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId, customerTier, products]);
 
   const handleAddItem = () => {

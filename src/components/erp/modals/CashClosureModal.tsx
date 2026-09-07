@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { createCashClosureAction } from '@/actions/erpActions';
 import { Loader2, DollarSign, CreditCard, Smartphone } from 'lucide-react';
@@ -38,11 +39,13 @@ export function CashClosureModal({
   const [physicalBinance, setPhysicalBinance] = useState<number>(0);
   const [notes, setNotes] = useState('');
 
-  useEffect(() => {
+  // Fija la caja pedida cuando cambia el default (ajuste de estado en render,
+  // patrón oficial de React, en lugar de useEffect).
+  useSyncOnKeyChange(defaultCashRegisterId ?? 0, () => {
     if (defaultCashRegisterId) {
       setCashRegisterId(defaultCashRegisterId);
     }
-  }, [defaultCashRegisterId]);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -235,7 +235,6 @@ export function PurchasesView({
               <tbody className="divide-y divide-slate-800/60">
                 {purchaseInvoices.map((inv) => {
                   const balance = Number(inv.balanceUSD) || 0;
-                  const whId = receptionWarehouseId(inv);
                   const canReceive =
                     inv.receptionStatus === 'pending' && inv.status !== 'voided';
                   const canPay =
