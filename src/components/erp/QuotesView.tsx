@@ -176,13 +176,15 @@ export function QuotesView({
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <ShareDocButtons
-                            collection="quotes"
-                            tenantId={tenantId}
-                            documentId={q.id}
-                            docLabel={q.quoteNumber || `COT-${q.id}`}
-                            defaultEmail={customerEmail(q)}
-                          />
+                          {q.status !== 'converted' && q.status !== 'rejected' && (
+                            <ShareDocButtons
+                              collection="quotes"
+                              tenantId={tenantId}
+                              documentId={q.id}
+                              docLabel={q.quoteNumber || `COT-${q.id}`}
+                              defaultEmail={customerEmail(q)}
+                            />
+                          )}
                           {(q.status === 'draft' || q.status === 'sent') && (
                             <button
                               onClick={() => {

@@ -35,11 +35,30 @@ export interface SharedDoc {
   customerName: string | null;
   issueDate: string | null;
   validUntil: string | null;
+  /** Estado del documento fuente (draft/sent/…/converted/voided). */
+  status: string | null;
   totalUSD: number;
   totalVES: number | null;
+  /** Tasa cambiaria aplicada al documento (snapshot), no el total en VES. */
+  exchangeRate: number | null;
   notes: string | null;
   tenantName: string;
   lines: SharedLineItem[];
+}
+
+/**
+ * Estados finales que deben anunciarse de forma prominente en el documento
+ * compartido: el enlace sigue vivo (fue emitido antes), pero el destinatario
+ * debe ver la verdad del ciclo de vida (anulada / rechazada / convertida).
+ */
+export function sharedDocStatusBanner(doc: SharedDoc): { label: string; tone: 'danger' | 'info' } | null {
+  if (doc.kind === 'quote') {
+    if (doc.status === 'rejected') return { label: 'Cotización rechazada', tone: 'danger' };
+    if (doc.status === 'converted') return { label: 'Cotización convertida en factura', tone: 'info' };
+    return null;
+  }
+  if (doc.status === 'voided') return { label: 'Remisión anulada', tone: 'danger' };
+  return null;
 }
 
 function docTenantName(tenant: Quote['tenant']): string {
@@ -61,8 +80,11 @@ export function quoteToSharedDoc(quote: Quote): SharedDoc {
     customerName: docCustomerName(quote.customer),
     issueDate: quote.issueDate || null,
     validUntil: quote.validUntil || null,
+    status: quote.status ?? null,
     totalUSD: Number(quote.totalUSD) || 0,
     totalVES: quote.totalVES == null ? null : Number(quote.totalVES),
+    exchangeRate:
+      quote.exchangeRateSnapshot == null ? null : Number(quote.exchangeRateSnapshot),
     notes: quote.notes || null,
     tenantName: docTenantName(quote.tenant),
     lines: (quote.items || []).map((item) => ({
@@ -83,18 +105,25 @@ export function deliveryNoteToSharedDoc(note: DeliveryNote): SharedDoc {
     customerName: docCustomerName(note.customer),
     issueDate: note.issueDate || null,
     validUntil: null,
+    status: note.status ?? null,
     totalUSD: Number(note.totalUSD) || 0,
     totalVES: note.totalVES == null ? null : Number(note.totalVES),
+    exchangeRate:
+      note.exchangeRateSnapshot == null ? null : Number(note.exchangeRateSnapshot),
     notes: note.notes || null,
     tenantName: docTenantName(note.tenant),
     lines: (note.items || []).map((item) => {
       const qty = Number(item.quantity) || 0;
       const price = Number(item.unitPriceUSD) || 0;
+      // Las líneas de remisión llevan descuento porcentual: el total compartido
+      // debe reflejarlo (mismo criterio que el hook de la colección), o las
+      // líneas infladas contradirían el total del documento.
+      const discount = Math.min(Math.max(Number(item.discountPct) || 0, 0), 100);
       return {
         description: item.description || item.sku || 'Mercancía',
         quantity: qty,
         unitPriceUSD: price,
-        totalUSD: Number((qty * price).toFixed(2)),
+        totalUSD: Number((qty * price * (1 - discount / 100)).toFixed(2)),
       };
     }),
   };
@@ -173,11 +202,30 @@ export function buildDocumentEmailHtml(doc: SharedDoc, shareUrl: string): string
       ? `<p style="margin:4px 0;font-size:14px;color:#475569;">Válida hasta: <strong>${fmtDate(doc.validUntil)}</strong></p>`
       : '';
 
+  const banner = sharedDocStatusBanner(doc);
+  const bannerBlock = banner
+    ? `<div style="margin:0 0 16px;padding:10px 14px;border-radius:8px;background:${
+        banner.tone === 'danger' ? '#fef2f2' : '#eff6ff'
+      };border:1px solid ${banner.tone === 'danger' ? '#fecaca' : '#bfdbfe'};">
+         <span style="font-size:13px;font-weight:700;color:${
+           banner.tone === 'danger' ? '#b91c1c' : '#1d4ed8'
+         };">${escapeHtml(banner.label)}</span>
+       </div>`
+    : '';
+
   const totalVesBlock =
     doc.totalVES != null
       ? `<tr>
-           <td style="padding:8px 12px;font-size:14px;text-align:right;color:#64748b;">Tasa del día</td>
+           <td style="padding:8px 12px;font-size:14px;text-align:right;color:#64748b;">Total Bs.</td>
            <td style="padding:8px 12px;font-size:15px;text-align:right;">${fmtVes(doc.totalVES)}</td>
+         </tr>`
+      : '';
+
+  const rateBlock =
+    doc.exchangeRate != null
+      ? `<tr>
+           <td style="padding:8px 12px;font-size:14px;text-align:right;color:#64748b;">Tasa aplicada</td>
+           <td style="padding:8px 12px;font-size:14px;text-align:right;">Bs. ${doc.exchangeRate.toFixed(4)} / USD</td>
          </tr>`
       : '';
 
@@ -202,6 +250,7 @@ export function buildDocumentEmailHtml(doc: SharedDoc, shareUrl: string): string
               <p style="margin:4px 0;font-size:14px;color:#475569;">Cliente: <strong>${escapeHtml(doc.customerName || '—')}</strong></p>
               <p style="margin:4px 0;font-size:14px;color:#475569;">Fecha de emisión: <strong>${fmtDate(doc.issueDate)}</strong></p>
               ${validUntilBlock}
+              ${bannerBlock}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
                 <thead>
                   <tr style="background:#f8fafc;">
@@ -218,6 +267,7 @@ export function buildDocumentEmailHtml(doc: SharedDoc, shareUrl: string): string
                     <td style="padding:8px 12px;font-size:15px;text-align:right;font-weight:700;">${fmtMoney(doc.totalUSD)}</td>
                   </tr>
                   ${totalVesBlock}
+                  ${rateBlock}
                 </tfoot>
               </table>
               ${

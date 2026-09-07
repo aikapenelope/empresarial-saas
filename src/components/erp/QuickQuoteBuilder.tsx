@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check, Copy, Loader2, Mail, MessageCircle, Plus, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -62,6 +62,30 @@ export function QuickQuoteBuilder({ tenantId, tenantSlug, customers, products, e
   const lineKey = useRef(0);
 
   const selectedTier = tierFor(customers.find((c) => c.id === customerId)?.priceTier);
+  const prevTierRef = useRef<Tier>(selectedTier);
+
+  // Cambio de cliente (tier): re-precia sólo las líneas "automáticas" — aquéllas
+  // cuyo precio sigue siendo el efectivo del tier ANTERIOR (mismo criterio que
+  // QuoteModal). Las editadas manualmente se conservan intactas.
+  useEffect(() => {
+    const prevTier = prevTierRef.current;
+    if (prevTier === selectedTier) return;
+    prevTierRef.current = selectedTier;
+
+    setLines((prev) =>
+      prev.map((line) => {
+        const product = products.find((p) => p.id === line.productId);
+        if (!product) return line;
+        const prevPrice = effectivePriceForTier(product, prevTier);
+        const nextPrice = effectivePriceForTier(product, selectedTier);
+        // Sólo re-precia si el precio actual sigue siendo el efectivo previo.
+        if (Math.abs(line.unitPriceUSD - prevPrice) < 0.005) {
+          return { ...line, unitPriceUSD: nextPrice };
+        }
+        return line;
+      }),
+    );
+  }, [selectedTier, products]);
 
   const totalUSD = useMemo(
     () => lines.reduce((acc, line) => acc + line.quantity * line.unitPriceUSD, 0),
@@ -127,7 +151,7 @@ export function QuickQuoteBuilder({ tenantId, tenantSlug, customers, products, e
         quantity: line.quantity,
         unitPriceUSD: line.unitPriceUSD,
       })),
-      validUntil: validUntil || undefined,
+      validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
       notes: notes || undefined,
     });
     setSaving(false);

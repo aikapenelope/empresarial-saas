@@ -2,7 +2,7 @@ import React from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { PrintButton } from '@/components/erp/PrintButton';
-import { resolveSharedDocument } from '@/utilities/documentSharing';
+import { resolveSharedDocument, sharedDocStatusBanner } from '@/utilities/documentSharing';
 
 // Sprint 28: página pública de compartición (cotizaciones y remisiones).
 // Capacidad sin sesión: el token (~192 bits del CSPRNG) ES el secreto.
@@ -41,6 +41,7 @@ export default async function SharedDocumentPage({ params }: PageProps) {
   }
 
   const doc = resolved.doc;
+  const banner = sharedDocStatusBanner(doc);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -55,6 +56,20 @@ export default async function SharedDocumentPage({ params }: PageProps) {
           </div>
           <PrintButton label="Imprimir / PDF" />
         </div>
+
+        {/* Estado final: el enlace sigue vivo, pero el destinatario debe ver
+            la verdad del ciclo de vida (anulada / rechazada / convertida). */}
+        {banner && (
+          <div
+            className={`px-6 py-3 text-sm font-bold ${
+              banner.tone === 'danger'
+                ? 'bg-rose-50 text-rose-700 border-b border-rose-200'
+                : 'bg-blue-50 text-blue-700 border-b border-blue-200'
+            }`}
+          >
+            {banner.label}
+          </div>
+        )}
 
         {/* Metadatos */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-6 py-5 border-b border-slate-200 text-sm">
@@ -101,11 +116,16 @@ export default async function SharedDocumentPage({ params }: PageProps) {
         {/* Totales */}
         <div className="px-6 pb-5 flex flex-col items-end gap-1 text-sm">
           <div className="text-base font-bold">
-            Total USD: <span className="tabular-nums">${doc.totalUSD.toFixed(2)}</span>
+            Total: <span className="tabular-nums">${doc.totalUSD.toFixed(2)}</span>
           </div>
           {doc.totalVES != null && (
-            <div className="text-slate-600">
-              Tasa del día: <span className="tabular-nums">Bs. {doc.totalVES.toFixed(2)}</span>
+            <div className="font-semibold text-slate-700">
+              Total Bs.: <span className="tabular-nums">{doc.totalVES.toFixed(2)}</span>
+            </div>
+          )}
+          {doc.exchangeRate != null && (
+            <div className="text-slate-500">
+              Tasa aplicada: <span className="tabular-nums">Bs. {doc.exchangeRate.toFixed(4)} / USD</span>
             </div>
           )}
         </div>
