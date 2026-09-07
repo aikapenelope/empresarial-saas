@@ -47,7 +47,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
     throw error;
   }
 
-  const { order, invoice } = data;
+  const { order } = data;
   const badge = STATUS_BADGE[order.status] || STATUS_BADGE.draft;
   const customer =
     typeof order.customer === 'object' && order.customer !== null ? order.customer : null;

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { toast } from 'sonner';
 import { createQuoteAction, updateQuoteAction } from '@/actions/erpActions';
@@ -99,7 +100,8 @@ export function QuoteModal({
   // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
   // cambia la cotización seleccionada. Con initial null (modo creación)
   // restaura los defaults para que un "Nueva Cotización" no herede valores.
-  useEffect(() => {
+  // Ajuste de estado en render (patrón oficial de React) en lugar de useEffect.
+  useSyncOnKeyChange(`${isOpen}:${initial?.id ?? 'new'}`, () => {
     if (initial) {
       setCustomerId(initial.customerId || customers[0]?.id || 0);
       setValidUntil(initial.validUntil ? initial.validUntil.slice(0, 10) : '');
@@ -139,7 +141,7 @@ export function QuoteModal({
       ]);
     }
     prevTierRef.current = tierFor(initial?.customerId || customers[0]?.id || 0);
-  }, [initial, isOpen]);
+  });
 
   // Cambio de cliente: sólo se re-precian las líneas cuyo precio sigue siendo
   // el efectivo del tier ANTERIOR (auto-gestionadas). Las editadas manualmente

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { toast } from 'sonner';
 import { createCustomerAction, updateCustomerAction } from '@/actions/erpActions';
@@ -50,7 +51,9 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
   // Sincroniza SIEMPRE los campos con `initial`: al montar, al abrir y cuando
   // cambia el registro seleccionado. Con initial null (modo creación) restaura
   // los defaults para que un "Nuevo" no herede valores de una edición previa.
-  useEffect(() => {
+  // Ajuste de estado en render (patrón oficial de React, "You Might Not Need
+  // an Effect") en lugar de useEffect: mismo timing, sin render en cascada.
+  useSyncOnKeyChange(`${isOpen}:${initial?.id ?? 'new'}`, () => {
     if (initial) {
       setName(initial.name || '');
       setTaxId(initial.taxId || '');
@@ -74,7 +77,7 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
       setCreditDays(15);
       setPriceTier('retail');
     }
-  }, [initial, isOpen]);
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -39,7 +39,7 @@ const TYPE_META: Record<
   inventory_diff: {
     label: 'Conteo con Diferencias',
     icon: ClipboardList,
-    refRoute: (t, id) => `/${t}/erp/inventory/counts`,
+    refRoute: (t, _id) => `/${t}/erp/inventory/counts`,
   },
   rate_change: { label: 'Variación de Tasa', icon: TrendingUp, refRoute: (t) => `/${t}/erp/rates` },
   overdue_invoice: {

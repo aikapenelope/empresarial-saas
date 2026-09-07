@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSyncOnKeyChange } from './hooks/useSyncOnKeyChange';
 import { useRouter } from 'next/navigation';
 import { Search, CornerDownLeft } from 'lucide-react';
 
@@ -48,12 +49,17 @@ export function CommandPalette({ tenantSlug, tenantId }: CommandPaletteProps) {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Búsqueda en vivo (debounce simple)
-  useEffect(() => {
+  // Reset síncrono de resultados cuando la búsqueda deja de ser válida:
+  // ajuste de estado en render (patrón oficial de React) en lugar de useEffect.
+  useSyncOnKeyChange(`${open}:${query}`, () => {
     if (!open || query.trim().length < 2) {
       setResults({ clientes: [], productos: [] });
-      return;
     }
+  });
+
+  // Búsqueda en vivo (debounce simple)
+  useEffect(() => {
+    if (!open || query.trim().length < 2) return;
     const timeout = setTimeout(async () => {
       try {
         const q = encodeURIComponent(query.trim());
@@ -76,7 +82,7 @@ export function CommandPalette({ tenantSlug, tenantId }: CommandPaletteProps) {
       }
     }, 250);
     return () => clearTimeout(timeout);
-  }, [query, open]);
+  }, [query, open, tenantId]);
 
   if (!open) return null;
 

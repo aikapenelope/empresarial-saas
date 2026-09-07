@@ -11,11 +11,6 @@ const eslintConfig = [
       '@typescript-eslint/ban-ts-comment': 'warn',
       '@typescript-eslint/no-empty-object-type': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn',
-      // Nueva regla de eslint-plugin-react-hooks@7 (React Compiler lint). Los
-      // modales ERP sincronizan props -> estado en useEffect (patrón estándar
-      // "adjusting state when props change"); el refactor a estado derivado/keys
-      // es deuda técnica documentada en el PR del Sprint 25, no bloqueo del stack.
-      'react-hooks/set-state-in-effect': 'warn',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         {

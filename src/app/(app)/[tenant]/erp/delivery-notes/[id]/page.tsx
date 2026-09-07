@@ -7,7 +7,6 @@ import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { PrintButton } from '@/components/erp/PrintButton';
 import { Badge } from '@/components/erp/Badge';
-import { formatUSD, formatVES } from '@/components/erp/KpiCard';
 
 interface PageProps {
   params: Promise<{ tenant: string; id: string }>;

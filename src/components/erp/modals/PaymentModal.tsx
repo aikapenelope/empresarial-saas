@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useTransition } from 'react';
+import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { toast } from 'sonner';
 import {
@@ -50,27 +51,30 @@ export function PaymentModal({
   // Reiniciar SIEMPRE la selección cuando el modal se abre o cambian los defaults:
   // una apertura "abono general" debe limpiar la factura de una sesión anterior,
   // y una apertura con factura específica debe fijar cliente + saldo. Incluye la
-  // transición a undefined y la limpieza tras un envío exitoso.
-  useEffect(() => {
-    if (!isOpen) return;
+  // transición a undefined y la limpieza tras un envío exitoso. Ajuste de estado
+  // en render (patrón oficial de React) en lugar de useEffect.
+  useSyncOnKeyChange(
+    `${isOpen}:${defaultCustomerId ?? 'none'}:${defaultInvoiceId ?? 'none'}`,
+    () => {
+      if (!isOpen) return;
 
-    setError(null);
-    setReferenceNumber('');
-    setNotes('');
-    setReceiptFile(null);
-    setAmountUSD(10);
+      setError(null);
+      setReferenceNumber('');
+      setNotes('');
+      setReceiptFile(null);
+      setAmountUSD(10);
 
-    const inv = defaultInvoiceId ? invoices.find((i) => i.id === defaultInvoiceId) : undefined;
-    setInvoiceId(inv ? inv.id : undefined);
-    setCustomerId(
-      defaultCustomerId ?? inv?.customerId ?? customers[0]?.id ?? 0,
-    );
+      const inv = defaultInvoiceId ? invoices.find((i) => i.id === defaultInvoiceId) : undefined;
+      setInvoiceId(inv ? inv.id : undefined);
+      setCustomerId(
+        defaultCustomerId ?? inv?.customerId ?? customers[0]?.id ?? 0,
+      );
 
-    if (inv) {
-      setAmountUSD(Number(inv.balanceUSD) || 10);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, defaultCustomerId, defaultInvoiceId]);
+      if (inv) {
+        setAmountUSD(Number(inv.balanceUSD) || 10);
+      }
+    },
+  );
 
   // Filtrar facturas con saldo del cliente seleccionado
   const customerInvoices = invoices.filter((inv) => inv.customerId === customerId && inv.balanceUSD > 0);
