@@ -71,6 +71,12 @@ const caCert = process.env.SUPABASE_CA_CERT
 export default buildConfig({
   admin: {
     user: Users.slug,
+    // Sprint 34: enlace visible en el dashboard del admin hacia el ERP.
+    // La operación diaria vive en /{tenant}/erp con su login propio (/login);
+    // el admin queda para quien lo necesite explícitamente.
+    components: {
+      beforeDashboard: ['/components/admin/GoToErpLink'],
+    },
     importMap: {
       baseDir: path.resolve(dirname),
     },

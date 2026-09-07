@@ -67,7 +67,7 @@ export default async function HomePage() {
           <HomeTenantList tenants={tenants} />
         ) : (
           <Link
-            href="/admin"
+            href="/login"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white transition-all"
           >
             <LogIn className="h-4 w-4" />
