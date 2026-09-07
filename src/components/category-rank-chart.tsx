@@ -34,19 +34,9 @@ const SLICE_PALETTE = [
 const MAX_NAMED_SLICES = 4;
 
 /** Rolling window for the mix (days). */
-const periodDays = 7;
+
 
 /** Demo mix (sums to 100). Replace or pass `data` on the component. */
-const data = [
-	{ category: "Apparel", share: 22 },
-	{ category: "Accessories", share: 22 },
-	{ category: "Footwear", share: 18 },
-	{ category: "Home & living", share: 14 },
-	{ category: "Beauty", share: 11 },
-	{ category: "Outlet", share: 8 },
-	{ category: "Sports", share: 5 },
-] as const satisfies readonly CategoryMixDatum[];
-
 /** Sort by share descending, keep top four, merge the rest into “Others” (max five slices). */
 function consolidateTopFourAndOthers(
 	data: readonly CategoryMixDatum[]
@@ -98,17 +88,23 @@ function buildSlices(data: readonly CategoryMixDatum[]): {
 	return { chartConfig, pieData };
 }
 
-export function CategoryRankChart() {
+export function CategoryRankChart({
+	data,
+	periodDays = 30,
+}: {
+	data: CategoryMixDatum[];
+	periodDays?: number;
+}) {
 	const { chartConfig, pieData } = React.useMemo(
 		() => buildSlices(consolidateTopFourAndOthers(data)),
-		[]
+		[data]
 	);
 
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>Revenue Share by Category</CardTitle>
-				<CardDescription>Last {periodDays} days.</CardDescription>
+				<CardTitle>Ingresos por Categoría</CardTitle>
+				<CardDescription>Últimos {periodDays} días.</CardDescription>
 			</CardHeader>
 			<CardContent className="my-auto p-0">
 				<ChartContainer

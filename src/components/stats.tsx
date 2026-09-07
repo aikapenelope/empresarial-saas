@@ -14,34 +14,9 @@ type Stat = {
 	hint: string;
 };
 
-const stats: readonly Stat[] = [
-	{
-		label: "Total revenue",
-		value: "$284,920",
-		delta: 8.2,
-		hint: "vs prior 30 days",
-	},
-	{
-		label: "Orders",
-		value: "1,842",
-		delta: 4.1,
-		hint: "vs prior 30 days",
-	},
-	{
-		label: "Average order value",
-		value: "$154.60",
-		delta: -1.3,
-		hint: "vs prior 30 days",
-	},
-	{
-		label: "Store conversion",
-		value: "3.06%",
-		delta: 0.6,
-		hint: "vs prior 30 days",
-	},
-] as const;
 
-export function DashboardStats() {
+
+export function DashboardStats({ stats }: { stats: readonly Stat[] }) {
 	return (
 		<>
 			{stats.map((s) => (

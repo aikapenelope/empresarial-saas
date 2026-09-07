@@ -19,20 +19,6 @@ import {
 import { Delta, DeltaIcon, DeltaValue } from "@/components/delta";
 import { ArrowRightIcon } from "lucide-react";
 
-/** Daily return rate (% of fulfilled orders returned), last 7 days (demo). */
-const returnDaily7 = [
-	{ day: "Mon", returnRate: 2.2 },
-	{ day: "Tue", returnRate: 1.5 },
-	{ day: "Wed", returnRate: 3.1 },
-	{ day: "Thu", returnRate: 4.8 },
-	{ day: "Fri", returnRate: 2.4 },
-	{ day: "Sat", returnRate: 3.2 },
-	{ day: "Sun", returnRate: 3.9 },
-] as const;
-
-/** Share of orders that were refunded over the same window (demo). */
-const REFUNDED_SHARE_OF_ORDERS_PCT = 2.6;
-
 const chartConfig = {
 	returnRate: {
 		label: "Return %",
@@ -40,9 +26,15 @@ const chartConfig = {
 	},
 } satisfies ChartConfig;
 
-export function RefundReturnRateChart() {
-	const first = returnDaily7[0];
-	const lastW = returnDaily7.at(-1) ?? first;
+export function RefundReturnRateChart({
+	daily,
+	refundedSharePct,
+}: {
+	daily: Array<{ day: string; returnRate: number }>;
+	refundedSharePct: number;
+}) {
+	const first = daily[0];
+	const lastW = daily.at(-1) ?? first;
 	const returnTrendPct =
 		first.returnRate > 0
 			? ((lastW.returnRate - first.returnRate) / first.returnRate) * 100
@@ -52,12 +44,12 @@ export function RefundReturnRateChart() {
 		<Card className="md:col-span-2">
 			<CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between">
 				<div className="space-y-1">
-					<CardTitle>Return rate</CardTitle>
-					<CardDescription>Last 7 days</CardDescription>
+					<CardTitle>Tasa de devoluciones</CardTitle>
+					<CardDescription>Últimos 7 días</CardDescription>
 				</div>
 				<div className="space-y-1">
 					<CardTitle className="text-right">
-						{REFUNDED_SHARE_OF_ORDERS_PCT}%
+						{refundedSharePct}%
 					</CardTitle>
 					<CardDescription>of orders refunded</CardDescription>
 				</div>
@@ -69,7 +61,7 @@ export function RefundReturnRateChart() {
 				>
 					<LineChart
 						accessibilityLayer
-						data={returnDaily7}
+						data={daily}
 						margin={{ left: 12, right: 12, top: 12, bottom: 0 }}
 					>
 						<CartesianGrid horizontal={false} strokeDasharray="3 3" />
