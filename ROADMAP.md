@@ -495,7 +495,7 @@ Cada sprint concluye con:
 
 # 🎨 Fase 8: Rediseño Visual Completo del ERP — shadcn/ui + Efferd (App Shell 4 + Dashboard 4)
 
-> **Objetivo:** Reemplazar la UI artesanal del ERP por un design system profesional: **shadcn/ui** como base (código propio en el repo), paleta **Cendaro Blue** (paridad visual con el ERP de referencia), y los bloques gratuitos de **Efferd** — **App Shell 4** (sidebar inset colapsable + breadcrumbs) y **Dashboard 4** (KPIs con delta, gráfico de ingresos, ranking por categoría, acciones rápidas) — conectados a datos reales.
+> **Objetivo:** Reemplazar la UI artesanal del ERP por un design system profesional: **shadcn/ui** como base (código propio en el repo), **paleta monocroma neutral original de shadcn — blanco y negro, nada más** (decisión de producto: no se adopta paleta externa; los tokens oklch del init son definitivos), y los bloques gratuitos de **Efferd** — **App Shell 4** (sidebar inset colapsable + breadcrumbs) y **Dashboard 4** (KPIs con delta, gráfico de ingresos, ranking por categoría, acciones rápidas) — conectados a datos reales.
 >
 > **Reglas no negociables:**
 > 1. **El admin de Payload NO se toca** (`src/app/(payload)/**` queda idéntico). Todo el esfuerzo es sobre `(app)` y componentes `src/components/erp`.
@@ -513,14 +513,15 @@ Cada sprint concluye con:
 - **Bloques Efferd descargados y verificados** (registry `efferd.com/r/new-york/…`): App Shell 4 = `SidebarProvider` + sidebar floating colapsable a iconos + `SidebarInset` con header de breadcrumbs + nav agrupada (`navGroups` con label/items/subItems) + `NavUser` con dropdown + footer. Dashboard 4 = grid de 4 stats con Delta + RevenueChart (área) + RefundReturnRateChart + CategoryRankChart (pie) + QuickActions (shadcn `Item`). Dependencias: primitivas shadcn (button, card, badge, input, select, separator, skeleton, table, tabs, tooltip, dropdown-menu, dialog, breadcrumb, kbd, collapsible, sidebar, item, chart) + `formater` de Efferd + recharts.
 - **Mapeo Dashboard 4 → nuestros datos:** Stats (ingresos facturados 30d vs previos · nº facturas · ticket promedio · tasa cotización→factura) · RevenueChart (facturación diaria USD) · RefundReturnRateChart (devoluciones/tasa efectiva de cobro) · CategoryRankChart (ventas por categoría, real desde invoices) · QuickActions (Nueva factura · Abrir POS · Cotización rápida · Registrar pago).
 
-### 🧱 Sprint 29 — Fundación del design system (PR `feat/design-system-base`)
+### 🧱 Sprint 29 — Fundación del design system (PR `feat/design-system-base`) — ✅ INSTALADO (en PR #40)
 
-- [ ] `tailwind.config.ts` completo con tokens semánticos (background, card, primary, muted, accent, destructive/success/warning + soft, border-subtle, ring, sidebar-*, chart-1..5, radios, sombras Cendaro) vía CSS variables.
-- [ ] `globals.css` con el `theme.css` de Cendaro traducido a Tailwind v3 (`:root` dark-first; el bloque light llega en S33). Fuente base 16px.
-- [ ] Deps: `class-variance-authority`, `radix-ui`, `recharts`, `tw-animate-css`. (`tailwind-merge` y `lucide-react` ya están.)
-- [ ] Primitivas shadcn portadas a `src/components/ui/` (código propio, adaptado Tailwind v3): button, card, badge, input, label, select, separator, skeleton, table, tabs, tooltip, dropdown-menu, dialog, breadcrumb, kbd, collapsible, sidebar, item, chart + `formater` de Efferd.
-- [ ] `Modal` artesanal → wrapper sobre `Dialog` (misma API pública para no romper los 22 modales en este sprint).
-- **Criterio de cierre:** build verde con las primitivas disponibles; nada visible cambia todavía.
+- [x] Proyecto inicializado con el CLI oficial de shadcn (base radix, preset nova/lucide): `components.json`, `src/lib/utils.ts` y tokens CSS variables monocromos (neutral, croma 0) en `globals.css`.
+- [x] **Upgrade Tailwind 3.4 → 4.3** (el CSS base de shadcn 4.x es v4 nativo): `postcss.config.mjs` con `@tailwindcss/postcss`, `globals.css` en formato v4 (`@import "tailwindcss"` + `@theme inline` + `@custom-variant dark`), `tailwind.config.ts` retirado (CSS-first).
+- [x] Deps: `class-variance-authority`, `radix-ui`, `recharts 3.8`, `tw-animate-css`.
+- [x] Registry `@efferd` registrado e instalado el bloque `@efferd/dashboard-4` con dependencias transitivas: 17 primitivas shadcn en `src/components/ui/` (button, card, badge, input, select, separator, skeleton, tooltip, dropdown-menu, breadcrumb, kbd, collapsible, sheet, sidebar, item, chart, avatar) + App Shell 4 completo + Dashboard 4 completo + `formater`.
+- [x] Ajustes post-instalación: `custom-sidebar-trigger` reubicado (path del CLI), `use-mobile` al patrón canónico de React (lint 0/0).
+- [ ] Pendiente en este sprint: `Modal` artesanal → wrapper sobre `Dialog` (misma API pública, 22 modales sin tocar).
+- **Criterio de cierre:** tsc/lint/build verdes ✓ — `Dialog` wrapper pendiente.
 
 ### 🧭 Sprint 30 — App Shell 4 (PR `feat/app-shell-4`)
 

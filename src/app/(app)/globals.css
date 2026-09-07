@@ -29,9 +29,9 @@
   }
 }
 
-/* Tokens del design system (placeholders neutral del init de shadcn).
-   Los valores se sustituirán por la paleta Cendaro Blue (Fase 8): el
-   theme.css de Cendaro es Tailwind v4 nativo y entrará en este formato. */
+/* Tokens del design system (shadcn) — BASE DEFINITIVA: monocroma neutral
+   (grises puros, croma 0), blanco y negro y nada más, tal como vienen del
+   init original. Decisión de producto: no se adopta paleta externa. */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
