@@ -12,11 +12,22 @@
    Los colores de ESTADO (emerald/amber/rose de badges y alertas) NO se
    mapean: son información funcional, no decoración. */
 @theme {
+  /* Valores del modo OSCURO (por defecto). */
   --color-indigo-300: oklch(0.78 0 0);
   --color-indigo-400: oklch(0.68 0 0);
   --color-indigo-500: oklch(0.60 0 0);
   --color-indigo-600: oklch(0.42 0 0);
   --color-indigo-700: oklch(0.36 0 0);
+}
+
+/* Valores del modo CLARO: acentos oscurecidos para contraste AA sobre blanco.
+   (Retirable por partes conforme cada vista migre a tokens semánticos.) */
+html:not(.dark) {
+  --color-indigo-300: oklch(0.50 0 0);
+  --color-indigo-400: oklch(0.45 0 0);
+  --color-indigo-500: oklch(0.52 0 0);
+  --color-indigo-600: oklch(0.38 0 0);
+  --color-indigo-700: oklch(0.32 0 0);
 }
 
 
