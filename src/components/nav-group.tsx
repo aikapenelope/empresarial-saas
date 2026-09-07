@@ -17,23 +17,29 @@ import {
 	SidebarMenuSub,
 	SidebarMenuSubButton,
 	SidebarMenuSubItem,
+	useSidebar,
 } from "@/components/ui/sidebar";
 import type { SidebarNavGroup } from "@/components/app-shared";
+import { resolveActiveNavItem } from "@/components/app-shared";
 import { ChevronRightIcon } from "lucide-react";
 
 export function NavGroup({ label, items }: SidebarNavGroup) {
 	const pathname = usePathname();
+	// FIX móvil: los links navegan sin desmontar el layout, así que el drawer
+	// (Sheet) hay que cerrarlo explícitamente en cada selección.
+	const { isMobile, setOpenMobile } = useSidebar();
+	const activeItem = resolveActiveNavItem(pathname, items);
+
+	const closeMobile = () => {
+		if (isMobile) setOpenMobile(false);
+	};
 
 	return (
 		<SidebarGroup>
 			{label && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
 			<SidebarMenu>
 				{items.map((item) => {
-					const isActive = item.path
-						? item.exact
-							? pathname === item.path
-							: pathname.startsWith(item.path)
-						: false;
+					const isActive = activeItem === item;
 					return (
 						<Collapsible
 							asChild
@@ -58,7 +64,7 @@ export function NavGroup({ label, items }: SidebarNavGroup) {
 													return (
 														<SidebarMenuSubItem key={subItem.title}>
 															<SidebarMenuSubButton asChild isActive={subActive}>
-																<Link href={subItem.path ?? "#"}>
+																<Link href={subItem.path ?? "#"} onClick={closeMobile}>
 																	<span>{subItem.title}</span>
 																</Link>
 															</SidebarMenuSubButton>
@@ -71,7 +77,7 @@ export function NavGroup({ label, items }: SidebarNavGroup) {
 								) : (
 									<SidebarMenuItem>
 										<SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
-											<Link href={item.path ?? "#"}>
+											<Link href={item.path ?? "#"} onClick={closeMobile}>
 												{item.icon ? <item.icon /> : null}
 												<span>{item.title}</span>
 											</Link>

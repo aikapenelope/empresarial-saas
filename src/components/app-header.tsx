@@ -38,7 +38,7 @@ export function AppHeader({
 	onOpenCommandPalette,
 }: AppHeaderProps) {
 	return (
-		<header className="mb-4 flex items-center justify-between gap-2">
+		<header className="no-print mb-4 flex items-center justify-between gap-2">
 			<div className="flex items-center gap-3">
 				<CustomSidebarTrigger />
 				<Separator

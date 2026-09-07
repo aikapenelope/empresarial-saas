@@ -12,6 +12,7 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	useSidebar,
 } from "@/components/ui/sidebar";
 import { NavGroup } from "@/components/nav-group";
 import { buildNavGroups } from "@/components/app-shared";
@@ -32,12 +33,17 @@ export function AppSidebar({
 	onOpenCommandPalette,
 }: AppSidebarProps) {
 	const navGroups = buildNavGroups(tenantSlug, userRole, activeAlertCount);
+	// FIX móvil: cerrar el drawer al elegir cualquier destino del sidebar.
+	const { isMobile, setOpenMobile } = useSidebar();
+	const closeMobile = () => {
+		if (isMobile) setOpenMobile(false);
+	};
 
 	return (
-		<Sidebar collapsible="icon" variant="floating">
+		<Sidebar collapsible="icon" variant="floating" className="no-print">
 			<SidebarHeader className="h-14 justify-center">
 				<SidebarMenuButton asChild tooltip="Ir a empresas">
-					<Link href="/">
+					<Link href="/" onClick={closeMobile}>
 						<StoreIcon />
 						<span className="font-medium">{tenantName}</span>
 					</Link>
@@ -51,7 +57,7 @@ export function AppSidebar({
 							className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
 							tooltip="Nueva venta"
 						>
-							<Link href={`/${tenantSlug}/erp/pos`}>
+							<Link href={`/${tenantSlug}/erp/pos`} onClick={closeMobile}>
 								<PlusIcon />
 								<span>Nueva venta</span>
 							</Link>
@@ -76,7 +82,7 @@ export function AppSidebar({
 				<SidebarMenu>
 					<SidebarMenuItem>
 						<SidebarMenuButton asChild size="sm" tooltip="Ver empresas" className="text-muted-foreground">
-							<Link href="/">
+							<Link href="/" onClick={closeMobile}>
 								<StoreIcon />
 								<span>Ver empresas</span>
 							</Link>

@@ -10,7 +10,7 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { buildNavGroups } from "@/components/app-shared";
+import { buildNavGroups, resolveActiveNavItem } from "@/components/app-shared";
 
 interface AppBreadcrumbsProps {
 	tenantName: string;
@@ -22,15 +22,7 @@ export function AppBreadcrumbs({ tenantName, tenantSlug, userRole }: AppBreadcru
 	const pathname = usePathname();
 	const groups = buildNavGroups(tenantSlug, userRole);
 
-	const current = groups
-		.flatMap((group) => group.items)
-		.find((item) =>
-			item.path === pathname
-				? true
-				: item.path && !item.exact
-					? pathname.startsWith(`${item.path}/`)
-					: false,
-		);
+	const current = resolveActiveNavItem(pathname, groups.flatMap((group) => group.items));
 
 	return (
 		<Breadcrumb>

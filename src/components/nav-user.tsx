@@ -15,6 +15,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { LogOutIcon, StoreIcon } from "lucide-react";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -37,10 +38,21 @@ export function NavUser({ userName, userEmail, userRole }: NavUserProps) {
 
 	const handleLogout = async () => {
 		// Endpoint REST oficial de Payload para cerrar la sesión del token.
+		// Sólo navegamos si el endpoint CONFIRMA el logout: un fallo HTTP no
+		// limpia la cookie y abandonar la pantalla daría la impresión de sesión
+		// cerrada cuando sigue activa.
 		try {
-			await fetch("/api/users/logout", { method: "POST", credentials: "include" });
+			const res = await fetch("/api/users/logout", {
+				method: "POST",
+				credentials: "include",
+			});
+			if (!res.ok) {
+				toast.error("No se pudo cerrar la sesión. Inténtalo de nuevo.");
+				return;
+			}
 		} catch {
-			// la cookie se limpia igual al navegar al selector sin sesión válida
+			toast.error("No se pudo contactar al servidor. Revisa tu conexión.");
+			return;
 		}
 		router.push("/");
 		router.refresh();

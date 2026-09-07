@@ -65,11 +65,11 @@ const NAV_ITEMS: Array<{
 const NAV_GROUPS: Array<{ label: string; routeKeys: string[] }> = [
 	{
 		label: "Operación",
-		routeKeys: ["invoices", "pos", "quotes", "quotes-quick", "orders", "delivery-notes"],
+		routeKeys: ["dashboard", "invoices", "pos", "quotes", "quotes-quick", "orders", "delivery-notes"],
 	},
 	{
 		label: "Finanzas",
-		routeKeys: ["customers", "receivables", "purchases", "cash-registers", "rates"],
+		routeKeys: ["customers", "receivables", "purchases", "suppliers", "cash-registers", "rates"],
 	},
 	{
 		label: "Inventario",
@@ -121,16 +121,17 @@ export function buildNavGroups(
 	})).filter((group) => group.items.length > 0);
 }
 
-export function findNavItemByPath(
+/**
+ * Ruta activa para un pathname: 1) match EXACTO tiene prioridad total (así
+ * /quotes/quick resuelve sólo a "Cotización rápida" y no también a
+ * "Cotizaciones"); 2) si no hay exacto, hereda la sección padre por prefijo
+ * con frontera de segmento (p. ej. /invoices/12 → "Facturación & Ventas").
+ */
+export function resolveActiveNavItem(
 	pathname: string,
-	groups: SidebarNavGroup[],
+	items: SidebarNavItem[],
 ): SidebarNavItem | undefined {
-	for (const group of groups) {
-		for (const item of group.items) {
-			if (item.path === pathname) return item;
-			// Detalles (p. ej. /invoices/12) heredan la sección padre.
-			if (item.path && pathname.startsWith(`${item.path}/`)) return item;
-		}
-	}
-	return undefined;
+	const exact = items.find((item) => item.path === pathname);
+	if (exact) return exact;
+	return items.find((item) => item.path && pathname.startsWith(`${item.path}/`));
 }
