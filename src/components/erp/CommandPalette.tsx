@@ -9,6 +9,9 @@ interface CommandPaletteProps {
   tenantSlug: string;
   /** Inquilino de la sesión: obligatorio para aislar las búsquedas REST. */
   tenantId: number;
+  /** Estado controlado opcional: lo usa el App Shell (botón Buscar del header). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface SearchResults {
@@ -20,9 +23,20 @@ interface SearchResults {
  * Paleta de comandos ⌘K (Sprint 17): navegación rápida a rutas del ERP y
  * búsqueda en vivo de clientes/productos vía REST (cookie de sesión incluida).
  */
-export function CommandPalette({ tenantSlug, tenantId }: CommandPaletteProps) {
+export function CommandPalette({ tenantSlug, tenantId, open: openProp, onOpenChange }: CommandPaletteProps) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = useCallback(
+    (value: boolean | ((prev: boolean) => boolean)) => {
+      if (onOpenChange) {
+        onOpenChange(typeof value === 'function' ? value(open) : value);
+      } else {
+        setOpenState(value);
+      }
+    },
+    [onOpenChange, open],
+  );
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResults>({ clientes: [], productos: [] });
 
@@ -34,7 +48,7 @@ export function CommandPalette({ tenantSlug, tenantId }: CommandPaletteProps) {
       setQuery('');
       router.push(href);
     },
-    [router],
+    [router, setOpen],
   );
 
   useEffect(() => {
@@ -47,7 +61,7 @@ export function CommandPalette({ tenantSlug, tenantId }: CommandPaletteProps) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [setOpen]);
 
   // Reset síncrono de resultados cuando la búsqueda deja de ser válida:
   // ajuste de estado en render (patrón oficial de React) en lugar de useEffect.

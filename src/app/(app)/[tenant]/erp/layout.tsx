@@ -7,7 +7,7 @@ import {
 } from '@/utilities/erpData';
 import { getLiveExchangeRates, resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { requireErpTenantAccess, ErpAccessError } from '@/utilities/erpAuth';
-import { AppShell } from '@/components/erp/AppShell';
+import { AppShell } from '@/components/app-shell';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface LayoutProps {
@@ -119,10 +119,13 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
 
   return (
     <AppShell
-      currentTenant={tenant}
-      availableTenants={availableTenants}
+      tenantName={tenant.name}
+      tenantSlug={tenant.slug}
+      tenantId={tenant.id}
       rates={rates}
       userRole={actor?.role}
+      userName={actor?.name ?? 'Usuario'}
+      userEmail={actor?.email ?? ''}
       activeAlertCount={activeAlertCount}
     >
       {children}
