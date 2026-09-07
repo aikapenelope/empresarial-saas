@@ -537,18 +537,22 @@ Cada sprint concluye con:
 - [ ] `[tenant]/erp/page.tsx` pasa del stack de `KpiCard`s al dashboard nuevo; KPIs y quick actions antiguos retirados al no tener referencias.
 - **Criterio de cierre:** dashboard con datos vivos del inquilino, sin datos mock.
 
-### 🖥️ Sprint 32 — Migración de vistas (PR `feat/ui-migration-views`)
+### 🖥️ Sprint 32 — Coherencia monocroma global (PR `feat/ui-migration-views`)
 
-- [ ] Las ~20 vistas (tablas, badges de estado, headers, filtros) migradas a primitivas: `Table`, `Badge`, `Card`, `DropdownMenu` por fila, `Tabs`, `Select`; densidad baja y targets grandes para el público definido.
-- [ ] Detalles de factura/pedido/remisión al nuevo look (print styles preservados).
-- **Criterio de cierre:** cero referencias a `Badge`/`KpiCard`/tablas artesanales viejas; lint 0/0.
+- [x] **Modo oscuro estable** en todo el grupo `(app)`: `html.dark` en su propio layout (el admin de Payload usa otro html — sigue intocable). El toggle claro/negro llega en S33.
+- [x] **Puente de paleta monocroma** en `globals.css` (`@theme`): los tonos decorativos `indigo-*` de las vistas anteriores se mapean a la escala neutra del sistema — las ~20 vistas quedan coherentes con el design system SIN editar cada archivo. Es una decisión central documentada y retirable por partes conforme cada vista migre a tokens.
+- [x] Los colores de **estado** (emerald/amber/rose en badges y alertas) NO se mapean: son información funcional del ERP (pagada/pendiente/anulada), no decoración.
+- [x] Home público y login: el login del ERP **es** el admin de Payload (intocable por definición); el home queda coherente con el puente (pulido de diseño propio en S33).
+- **Criterio de cierre:** tsc/lint/build en verde; el ERP completo legible en monocromo oscuro sobre el shell nuevo.
 
-### ☀️ Sprint 33 — Modo claro + pulido (PR `feat/ui-light-mode`)
+### ☀️ Sprint 33 — Modo claro con toggle + migración progresiva (PR `feat/ui-light-mode`)
 
-- [ ] `next-themes` restringido a `light|dark` (clase en `<html>`, sin `system`), script anti-flash, toggle claro/negro en `NavUser`.
-- [ ] Tokens `:root` light de Cendaro (con las variantes soft AA); revisión de contraste AA en ambos modos.
-- [ ] Pulido final: CWV de Sprint 18, focus states, empty states.
-- **Criterio de cierre:** dos modos completos (claro por defecto, negro), toggle persistente, sin flash.
+- [ ] `next-themes` restringido a `light|dark` (sin `system`), script anti-flash, toggle en `NavUser`; retirar el `html.dark` fijo.
+- [ ] Tokens `:root` light; revisión de contraste AA en ambos modos.
+- [ ] Migración progresiva de vistas a primitivas (Table/Badge/Card/DropdownMenu) y retiro por partes del puente `indigo-*`; CWV.
+- **Criterio de cierre:** dos modos completos (claro por defecto para el público definido, negro), toggle persistente, sin flash; puente retirado a medida que las vistas migren.
+
+
 
 ### ✅ Criterios de Cierre de la Fase 8
 1. `src/app/(payload)/**` sin un solo cambio (verificable con `git diff main -- src/app/\(payload\)`).

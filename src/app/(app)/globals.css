@@ -4,6 +4,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ─── PUENTE DE MIGRACIÓN (Fase 8 / Sprint 32) ───
+   Las vistas del ERP anteriores al design system usan la paleta decorativa
+   indigo-* del tema antiguo. Este mapeo las re-skinnea a la escala neutra
+   monocroma del sistema SIN editar cada archivo: una decisión central y
+   retirables por partes cuando cada vista migre a tokens semánticos.
+   Los colores de ESTADO (emerald/amber/rose de badges y alertas) NO se
+   mapean: son información funcional, no decoración. */
+@theme {
+  --color-indigo-300: oklch(0.78 0 0);
+  --color-indigo-400: oklch(0.68 0 0);
+  --color-indigo-500: oklch(0.60 0 0);
+  --color-indigo-600: oklch(0.42 0 0);
+  --color-indigo-700: oklch(0.36 0 0);
+}
+
+
 /* ─── Impresión de documentos (Sprint 13) ─── */
 @media print {
   body {
