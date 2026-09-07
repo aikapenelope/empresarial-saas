@@ -19,6 +19,7 @@ import {
   ClipboardList,
   TrendingUp,
   BellRing,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/utilities/cn';
 
@@ -36,9 +37,9 @@ interface SidebarProps {
  * capa de datos son la autoridad real; esto es UX: cada rol ve solo su operación.
  */
 const ROLE_NAV: Record<string, string[]> = {
-  vendor: ['dashboard', 'alerts', 'pos', 'quotes', 'orders', 'delivery-notes', 'vendors', 'customers', 'receivables'],
+  vendor: ['dashboard', 'alerts', 'pos', 'quotes', 'quotes-quick', 'orders', 'delivery-notes', 'vendors', 'customers', 'receivables'],
   cashier: ['dashboard', 'alerts', 'pos', 'invoices', 'orders', 'delivery-notes', 'customers', 'cash-registers'],
-  employee: ['dashboard', 'alerts', 'invoices', 'customers', 'inventory', 'quotes', 'orders', 'delivery-notes'],
+  employee: ['dashboard', 'alerts', 'invoices', 'customers', 'inventory', 'quotes', 'quotes-quick', 'orders', 'delivery-notes'],
   supervisor: [
     'dashboard',
     'pos',
@@ -46,6 +47,7 @@ const ROLE_NAV: Record<string, string[]> = {
     'customers',
     'inventory',
     'quotes',
+    'quotes-quick',
     'orders',
     'delivery-notes',
     'alerts',
@@ -108,6 +110,12 @@ export function Sidebar({
           href: `/${tenantSlug}/erp/quotes`,
           routeKey: 'quotes',
           icon: FileText,
+        },
+        {
+          name: 'Cotización rápida',
+          href: `/${tenantSlug}/erp/quotes/quick`,
+          routeKey: 'quotes-quick',
+          icon: Zap,
         },
         {
           name: 'Pedidos de Venta',

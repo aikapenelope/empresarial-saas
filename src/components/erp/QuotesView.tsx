@@ -9,11 +9,13 @@ import {
   ArrowRightLeft,
   Ban,
   Calendar,
+  Zap,
 } from 'lucide-react';
 import { formatUSD, formatVES } from './KpiCard';
 import { Badge } from './Badge';
 import { QuoteModal } from './modals/QuoteModal';
 import { ConvertQuoteModal } from './modals/ConvertQuoteModal';
+import { ShareDocButtons } from './ShareDocButtons';
 import { updateQuoteStatusAction } from '@/actions/erpActions';
 import type { Quote } from '@/payload-types';
 
@@ -71,6 +73,11 @@ export function QuotesView({
       ? (q.customer as { name: string }).name
       : 'Cliente';
 
+  const customerEmail = (q: Quote) =>
+    typeof q.customer === 'object' && q.customer !== null
+      ? ((q.customer as { email?: string | null }).email ?? '')
+      : '';
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -93,13 +100,22 @@ export function QuotesView({
           </p>
         </div>
 
-        <button
-          onClick={() => setIsQuoteModalOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span>+ Nueva Cotización</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/${tenantSlug}/erp/quotes/quick`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/25 transition-colors"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>Cotización rápida</span>
+          </Link>
+          <button
+            onClick={() => setIsQuoteModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>+ Nueva Cotización</span>
+          </button>
+        </div>
       </div>
 
       {/* Listado */}
@@ -160,6 +176,15 @@ export function QuotesView({
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-1.5 flex-wrap">
+                          {q.status !== 'converted' && q.status !== 'rejected' && (
+                            <ShareDocButtons
+                              collection="quotes"
+                              tenantId={tenantId}
+                              documentId={q.id}
+                              docLabel={q.quoteNumber || `COT-${q.id}`}
+                              defaultEmail={customerEmail(q)}
+                            />
+                          )}
                           {(q.status === 'draft' || q.status === 'sent') && (
                             <button
                               onClick={() => {

@@ -518,6 +518,7 @@ export interface DeliveryNote {
    */
   invoice?: (number | null) | Invoice;
   notes?: string | null;
+  shareToken?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -893,6 +894,7 @@ export interface Quote {
    */
   convertedInvoice?: (number | null) | Invoice;
   notes?: string | null;
+  shareToken?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1911,6 +1913,7 @@ export interface QuotesSelect<T extends boolean = true> {
   totalVES?: T;
   convertedInvoice?: T;
   notes?: T;
+  shareToken?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1975,6 +1978,7 @@ export interface DeliveryNotesSelect<T extends boolean = true> {
   totalVES?: T;
   invoice?: T;
   notes?: T;
+  shareToken?: T;
   updatedAt?: T;
   createdAt?: T;
 }

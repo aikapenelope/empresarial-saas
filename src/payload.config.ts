@@ -10,6 +10,7 @@ import sharp from 'sharp';
 
 import { s3Storage } from '@payloadcms/storage-s3';
 import { nodemailerAdapter } from '@payloadcms/email-nodemailer';
+import { resendAdapter } from '@payloadcms/email-resend';
 import { importExportPlugin } from '@payloadcms/plugin-import-export';
 
 import { Users } from './collections/Users';
@@ -141,20 +142,29 @@ export default buildConfig({
     migrationDir: path.resolve(dirname, 'migrations'),
     prodMigrations: migrations,
   }),
-  email: nodemailerAdapter({
-    defaultFromAddress: process.env.SMTP_FROM_ADDRESS || 'soporte@empresarial-saas.com',
-    defaultFromName: process.env.SMTP_FROM_NAME || 'Empresarial SaaS',
-    transportOptions: process.env.SMTP_HOST
-      ? {
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT) || 587,
-          auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-          },
-        }
-      : undefined,
-  }),
+  // Email: adaptador oficial de Resend (@payloadcms/email-resend) cuando hay
+  // RESEND_API_KEY — ligero y recomendado para Vercel (HTTP, sin puertos SMTP).
+  // Sin la clave, se conserva nodemailer/SMTP (o el mock de ethereal en dev).
+  email: process.env.RESEND_API_KEY
+    ? resendAdapter({
+        defaultFromAddress: process.env.SMTP_FROM_ADDRESS || 'soporte@empresarial-saas.com',
+        defaultFromName: process.env.SMTP_FROM_NAME || 'Empresarial SaaS',
+        apiKey: process.env.RESEND_API_KEY,
+      })
+    : nodemailerAdapter({
+        defaultFromAddress: process.env.SMTP_FROM_ADDRESS || 'soporte@empresarial-saas.com',
+        defaultFromName: process.env.SMTP_FROM_NAME || 'Empresarial SaaS',
+        transportOptions: process.env.SMTP_HOST
+          ? {
+              host: process.env.SMTP_HOST,
+              port: Number(process.env.SMTP_PORT) || 587,
+              auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+              },
+            }
+          : undefined,
+      }),
   plugins: [
     // Sprint 7: acoplamiento venta→inventario (campos + hooks compuestos) empaquetado
     // como plugin canónico de la constitución ((options) => (config) => Config).

@@ -173,6 +173,7 @@ function useMemoRoutes(tenantSlug: string) {
       { name: 'Facturación & Ventas', href: `/${tenantSlug}/erp/invoices` },
       { name: 'Clientes & Cartera CxC', href: `/${tenantSlug}/erp/customers` },
       { name: 'Cotizaciones', href: `/${tenantSlug}/erp/quotes` },
+      { name: 'Cotización rápida', href: `/${tenantSlug}/erp/quotes/quick` },
       { name: 'Pedidos de Venta', href: `/${tenantSlug}/erp/orders` },
       { name: 'Remisiones', href: `/${tenantSlug}/erp/delivery-notes` },
       { name: 'Cartera por Antigüedad (CxC)', href: `/${tenantSlug}/erp/receivables` },

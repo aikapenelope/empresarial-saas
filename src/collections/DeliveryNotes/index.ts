@@ -214,6 +214,21 @@ export const DeliveryNotes: CollectionConfig = {
       label: 'Notas de Entrega',
       type: 'textarea',
     },
+    {
+      // Sprint 28: token de compartición pública (envío por email / WhatsApp).
+      // 32 bytes del CSPRNG; se emite perezosamente la primera vez que se
+      // comparte el documento y nunca es editable por la UI ni por REST.
+      name: 'shareToken',
+      label: 'Token de Compartición',
+      type: 'text',
+      index: true,
+      unique: true,
+      hidden: true,
+      access: {
+        create: () => false,
+        update: () => false,
+      },
+    },
   ],
   timestamps: true,
 };
