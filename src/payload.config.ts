@@ -207,7 +207,12 @@ export default buildConfig({
         'delivery-notes': {},
         alerts: {},
         'price-history': {},
-        'audit-log': {},
+        // audit-log NO es multi-tenant: es la bitácora GLOBAL de la plataforma y
+        // registra también operaciones sin inquilino (p. ej. la creación de
+        // empresas por el super-admin). El plugin inyecta aquí un campo tenant
+        // required que hace reventar TODA escritura de auditoría de operaciones
+        // globales. El aislamiento por inquilino lo aplica el access read del
+        // propio auditPlugin (patrón de Users.ts).
         'inventory-counts': {},
       },
       userHasAccessToAllTenants: (user) => Boolean(user?.role === 'super-admin'),

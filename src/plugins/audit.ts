@@ -6,7 +6,7 @@ import type {
   Config,
   Plugin,
 } from 'payload';
-import { extractId } from '../utilities/inventoryLedger';
+import { extractId, getUserTenantIds } from '../utilities/inventoryLedger';
 
 /**
  * ─── Audit Plugin (Sprint 12) ───────────────────────────────────────────────
@@ -106,13 +106,38 @@ export const auditPlugin =
           'Bitácora inmutable escrita por auditPlugin: quién cambió qué, cuándo y con qué diff.',
       },
       access: {
-        read: ({ req: { user } }) =>
-          Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+        read: ({ req: { user } }) => {
+          if (!user) return false;
+          if (user.role === 'super-admin') return true;
+          // Aislamiento multi-inquilino manual (audit-log ya no pasa por el
+          // multiTenantPlugin): un tenant-admin ve sólo las entradas de sus
+          // inquilinos. Los eventos GLOBALES (tenant null — p. ej. creación de
+          // empresas) quedan reservados al super-admin.
+          const tenantIds = getUserTenantIds(user);
+          if (tenantIds.length === 0) return false;
+          return {
+            tenant: { in: tenantIds },
+          };
+        },
         create: () => false, // Solo los hooks del plugin escriben (overrideAccess)
         update: () => false,
         delete: () => false,
       },
       fields: [
+        {
+          // Opcional por diseño: las operaciones GLOBALES de la plataforma
+          // (p. ej. createTenantAction) auditan sin inquilino. La columna
+          // tenant_id ya es nullable en BD; el aislamiento en lectura lo
+          // aplica el access de arriba.
+          name: 'tenant',
+          label: 'Inquilino',
+          type: 'relationship',
+          relationTo: 'tenants',
+          index: true,
+          admin: {
+            description: 'Inquilino del documento auditado (vacío en operaciones globales).',
+          },
+        },
         {
           name: 'actor',
           label: 'Actor',
@@ -184,10 +209,14 @@ export const auditPlugin =
 
       const typedDoc = doc as unknown as Record<string, unknown>;
       const typedOriginal = previousDoc as unknown as Record<string, unknown> | undefined;
+      const auditedTenant = extractId(typedDoc.tenant);
 
       await req.payload.create({
         collection: auditLogSlug as CollectionSlug,
         data: {
+          // El inquilino viaja del documento auditado; en operaciones globales
+          // (sin tenant) queda null y el access lo reserva al super-admin.
+          tenant: auditedTenant == null ? null : Number(auditedTenant),
           actor: req.user?.id ?? null,
           actorRole: req.user?.role || 'system',
           collection: slug,
@@ -213,10 +242,12 @@ export const auditPlugin =
       if (req.context?.skipAuditLog) return doc;
 
       const typedDoc = doc as unknown as Record<string, unknown>;
+      const auditedTenant = extractId(typedDoc.tenant);
 
       await req.payload.create({
         collection: auditLogSlug as CollectionSlug,
         data: {
+          tenant: auditedTenant == null ? null : Number(auditedTenant),
           actor: req.user?.id ?? null,
           actorRole: req.user?.role || 'system',
           collection: slug,
