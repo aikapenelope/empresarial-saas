@@ -6,6 +6,11 @@ import { HomeTenantList } from '@/components/erp/HomeTenantList';
 import Link from 'next/link';
 import { ErpAccessError } from '@/utilities/erpAuth';
 
+// El contenido depende de la sesión (anti-enumeración): nunca debe
+// prerenderizarse durante el build ni cachearse (patrón de los templates
+// oficiales de Payload para páginas que leen sesión).
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   // Anti-enumeración: el listado de empresas exige sesión. Anónimos ven el hero
   // con un CTA de inicio de sesión, nunca nombres ni slugs de inquilinos.
