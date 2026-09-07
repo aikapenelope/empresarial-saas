@@ -977,6 +977,9 @@ export interface PriceHistory {
  */
 export interface AuditLog {
   id: number;
+  /**
+   * Inquilino del documento auditado (vacío en operaciones globales).
+   */
   tenant?: (number | null) | Tenant;
   /**
    * Usuario que realizó la operación (sistema si no aplica).
