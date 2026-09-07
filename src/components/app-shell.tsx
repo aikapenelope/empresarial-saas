@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppHeader } from "@/components/app-header";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandPalette } from "./erp/CommandPalette";
@@ -41,6 +42,9 @@ export function AppShell({
 	const [commandOpen, setCommandOpen] = useState(false);
 
 	return (
+		// Los botones del sidebar renderizan Tooltip (título al colapsar):
+		// sin el provider global el render de /aquela/erp entero reventaba.
+		<TooltipProvider>
 		<SidebarProvider>
 			<AppSidebar
 				tenantName={tenantName}
@@ -67,6 +71,7 @@ export function AppShell({
 				/>
 				<div className="flex flex-1 flex-col gap-4">{children}</div>
 			</SidebarInset>
-		</SidebarProvider>
+			</SidebarProvider>
+		</TooltipProvider>
 	);
 }
