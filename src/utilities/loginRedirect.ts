@@ -6,6 +6,18 @@
  * - Ninguno → null (la pantalla de login muestra el aviso).
  * Helper puro: lo usan el RSC de /login y el LoginForm en cliente.
  */
+/**
+ * Valida un redirect interno: sólo rutas absolutas del propio origen.
+ * Rechaza protocol-relative (//host) y backslashes (/\\host) — ambos son
+ * vectores de open-redirect aunque el valor empiece por '/'.
+ */
+export function safeInternalPath(value?: string | null): string | undefined {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) {
+    return undefined;
+  }
+  return value;
+}
+
 export function resolvePostLoginTarget(user: {
   role?: string | null;
   tenants?: Array<{ tenant?: number | { slug?: string } | null } | null> | null;

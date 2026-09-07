@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { resolvePostLoginTarget } from '@/utilities/loginRedirect';
+import { resolvePostLoginTarget, safeInternalPath } from '@/utilities/loginRedirect';
 
 /**
  * Login propio del ERP (Sprint 34): autentica contra el endpoint REST oficial
@@ -66,7 +66,15 @@ export function LoginForm({ redirectParam }: { redirectParam?: string }) {
         setLoading(false);
         return;
       }
-      router.push(target);
+      const destination = redirectParam
+        ? safeInternalPath(redirectParam)
+        : target ?? undefined;
+      if (!destination) {
+        setError('Tu usuario no está asignado a ninguna empresa. Contacta al administrador.');
+        setLoading(false);
+        return;
+      }
+      router.push(destination);
       router.refresh();
     } catch {
       setError('No se pudo contactar al servidor. Revisa tu conexión.');
