@@ -437,19 +437,20 @@ Cada sprint concluye con:
 - [ ] Validar en preview/producción: `/admin/create-first-user` renderiza → crear primer super-admin por la UI oficial.
 - **Entregable:** PR #34.
 
-### 🧹 Sprint 24: Limpieza de desviaciones del scaffold
+### 🧹 Sprint 24 (PR `fix/scaffold-alignment-3.88`): Limpieza de desviaciones del scaffold
 
-- [ ] **Eliminar el campo `password` manual de `Users.ts`** (las credenciales son automáticas: `salt`/`hash`; el create oficial lee `data.password` sin necesidad del campo).
-- [ ] **Declarar `graphql: ^16.8.1`** en dependencies.
-- [ ] **Pins exactos** para `next 15.4.11` (ya exacto), `react 19.2.4`, y `payload`/`@payloadcms/*` en `3.88.0` exacto (el monorepo se publica como bloque; evita deriva entre paquetes del mismo release).
-- [ ] Migración opcional de limpieza: `ALTER TABLE users DROP COLUMN password` (columna huérfana del scaffold).
-- [ ] Alinear `sharp` a `0.34.x` y añadir `dotenv` si se adopta el estilo de scripts oficial.
+- [x] **Eliminar el campo `password` manual de `Users.ts`** (las credenciales son automáticas: `salt`/`hash`; el create oficial lee `data.password` sin necesidad del campo).
+- [x] **Declarar `graphql: ^16.8.1`** en dependencies.
+- [x] **Pins exactos** para `next 15.4.11` (ya exacto), `react 19.2.4`, y `payload`/`@payloadcms/*` en `3.88.0` exacto (el monorepo se publica como bloque; evita deriva entre paquetes del mismo release).
+- [x] Migración de limpieza: `ALTER TABLE users DROP COLUMN password` (columna huérfana del scaffold) — creada; aplicar a la BD tras el merge.
+- [x] Alinear `sharp` a `0.34.2` exacto, `dotenv 16.4.7` declarado y scripts al estilo oficial (`NODE_OPTIONS=--no-deprecation`, sin `PAYLOAD_CONFIG_PATH`).
 - **Entregable:** PR `fix/scaffold-alignment-3.88`.
 
 ### 🎯 Sprint 25 (experimento con puerta de decisión): Combo oficial de hoy — Next 16.3.0 + React 19.2.6
 
-- [ ] Rama de upgrade al combo **exacto** del template oficial v3.88.0: `next 16.3.0`, `react 19.2.6`, `eslint-config-next 16.3.0`, `@types/*` del template, y `next.config.ts` oficial completo (`images.localPatterns`, `webpack.extensionAlias`, `turbopack.root`, `devBundleServerPackages: false`).
-- [ ] Regenerar `importMap` y `payload-types`.
+- [x] Rama de upgrade al combo **exacto** del template oficial v3.88.0: `next 16.3.0`, `react 19.2.6`, `eslint-config-next 16.3.0` (flat config nativa, `.eslintrc.json` retirado), `@types/*` del template, y `next.config.ts` oficial completo (`images.localPatterns`, `webpack.extensionAlias`, `turbopack.root`, `devBundleServerPackages: false`).
+- [x] Regenerar `importMap` y `payload-types`.
+- [x] Build local con Turbopack en verde y `tsc --noEmit` en verde (home marcada `force-dynamic`: lee sesión, nunca debe prerenderizarse).
 - [ ] **Puerta de decisión empírica** en preview: ¿las rutas no autenticadas del admin renderizan con el combo oficial?
   - ✅ **Sí** → merge: el proyecto queda **1:1 con el template oficial v3.88.0 de hoy**. Fin de la Fase 6.
   - ❌ **No** → revertir con hallazgos documentados en #17545 y permanecer en el estado del Sprint 24 hasta que Payload publique el fix.
