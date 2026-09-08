@@ -1357,13 +1357,16 @@ export async function issueInvoiceFromOrderAction(input: {
       if (order.status !== 'confirmed') {
         throw new Error(`Confirma el pedido antes de facturar (estado actual: "${order.status}").`);
       }
+      // Sin término explícito se respeta contado: facturar una entrega no
+      // crea crédito implícito (Devin #57).
+      const effectivePaymentTerms = parsed.paymentTerms || 'cash';
 
       const invoiceParsed = createInvoiceSchema.parse({
         tenantId: parsed.tenantId,
         tenantSlug: parsed.tenantSlug,
         customerId: order.customer,
-        paymentTerms: parsed.paymentTerms,
-        cashMethod: parsed.paymentTerms === 'cash' ? parsed.cashMethod : undefined,
+        paymentTerms: effectivePaymentTerms,
+        cashMethod: effectivePaymentTerms === 'cash' ? parsed.cashMethod : undefined,
         cashRegisterId: parsed.cashRegisterId,
         warehouseId: parsed.warehouseId,
         items: (order.items || []).map((item) => {
