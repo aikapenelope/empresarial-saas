@@ -1324,7 +1324,7 @@ export async function issueInvoiceFromOrderAction(input: {
   tenantId: number;
   tenantSlug: string;
   orderId: number;
-  paymentTerms: 'cash' | 'credit';
+  paymentTerms?: 'cash' | 'credit';
   cashMethod?: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance';
   cashRegisterId?: number;
   warehouseId?: number;
