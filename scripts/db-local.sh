@@ -58,7 +58,25 @@ case "${1:-}" in
     pg_ctl -D "$DIR" stop && echo "🛑 Cluster local apagado"
     ;;
   reset)
-    pg_ctl -D "$DIR" stop 2>/dev/null || true
+    # Fix Devin #47: nunca borrar un cluster que sigue corriendo. Si el stop
+    # falla tras los reintentos, abortar con guía en lugar de rm -rf ciego
+    # (el proceso vivo mantendría el puerto 54322 tomado y bloquearía el init).
+    if pg_ctl -D "$DIR" status >/dev/null 2>&1; then
+      stopped=false
+      for _ in 1 2 3; do
+        if pg_ctl -D "$DIR" stop -m fast >/dev/null 2>&1; then
+          stopped=true
+          break
+        fi
+        sleep 1
+      done
+      if ! $stopped && pg_ctl -D "$DIR" status >/dev/null 2>&1; then
+        echo "❌ No se pudo detener el cluster local (proceso vivo en el puerto $PORT)."
+        echo "   Revisa $DIR.log y cierra el proceso manualmente antes de resetear."
+        echo "   El directorio de datos NO fue tocado."
+        exit 1
+      fi
+    fi
     rm -rf "$DIR" "$DIR.log"
     "$0" init
     ;;
