@@ -60,7 +60,6 @@ export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotes
       tenantId,
       tenantSlug,
       orderId: Number(orderId),
-      paymentTerms: 'credit',
     });
     setInvoicingNoteId(undefined);
     if (res.success) {

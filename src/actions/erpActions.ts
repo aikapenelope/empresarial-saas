@@ -788,6 +788,14 @@ async function createInvoiceCore(
     parsed.cashMethod === 'zelle' ||
     parsed.cashMethod === 'binance';
 
+  // IGTF del recibo automático (Devin #58): mismo snapshot que createPaymentAction.
+  const receiptIgtfUSD = computeIgtfUSD(
+    totalUSD,
+    parsed.cashMethod || 'cash_usd',
+    Number(tenant?.taxConfig?.igtfPct ?? 3),
+    tenant?.taxConfig?.applyIgtfOnFxPayments !== false,
+  );
+
   const paymentNumber = await nextDocumentNumber(
     payload,
     'customer-payments',
@@ -802,6 +810,7 @@ async function createInvoiceCore(
       tenant: parsed.tenantId,
       paymentNumber,
       customer: parsed.customerId,
+      igtfUSD: receiptIgtfUSD,
       paymentDate: new Date().toISOString(),
       status: 'confirmed',
       cashRegister: parsed.cashRegisterId || undefined,
@@ -1357,7 +1366,7 @@ export async function issueInvoiceFromOrderAction(input: {
   tenantId: number;
   tenantSlug: string;
   orderId: number;
-  paymentTerms: 'cash' | 'credit';
+  paymentTerms?: 'cash' | 'credit';
   cashMethod?: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance';
   cashRegisterId?: number;
   warehouseId?: number;
@@ -1390,13 +1399,16 @@ export async function issueInvoiceFromOrderAction(input: {
       if (order.status !== 'confirmed') {
         throw new Error(`Confirma el pedido antes de facturar (estado actual: "${order.status}").`);
       }
+      // Sin término explícito se usa CONTADO: facturar una entrega no crea
+      // crédito implícito (Devin #58).
+      const effectivePaymentTerms = parsed.paymentTerms || 'cash';
 
       const invoiceParsed = createInvoiceSchema.parse({
         tenantId: parsed.tenantId,
         tenantSlug: parsed.tenantSlug,
         customerId: order.customer,
-        paymentTerms: parsed.paymentTerms,
-        cashMethod: parsed.paymentTerms === 'cash' ? parsed.cashMethod : undefined,
+        paymentTerms: effectivePaymentTerms,
+        cashMethod: effectivePaymentTerms === 'cash' ? parsed.cashMethod : undefined,
         cashRegisterId: parsed.cashRegisterId,
         warehouseId: parsed.warehouseId,
         items: (order.items || []).map((item) => {
