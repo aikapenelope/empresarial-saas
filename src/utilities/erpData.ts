@@ -473,7 +473,7 @@ export async function getInvoicesPage(
   const payload = await getPayload({ config });
 
   const and: Where[] = [{ tenant: { equals: tenantId } }];
-  and.push(...buildBusinessDateRange(filters.from, filters.to));
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
   if (filters.status) and.push({ status: { equals: filters.status } });
 
   const res = await payload.find({
@@ -496,7 +496,7 @@ export async function getInvoicesPage(
 }
 
 /**
- * Cotizaciones paginadas por fecha y estado (Sprint 39).
+ * Cotizaciones paginadas por fecha de emisión y estado (Sprint 39).
  */
 export async function getQuotesPage(
   tenantId: number,
@@ -506,7 +506,7 @@ export async function getQuotesPage(
   const payload = await getPayload({ config });
 
   const and: Where[] = [{ tenant: { equals: tenantId } }];
-  and.push(...buildBusinessDateRange(filters.from, filters.to));
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
   if (filters.status) and.push({ status: { equals: filters.status } });
 
   const res = await payload.find({
@@ -547,10 +547,20 @@ export interface SalesBookReport {
 }
 
 /**
- * Libro de Ventas del período (Sprint 39): facturas emitidas/no-anuladas con
- * su tasa snapshot, agregadas en USD y VES históricos (cada factura con SU
- * tasa — el total VES es la suma de los contravalores reales del momento,
- * no una conversión retroactiva con la tasa vigente).
+ * Estados que constituyen una venta EMITIDA. El libro de ventas (preview y
+ * export CSV) comparte esta única lista: un borrador (`draft`) es un documento
+ * sin emitir y no puede inflar las ventas del período; una anulada (`voided`)
+ * tampoco. Exportada para que el route handler del export use el mismo
+ * predicado que el preview y ambos reporten exactamente el mismo conjunto.
+ */
+export const SALES_BOOK_STATUSES = ['issued', 'partially_paid', 'paid'] as const;
+
+/**
+ * Libro de Ventas del período (Sprint 39): facturas EMITIDAS (ver
+ * SALES_BOOK_STATUSES) por fecha de emisión, con su tasa snapshot, agregadas
+ * en USD y VES históricos (cada factura con SU tasa — el total VES es la suma
+ * de los contravalores reales del momento, no una conversión retroactiva con
+ * la tasa vigente).
  */
 export async function getSalesBookReport(
   tenantId: number,
@@ -561,9 +571,9 @@ export async function getSalesBookReport(
 
   const and: Where[] = [
     { tenant: { equals: tenantId } },
-    { status: { not_equals: 'voided' } },
+    { status: { in: [...SALES_BOOK_STATUSES] } },
   ];
-  and.push(...buildBusinessDateRange(filters.from, filters.to));
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
 
   // pagination:false + límite explícito: reportes agregados SIN el costo de
   // conteo de paginación (patrón documentado de la Local API).
@@ -624,8 +634,9 @@ export interface InvoiceListTotals {
 
 /**
  * KPIs del listado de facturas sobre el conjunto FILTRADO completo (no la
- * página visible). `select` limita el payload a los 3 campos usados y
- * `pagination:false` evita el conteo — patrón de la Local API para agregados.
+ * página visible), por fecha de emisión — el mismo período que ve el listado.
+ * `select` limita el payload a los 4 campos usados y `pagination:false` evita
+ * el conteo — patrón de la Local API para agregados.
  */
 export async function getInvoicesTotals(
   tenantId: number,
@@ -635,7 +646,7 @@ export async function getInvoicesTotals(
   const payload = await getPayload({ config });
 
   const and: Where[] = [{ tenant: { equals: tenantId } }];
-  and.push(...buildBusinessDateRange(filters.from, filters.to));
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
   if (filters.status) and.push({ status: { equals: filters.status } });
 
   const res = await payload.find({
@@ -669,6 +680,64 @@ export async function getInvoicesTotals(
     balanceUSD: Number(balanceUSD.toFixed(2)),
     paidCount,
   };
+}
+
+/** Opción de factura cobrable para el modal de cobro (contrato de PaymentModal). */
+export interface PayableInvoiceOption {
+  id: number;
+  invoiceNumber: string;
+  customerId: number;
+  balanceUSD: number;
+  balanceVES: number;
+}
+
+/**
+ * Padrón COMPLETO de facturas cobrables del inquilino (con saldo pendiente y
+ * emitidas). El modal de cobro no puede apoyarse en la página visible del
+ * listado: los filtros de fecha/estado y la paginación server-side ocultarían
+ * facturas perfectamente pagables (p. ej. una del mes pasado mientras se ve
+ * el mes actual). Consulta aparte con `select` mínimo y `depth:0` (customer
+ * viaja como id) para no cargar el histórico completo del inquilino.
+ */
+export async function getOpenInvoicesForPayments(
+  tenantId: number,
+): Promise<PayableInvoiceOption[]> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const res = await payload.find({
+    collection: 'invoices',
+    where: {
+      and: [
+        { tenant: { equals: tenantId } },
+        { status: { in: ['issued', 'partially_paid'] } },
+        { balanceUSD: { greater_than: 0 } },
+      ],
+    },
+    depth: 0,
+    limit: 2000,
+    pagination: false,
+    sort: '-issueDate',
+    select: { invoiceNumber: true, customer: true, balanceUSD: true, balanceVES: true },
+    user,
+    overrideAccess: false,
+  });
+
+  type PayableInvoiceRow = Pick<
+    Invoice,
+    'id' | 'invoiceNumber' | 'customer' | 'balanceUSD' | 'balanceVES'
+  >;
+
+  return (res.docs as PayableInvoiceRow[]).map((inv) => ({
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    customerId:
+      typeof inv.customer === 'object' && inv.customer !== null
+        ? inv.customer.id
+        : Number(inv.customer),
+    balanceUSD: Number(inv.balanceUSD) || 0,
+    balanceVES: Number(inv.balanceVES) || 0,
+  }));
 }
 
 export async function getWarehousesList(tenantId: number): Promise<Warehouse[]> {

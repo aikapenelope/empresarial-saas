@@ -3,7 +3,8 @@ import config from '@payload-config';
 import type { Where } from 'payload';
 import { getTenantBySlug } from '@/utilities/erpData';
 import { ErpAccessError, requireErpTenantAccess } from '@/utilities/erpAuth';
-import { buildBusinessDateRange } from '@/utilities/erpValidation';
+import { buildBusinessDateRange, businessDateRangeSchema } from '@/utilities/erpValidation';
+import { csvCell } from '@/utilities/csv';
 import type { StockMovement } from '@/payload-types';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -21,7 +22,9 @@ const TYPE_LABELS: Record<string, string> = {
 /**
  * Export CSV del Kardex (Sprint 39): movimientos del período con producto,
  * almacenes, cantidad y costo. `pagination:false` trae el conjunto completo
- * filtrado (hasta el límite) en una sola consulta.
+ * filtrado (hasta el límite) en una sola consulta. El kardex es una bitácora
+ * inmutable: su período se define por `createdAt` (a diferencia de los
+ * documentos de venta, que usan la fecha de emisión).
  */
 export async function GET(
   request: Request,
@@ -36,14 +39,20 @@ export async function GET(
       return Response.json({ error: 'Inquilino no encontrado.' }, { status: 404 });
     }
 
-    await requireErpTenantAccess(tenant.id);
+    // El usuario verificado viaja a la Local API: con `overrideAccess:false`
+    // el control de acceso de la colección necesita la identidad real.
+    const user = await requireErpTenantAccess(tenant.id);
 
+    // Mismo contrato que las páginas RSC: una fecha malformada se descarta en
+    // lugar de llegar a `toISOString()` y responder 500.
     const { searchParams } = new URL(request.url);
-    const from = searchParams.get('from') || undefined;
-    const to = searchParams.get('to') || undefined;
+    const q = businessDateRangeSchema.parse({
+      from: searchParams.get('from') || undefined,
+      to: searchParams.get('to') || undefined,
+    });
 
     const and: Where[] = [{ tenant: { equals: tenant.id } }];
-    and.push(...buildBusinessDateRange(from, to));
+    and.push(...buildBusinessDateRange(q.from, q.to, 'createdAt'));
 
     const res = await payload.find({
       collection: 'stock-movements',
@@ -52,10 +61,9 @@ export async function GET(
       limit: 10000,
       pagination: false,
       sort: '-createdAt',
+      user,
       overrideAccess: false,
     });
-
-    const csvEscape = (v: string) => `"${v.replace(/"/g, '""')}"`;
 
     const lines: string[] = [
       'fecha,referencia,tipo,producto,origen,destino,cantidad,costo_usd',
@@ -74,11 +82,11 @@ export async function GET(
       lines.push(
         [
           new Date(m.createdAt).toISOString().slice(0, 10),
-          csvEscape(m.reference),
+          csvCell(m.reference),
           TYPE_LABELS[m.movementType] || m.movementType,
-          csvEscape(productName),
-          csvEscape(sourceName),
-          csvEscape(targetName),
+          csvCell(productName),
+          csvCell(sourceName),
+          csvCell(targetName),
           String(m.quantity),
           Number(m.totalCostUSD || 0).toFixed(2),
         ].join(','),
@@ -86,7 +94,7 @@ export async function GET(
     }
 
     const csv = lines.join('\n');
-    const suffix = from || to ? `-${from || 'ini'}-a-${to || 'hoy'}` : '';
+    const suffix = q.from || q.to ? `-${q.from || 'ini'}-a-${q.to || 'hoy'}` : '';
     return new Response(csv, {
       status: 200,
       headers: {

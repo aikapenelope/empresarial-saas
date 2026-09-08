@@ -1,15 +1,18 @@
 import { getPayload } from 'payload';
 import config from '@payload-config';
-import { getTenantBySlug } from '@/utilities/erpData';
+import { getTenantBySlug, SALES_BOOK_STATUSES } from '@/utilities/erpData';
 import { ErpAccessError, requireErpTenantAccess } from '@/utilities/erpAuth';
-import { buildBusinessDateRange } from '@/utilities/erpValidation';
+import { buildBusinessDateRange, businessDateRangeSchema } from '@/utilities/erpValidation';
+import { csvCell } from '@/utilities/csv';
 import type { Where } from 'payload';
 import type { Invoice } from '@/payload-types';
 
 /**
- * Export CSV del Libro de Ventas del período (Sprint 39): facturas no anuladas
- * con tasa snapshot y contravalor VES histórico. Route handler server-side
- * (streaming nativo de Next) — mismo patrón de la plantilla de inventario.
+ * Export CSV del Libro de Ventas del período (Sprint 39): facturas EMITIDAS
+ * (mismo predicado SALES_BOOK_STATUSES que el preview — sin borradores ni
+ * anuladas) por fecha de emisión, con tasa snapshot y contravalor VES
+ * histórico. Route handler server-side (streaming nativo de Next) — mismo
+ * patrón de la plantilla de inventario.
  */
 export async function GET(
   request: Request,
@@ -25,17 +28,23 @@ export async function GET(
     }
 
     // Operadores autorizados (la vista de facturas ya exige sesión del tenant).
-    await requireErpTenantAccess(tenant.id);
+    // El usuario verificado viaja a la Local API: con `overrideAccess:false`
+    // el control de acceso de la colección necesita la identidad real.
+    const user = await requireErpTenantAccess(tenant.id);
 
+    // Mismo contrato que las páginas RSC: una fecha malformada se descarta en
+    // lugar de llegar a `toISOString()` y responder 500.
     const { searchParams } = new URL(request.url);
-    const from = searchParams.get('from') || undefined;
-    const to = searchParams.get('to') || undefined;
+    const q = businessDateRangeSchema.parse({
+      from: searchParams.get('from') || undefined,
+      to: searchParams.get('to') || undefined,
+    });
 
     const and: Where[] = [
       { tenant: { equals: tenant.id } },
-      { status: { not_equals: 'voided' } },
+      { status: { in: [...SALES_BOOK_STATUSES] } },
     ];
-    and.push(...buildBusinessDateRange(from, to));
+    and.push(...buildBusinessDateRange(q.from, q.to, 'issueDate'));
 
     const res = await payload.find({
       collection: 'invoices',
@@ -44,10 +53,10 @@ export async function GET(
       limit: 5000,
       pagination: false,
       sort: '-createdAt',
+      user,
       overrideAccess: false,
     });
 
-    const csvEscape = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const money = (v: unknown) => Number(v || 0).toFixed(2);
 
     const lines: string[] = [
@@ -61,8 +70,8 @@ export async function GET(
       lines.push(
         [
           new Date(inv.issueDate).toISOString().slice(0, 10),
-          csvEscape(inv.invoiceNumber),
-          csvEscape(customerName),
+          csvCell(inv.invoiceNumber),
+          csvCell(customerName),
           inv.paymentTerms,
           inv.status,
           money(inv.totalUSD),
@@ -73,7 +82,7 @@ export async function GET(
     }
 
     const csv = lines.join('\n');
-    const suffix = from || to ? `-${from || 'ini'}-a-${to || 'hoy'}` : '';
+    const suffix = q.from || q.to ? `-${q.from || 'ini'}-a-${q.to || 'hoy'}` : '';
     return new Response(csv, {
       status: 200,
       headers: {

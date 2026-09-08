@@ -546,15 +546,21 @@ export const auditFiltersSchema = z.object({
   to: dateOnly.optional().catch(undefined),
 });
 
-// Filtros de negocio compartidos (Sprint 39): facturas, cotizaciones, pedidos,
-// remisiones, compras y pagos usan el MISMO contrato URL→RSC. `from`/`to` son
-// fechas de calendario en la zona horaria de negocio (UTC-4, ver
-// buildBusinessDateRange); `status` es el enum propio de cada documento y se
-// filtra por vista con un literal tuple tipado.
-export const businessListFiltersSchema = z.object({
-  page: z.coerce.number().int().positive().catch(1),
+// Rango de fechas de calendario compartido por los listados de negocio Y los
+// exports CSV (route handlers): `from`/`to` son fechas YYYY-MM-DD en la zona
+// horaria de negocio (UTC-4, ver buildBusinessDateRange). Un valor malformado
+// se descarta (catch) en lugar de fallar — el mismo contrato que las páginas
+// RSC, así un export con `from=abc` devuelve el conjunto sin filtrar y no un 500.
+export const businessDateRangeSchema = z.object({
   from: dateOnly.optional().catch(undefined),
   to: dateOnly.optional().catch(undefined),
+});
+
+// Filtros de negocio compartidos (Sprint 39): facturas, cotizaciones, pedidos,
+// remisiones, compras y pagos usan el MISMO contrato URL→RSC. `status` es el
+// enum propio de cada documento y se filtra por vista con un literal tuple tipado.
+export const businessListFiltersSchema = businessDateRangeSchema.extend({
+  page: z.coerce.number().int().positive().catch(1),
 });
 
 /** Listado de facturas: agrega su enum de estado al contrato compartido. */
@@ -574,24 +580,47 @@ export const quotesListFiltersSchema = businessListFiltersSchema.extend({
 });
 
 /**
+ * Campo sobre el que se aplica el período de negocio. Los documentos de venta
+ * (facturas, cotizaciones) definen su período por la FECHA DE EMISIÓN
+ * (`issueDate`): una factura con fecha retroactiva o editada pertenece al
+ * período de su emisión, no al del timestamp en que se insertó la fila. Las
+ * bitácoras inmutables (kardex) sí se ordenan por `createdAt`.
+ */
+export type BusinessDateField = 'issueDate' | 'createdAt';
+
+/**
  * Convierte el par {from,to} de fechas de calendario (YYYY-MM-DD) en un rango
  * de timestamps ISO inclusivo-exclusivo en la zona horaria de negocio
  * (Venezuela, UTC-4, sin DST): "hasta" usa el borde exclusivo del día
  * siguiente para incluir la tarde/noche local que un corte 23:59:59 perdería.
  * Devuelve condiciones `where` listas para spread en un AND:
- * `and.push(...buildBusinessDateRange(q.from, q.to))`.
+ * `and.push(...buildBusinessDateRange(q.from, q.to, 'issueDate'))`.
+ *
+ * El campo se ramifica con literales (sin claves computadas) para que cada
+ * condición conserve el tipado estricto de `Where` sin casts.
  */
-export function buildBusinessDateRange(from?: string, to?: string): Where[] {
+export function buildBusinessDateRange(
+  from?: string,
+  to?: string,
+  field: BusinessDateField = 'createdAt',
+): Where[] {
   const conditions: Where[] = [];
-  if (from) {
-    conditions.push({
-      createdAt: { greater_than_equal: new Date(`${from}T00:00:00-04:00`).toISOString() },
-    });
-  }
+  const lowerInclusive = from ? new Date(`${from}T00:00:00-04:00`).toISOString() : undefined;
+
+  let upperExclusive: string | undefined;
   if (to) {
     const toEndExclusive = new Date(`${to}T00:00:00-04:00`);
     toEndExclusive.setUTCDate(toEndExclusive.getUTCDate() + 1);
-    conditions.push({ createdAt: { less_than: toEndExclusive.toISOString() } });
+    upperExclusive = toEndExclusive.toISOString();
   }
+
+  if (field === 'issueDate') {
+    if (lowerInclusive) conditions.push({ issueDate: { greater_than_equal: lowerInclusive } });
+    if (upperExclusive) conditions.push({ issueDate: { less_than: upperExclusive } });
+  } else {
+    if (lowerInclusive) conditions.push({ createdAt: { greater_than_equal: lowerInclusive } });
+    if (upperExclusive) conditions.push({ createdAt: { less_than: upperExclusive } });
+  }
+
   return conditions;
 }

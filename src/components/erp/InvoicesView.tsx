@@ -34,11 +34,18 @@ import { InvoiceModal } from './modals/InvoiceModal';
 import { PaymentModal } from './modals/PaymentModal';
 import { ReturnModal } from './modals/ReturnModal';
 import type { Invoice } from '@/payload-types';
+import type { PayableInvoiceOption } from '@/utilities/erpData';
 
 interface InvoicesViewProps {
   tenantId: number;
   tenantSlug: string;
   invoices: Invoice[];
+  /**
+   * Padrón COMPLETO de facturas cobrables del inquilino (no la página visible):
+   * el modal de cobro debe poder imputar a cualquier factura abierta aunque
+   * los filtros de fecha/estado o la paginación la oculten del listado.
+   */
+  payableInvoices: PayableInvoiceOption[];
   listMeta: { page: number; totalPages: number; totalDocs: number };
   totals: {
     count: number;
@@ -66,6 +73,7 @@ export function InvoicesView({
   tenantId,
   tenantSlug,
   invoices,
+  payableInvoices,
   listMeta,
   totals,
   filters,
@@ -102,20 +110,10 @@ export function InvoicesView({
     );
   });
 
-  // Preparar lista de facturas para el modal de cobro
-  const invoicesForPayment = invoices.map((inv) => {
-    const custId =
-      typeof inv.customer === 'object' && inv.customer !== null
-        ? (inv.customer as { id: number }).id
-        : Number(inv.customer);
-    return {
-      id: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      customerId: custId,
-      balanceUSD: Number(inv.balanceUSD) || 0,
-      balanceVES: Number(inv.balanceVES) || 0,
-    };
-  });
+  // La lista de facturas del modal de cobro NO se deriva de `invoices` (la
+  // página visible): llega ya preparada del servidor como `payableInvoices`
+  // (padrón completo de abiertas), porque el rango de fechas, el estado y la
+  // paginación server-side ocultarían facturas perfectamente pagables.
 
   const handleOpenCollect = (inv: Invoice) => {
     const custId =
@@ -408,7 +406,7 @@ export function InvoicesView({
         tenantSlug={tenantSlug}
         rate={effectiveRate}
         customers={customers}
-        invoices={invoicesForPayment}
+        invoices={payableInvoices}
         defaultCustomerId={selectedCustomerId}
         defaultInvoiceId={selectedInvoiceId}
       />

@@ -4,6 +4,7 @@ import {
   getTenantBySlug,
   getInvoicesPage,
   getInvoicesTotals,
+  getOpenInvoicesForPayments,
   getCustomersWithDebt,
   getProductsCatalog,
   getCashRegistersWithDetails,
@@ -48,24 +49,28 @@ export default async function InvoicesPage({ params, searchParams }: PageProps) 
     status: q.status,
   };
 
-  let page, totals, customers, products, registers, warehouses, effectiveRateData;
+  let page, totals, payableInvoices, customers, products, registers, warehouses, effectiveRateData;
   try {
-    [page, totals, customers, products, registers, warehouses, effectiveRateData] = await Promise.all([
-      getInvoicesPage(tenant.id, filters),
-      getInvoicesTotals(tenant.id, filters),
-      getCustomersWithDebt(tenant.id),
-      getProductsCatalog(tenant.id),
-      getCashRegistersWithDetails(tenant.id),
-      getWarehousesList(tenant.id),
-      resolveEffectiveRate(
-        tenant.currencyConfig
-          ? {
-              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
-              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
-            }
-          : undefined,
-      ),
-    ]);
+    [page, totals, payableInvoices, customers, products, registers, warehouses, effectiveRateData] =
+      await Promise.all([
+        getInvoicesPage(tenant.id, filters),
+        getInvoicesTotals(tenant.id, filters),
+        // Padrón completo de abiertas para el modal de cobro: independiente
+        // de los filtros y la paginación del listado.
+        getOpenInvoicesForPayments(tenant.id),
+        getCustomersWithDebt(tenant.id),
+        getProductsCatalog(tenant.id),
+        getCashRegistersWithDetails(tenant.id),
+        getWarehousesList(tenant.id),
+        resolveEffectiveRate(
+          tenant.currencyConfig
+            ? {
+                manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+                autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+              }
+            : undefined,
+        ),
+      ]);
   } catch (error: unknown) {
     if (error instanceof ErpAccessError) {
       return <ErpAccessDenied status={error.status} />;
@@ -95,6 +100,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps) 
       tenantId={tenant.id}
       tenantSlug={tenant.slug}
       invoices={page.docs}
+      payableInvoices={payableInvoices}
       listMeta={{ page: page.page, totalPages: page.totalPages, totalDocs: page.totalDocs }}
       totals={totals}
       filters={{ from: q.from, to: q.to, status: q.status }}

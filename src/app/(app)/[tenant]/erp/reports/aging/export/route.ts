@@ -1,5 +1,6 @@
 import { getTenantBySlug, getCustomersWithDebt } from '@/utilities/erpData';
 import { ErpAccessError, requireErpTenantAccess } from '@/utilities/erpAuth';
+import { csvCell } from '@/utilities/csv';
 
 /**
  * Export CSV de la cartera por antigüedad (Sprint 39): padrón completo con
@@ -23,7 +24,6 @@ export async function GET(
     // tenant; los reportes de cartera son sensible a saldos).
     await requireErpTenantAccess(tenant.id);
 
-    const csvEscape = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const money = (v: unknown) => Number(v || 0).toFixed(2);
 
     const lines: string[] = [
@@ -32,9 +32,9 @@ export async function GET(
     for (const c of customers) {
       lines.push(
         [
-          csvEscape(c.name),
-          csvEscape(c.taxId),
-          csvEscape(c.phone || ''),
+          csvCell(c.name),
+          csvCell(c.taxId),
+          csvCell(c.phone || ''),
           c.status || 'general',
           money(c.currentDebtUSD),
           money(c.overdueDebtUSD),
