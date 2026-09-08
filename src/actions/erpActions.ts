@@ -1428,10 +1428,15 @@ export async function issueInvoiceFromOrderAction(input: {
       if (order.status !== 'confirmed') {
         throw new Error(`Confirma el pedido antes de facturar (estado actual: "${order.status}").`);
       }
+<<<<<<< HEAD
       // Sin término explícito se respeta el del pedido (Devin #57: facturar la
       // entrega de un cliente de CONTADO no puede forzar crédito).
       // Contado por defecto: facturar una entrega sin término explícito no
       // debe crear crédito implícito (Devin #57).
+=======
+      // Sin término explícito se usa CONTADO: facturar una entrega no crea
+      // crédito implícito (Devin #58).
+>>>>>>> feat/sprint43-email-invoices
       const effectivePaymentTerms = parsed.paymentTerms || 'cash';
 
       const invoiceParsed = createInvoiceSchema.parse({
