@@ -451,6 +451,7 @@ export const updateTenantSettingsSchema = z.object({
   baseCurrency: z.enum(['USD', 'VES']),
   manualExchangeRate: positiveMoney.optional(),
   autoSyncRate: z.boolean(),
+  salesDocumentDefault: z.enum(['nota_entrega', 'factura']).optional(),
 });
 
 export const createTenantSchema = z.object({

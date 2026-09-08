@@ -204,6 +204,12 @@ export interface Tenant {
     manualExchangeRate?: number | null;
     autoSyncRate?: boolean | null;
   };
+  salesConfig: {
+    /**
+     * Escenario regulatorio venezolano 2026: en modo "nota_entrega" la entrega al cliente se documenta con Nota de Entrega y la factura pasa a ser opcional (se emite después, desde la remisión o el pedido).
+     */
+    salesDocumentDefault: 'nota_entrega' | 'factura';
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -1374,6 +1380,11 @@ export interface TenantsSelect<T extends boolean = true> {
         baseCurrency?: T;
         manualExchangeRate?: T;
         autoSyncRate?: T;
+      };
+  salesConfig?:
+    | T
+    | {
+        salesDocumentDefault?: T;
       };
   updatedAt?: T;
   createdAt?: T;

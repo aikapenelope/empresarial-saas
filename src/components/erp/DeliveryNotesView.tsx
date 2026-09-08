@@ -9,6 +9,7 @@ import {
   Send,
   CircleDollarSign,
   FileX2,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatUSD, formatVES } from './format';
@@ -24,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { voidDeliveryNoteAction } from '@/actions/erpActions';
+import { issueInvoiceFromOrderAction, voidDeliveryNoteAction } from '@/actions/erpActions';
 import { ShareDocButtons } from './ShareDocButtons';
 import type { DeliveryNote } from '@/payload-types';
 
@@ -41,9 +42,33 @@ const STATUS_BADGE: Record<string, { variant: 'slate' | 'amber' | 'emerald' | 'r
 
 export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotesViewProps) {
   const [busyNoteId, setBusyNoteId] = useState<number | undefined>(undefined);
+  const [invoicingNoteId, setInvoicingNoteId] = useState<number | undefined>(undefined);
 
   const issued = notes.filter((n) => n.status === 'issued');
   const issuedValue = issued.reduce((acc, n) => acc + (Number(n.totalUSD) || 0), 0);
+
+  // Factura el pedido padre (Sprint 41): entrega documentada con nota, factura
+  // opcional a demanda. El action rechaza si el pedido ya fue facturado.
+  const handleInvoice = async (note: DeliveryNote) => {
+    const orderId = typeof note.order === 'object' && note.order !== null ? note.order.id : note.order;
+    if (!orderId) {
+      toast.error('La remisión no tiene pedido asociado.');
+      return;
+    }
+    setInvoicingNoteId(note.id);
+    const res = await issueInvoiceFromOrderAction({
+      tenantId,
+      tenantSlug,
+      orderId: Number(orderId),
+      paymentTerms: 'credit',
+    });
+    setInvoicingNoteId(undefined);
+    if (res.success) {
+      toast.success('Factura emitida desde la remisión.');
+    } else {
+      toast.error(res.error || 'No se pudo facturar.');
+    }
+  };
 
   const handleVoid = async (noteId: number) => {
     setBusyNoteId(noteId);
@@ -188,16 +213,28 @@ export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotes
                             </Link>
                           </Button>
                           {n.status === 'issued' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-[11px] text-rose-600 dark:text-rose-400"
-                              onClick={() => handleVoid(n.id)}
-                              disabled={busyNoteId === n.id}
-                            >
-                              <Ban className="h-3 w-3" aria-hidden="true" />
-                              <span>Anular</span>
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-[11px]"
+                                onClick={() => handleInvoice(n)}
+                                disabled={invoicingNoteId === n.id}
+                              >
+                                <FileText className="h-3 w-3" aria-hidden="true" />
+                                <span>Facturar</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-[11px] text-rose-600 dark:text-rose-400"
+                                onClick={() => handleVoid(n.id)}
+                                disabled={busyNoteId === n.id}
+                              >
+                                <Ban className="h-3 w-3" aria-hidden="true" />
+                                <span>Anular</span>
+                              </Button>
+                            </>
                           )}
                         </div>
                       </TableCell>

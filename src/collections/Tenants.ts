@@ -87,6 +87,28 @@ export const Tenants: CollectionConfig = {
         },
       ],
     },
+    {
+      name: 'salesConfig',
+      label: 'Documento de Venta por Defecto',
+      type: 'group',
+      fields: [
+        {
+          name: 'salesDocumentDefault',
+          label: 'Documento de Entrega',
+          type: 'select',
+          required: true,
+          defaultValue: 'factura',
+          admin: {
+            description:
+              'Escenario regulatorio venezolano 2026: en modo "nota_entrega" la entrega al cliente se documenta con Nota de Entrega y la factura pasa a ser opcional (se emite después, desde la remisión o el pedido).',
+          },
+          options: [
+            { label: 'Nota de Entrega (factura opcional)', value: 'nota_entrega' },
+            { label: 'Factura inmediata', value: 'factura' },
+          ],
+        },
+      ],
+    },
   ],
   timestamps: true,
 };

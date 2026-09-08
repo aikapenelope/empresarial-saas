@@ -3291,6 +3291,7 @@ export interface UpdateTenantSettingsInput {
   baseCurrency: 'USD' | 'VES';
   manualExchangeRate?: number;
   autoSyncRate: boolean;
+  salesDocumentDefault?: 'nota_entrega' | 'factura';
 }
 
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
@@ -3311,6 +3312,10 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
           manualExchangeRate: parsed.manualExchangeRate ?? 0,
           autoSyncRate: parsed.autoSyncRate,
         },
+        // Solo se persiste cuando viene explícito: no se pisa lo ya guardado
+        ...(parsed.salesDocumentDefault
+          ? { salesConfig: { salesDocumentDefault: parsed.salesDocumentDefault } }
+          : {}),
       },
     });
 
@@ -3354,6 +3359,9 @@ export async function createTenantAction(input: CreateTenantInput) {
           manualExchangeRate: 0,
           autoSyncRate: true,
         },
+        // Escenario regulatorio venezolano 2026: los nuevos inquilinos entregan
+        // con Nota de Entrega; la factura pasa a ser opcional.
+        salesConfig: { salesDocumentDefault: 'nota_entrega' },
       },
     });
 

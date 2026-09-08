@@ -61,6 +61,7 @@ export default async function OrdersPage({ params }: PageProps) {
     <div className="space-y-6">
 
       <OrdersView
+  salesDocumentDefault={tenant.salesConfig?.salesDocumentDefault ?? 'factura'}
         tenantId={tenant.id}
         tenantSlug={tenant.slug}
         orders={orders}

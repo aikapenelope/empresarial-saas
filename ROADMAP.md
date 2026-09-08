@@ -673,11 +673,12 @@ Hallazgos de la segunda revisión de Devin, reparados agrupados:
 - [x] **Test de regresión (CI):** recepción de compra → `supplier.currentDebtUSD` = total recibido (antes quedaba en 0 por el flag contaminante).
 - **Criterio de cierre:** `tsc`/`eslint` locales + suite completa en CI en verde.
 
-### 📄 Sprint 41 — Nota de entrega por defecto / factura opcional
+### 📄 Sprint 41 — Nota de entrega por defecto / factura opcional (PR `feat/sprint41-delivery-note-default`)
 
-- [ ] **Config de tenant:** `salesConfig.salesDocumentDefault: 'nota_entrega' | 'factura'` (default nuevos inquilinos: `nota_entrega`), editable en `SettingsView` vía `updateTenantSettingsAction`.
-- [ ] **`issueInvoiceFromDeliveryNoteAction`:** facturar desde remisión emitida reutilizando `createInvoiceCore` + lock del pedido padre. Invariante kardex intacto: la remisión no descarga; la factura publica `sale_out` una sola vez.
-- [ ] **UI:** botón "Facturar" en detalle de remisión; POS/venta rápida respetan el default del inquilino.
+- [x] **Config de tenant:** `salesConfig.salesDocumentDefault: 'nota_entrega' | 'factura'` — inquilinos existentes conservan `factura`; **los nuevos nacen en `nota_entrega`** (`createTenantAction`). Editable en `SettingsView` (nueva sección "Documento de Venta por Defecto") vía `updateTenantSettingsAction`.
+- [x] **Facturar la entrega:** botón "Facturar" en cada remisión emitida de `DeliveryNotesView` → reutiliza `issueInvoiceFromOrderAction` (lock del pedido + `createInvoiceCore` + vínculo `issuedInvoice`; doble facturación imposible bajo lock). **Invariante kardex intacto:** la remisión nunca descarga; la factura publica `sale_out` una sola vez.
+- [x] **OrdersView adaptado:** en modo `nota_entrega` la acción primaria de un pedido confirmado es **"Entregar (Nota)"** y Facturar pasa a secundaria; en `factura` se conserva el orden actual.
+- [ ] **Diferido (S41.2):** POS de mostrador en modo `nota_entrega` (creación directa de notas sin pedido) — requiere decisión de manejo de caja en contado bajo nota.
 - [ ] **Tests CI:** nota no toca kardex; factura desde nota descarga exactamente una vez.
 
 ### 🧾 Sprint 42 — IVA/IGTF configurable + libro fiscal
