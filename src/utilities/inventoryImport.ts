@@ -1,5 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { extractId, getProductWarehouseStock, lockStockBalances } from './inventoryLedger';
+import { runIsolatedContext } from './requestContext';
 import type { Product, Warehouse } from '@/payload-types';
 
 export type StockImportMode = 'adjust' | 'set';
@@ -201,8 +202,9 @@ export async function importStockToWarehouse({
     }
 
     const isEntry = delta > 0;
-    await req.payload.create({
-      collection: 'stock-movements',
+    await runIsolatedContext(req, () =>
+      req.payload.create({
+        collection: 'stock-movements',
       data: {
         reference: `IMPORT-${warehouse.code}`,
         movementType: isEntry ? 'adjustment_positive' : 'adjustment_negative',
@@ -214,18 +216,19 @@ export async function importStockToWarehouse({
         unitCostUSD: Number(product.costUSD) || 0,
         totalCostUSD: Number((Math.abs(delta) * (Number(product.costUSD) || 0)).toFixed(2)),
         tenant: tenantId,
-        reason:
-          mode === 'set'
-            ? `Ajuste por carga masiva (fijar ${Number(aggregate.setTarget ?? 0)} en ${warehouse.name})`
-            : `Ajuste por carga masiva (delta ${delta > 0 ? '+' : ''}${delta} en ${warehouse.name})`,
-      },
-      req,
-      overrideAccess: true,
-      context: {
-        ...req.context,
-        allowInternalStockUpdate: true,
-      },
-    });
+          reason:
+            mode === 'set'
+              ? `Ajuste por carga masiva (fijar ${Number(aggregate.setTarget ?? 0)} en ${warehouse.name})`
+              : `Ajuste por carga masiva (delta ${delta > 0 ? '+' : ''}${delta} en ${warehouse.name})`,
+        },
+        req,
+        overrideAccess: true,
+        context: {
+          ...req.context,
+          allowInternalStockUpdate: true,
+        },
+      }),
+    );
 
     movementsCreated++;
     results.push({

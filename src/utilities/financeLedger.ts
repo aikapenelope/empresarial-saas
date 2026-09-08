@@ -89,10 +89,6 @@ export async function fetchAllCustomerOpenInvoices(
       page,
       depth: 0,
       req,
-      context: {
-        ...req.context,
-        skipBalanceRecalculation: true,
-      },
     });
 
     allDocs.push(...(res.docs as unknown as Array<Record<string, unknown>>));

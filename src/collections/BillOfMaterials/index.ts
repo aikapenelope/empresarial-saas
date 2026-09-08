@@ -14,10 +14,6 @@ const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, originalD
     id: finishedProductId,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipInventoryRecalculation: true,
-    },
   });
 
   const productTenant = extractId(finishedProduct?.tenant);
@@ -78,10 +74,6 @@ const beforeValidateBOM: CollectionBeforeValidateHook = async ({ data, originalD
           id: rawId,
           depth: 0,
           req,
-          context: {
-            ...req.context,
-            skipInventoryRecalculation: true,
-          },
         });
 
         const rawTenant = extractId(rawDoc?.tenant);
