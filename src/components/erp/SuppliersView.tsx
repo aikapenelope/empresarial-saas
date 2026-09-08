@@ -10,7 +10,7 @@ import {
   Receipt,
   Calendar,
 } from 'lucide-react';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { SupplierModal } from './modals/SupplierModal';
 import type { Supplier, PurchaseInvoice } from '@/payload-types';

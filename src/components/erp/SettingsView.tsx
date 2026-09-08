@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { updateTenantSettingsAction } from '@/actions/erpActions';
-import { formatVES } from './KpiCard';
+import { formatVES } from './format';
 import { ArrowLeft, Building2, Coins, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 
 interface SettingsViewProps {

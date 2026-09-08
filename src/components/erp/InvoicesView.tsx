@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   Receipt,
   Search,
   Plus,
@@ -11,9 +10,25 @@ import {
   Calendar,
   Clock,
   CheckCircle,
-  Undo2,} from 'lucide-react';
-import { formatUSD, formatVES } from './KpiCard';
+  Undo2,
+  FileStack,
+  Wallet,
+  ListChecks,
+} from 'lucide-react';
+import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
+import { KpiCard } from './KpiCard';
+import { ErpPageHeader } from './ErpPageHeader';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { InvoiceModal } from './modals/InvoiceModal';
 import { PaymentModal } from './modals/PaymentModal';
 import { ReturnModal } from './modals/ReturnModal';
@@ -29,6 +44,13 @@ interface InvoicesViewProps {
   cashRegisters: Array<{ id: number; name: string; code: string; currentStatus: string }>;
   warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
 }
+
+const STATUS_FILTERS = [
+  { value: 'all', label: 'Todas' },
+  { value: 'issued', label: 'Emitidas' },
+  { value: 'partially_paid', label: 'Parciales' },
+  { value: 'paid', label: 'Pagadas' },
+] as const;
 
 export function InvoicesView({
   tenantId,
@@ -111,165 +133,110 @@ export function InvoicesView({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
+      <ErpPageHeader
+        title="Facturas de Venta & Cobranzas Bimonetarias"
+        description="Emisión de facturas fiscales y comerciales (USD/VES), control de vencimientos y registro multimétodo de cobranza."
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Facturación & Ventas"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedInvoiceId(undefined);
+                setSelectedCustomerId(undefined);
+                setIsPaymentModalOpen(true);
+              }}
             >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Facturación & Ventas</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            Facturas de Venta & Cobranzas Bimonetarias
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Emisión de facturas fiscales y comerciales (USD/VES), control de vencimientos y registro multimétodo de cobranza.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setSelectedInvoiceId(undefined);
-              setSelectedCustomerId(undefined);
-              setIsPaymentModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Registrar Cobro</span>
-          </button>
-          <button
-            onClick={() => setIsInvoiceModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors shadow-sm shadow-indigo-500/20"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>+ Nueva Venta</span>
-          </button>
-        </div>
-      </div>
+              <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              Registrar Cobro
+            </Button>
+            <Button size="sm" onClick={() => setIsInvoiceModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Nueva Venta
+            </Button>
+          </>
+        }
+      />
 
       {/* KPIs de Facturación */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Total Facturado</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">{formatUSD(totalInvoicedUSD)}</span>
-            <span className="text-xs font-medium text-slate-400">≈ {formatVES(totalInvoicedVES)}</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Saldo Pendiente por Cobrar</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-amber-400">{formatUSD(totalBalanceUSD)}</span>
-            <span className="text-xs font-medium text-emerald-400">≈ {formatVES(totalBalanceVES)}</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Estado de Documentos</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">{invoices.length}</span>
-            <span className="text-xs text-slate-400">
-              ({paidCount} pagadas / {invoices.length - paidCount} con saldo)
-            </span>
-          </div>
-        </div>
+        <KpiCard
+          title="Total Facturado"
+          valueUSD={totalInvoicedUSD}
+          valueVES={totalInvoicedVES}
+          icon={FileStack}
+        />
+        <KpiCard
+          title="Saldo Pendiente por Cobrar"
+          valueUSD={totalBalanceUSD}
+          valueVES={totalBalanceVES}
+          icon={Wallet}
+          tone="warning"
+        />
+        <KpiCard
+          title="Estado de Documentos"
+          valueUSD={String(invoices.length)}
+          icon={ListChecks}
+          description={`${paidCount} pagadas / ${invoices.length - paidCount} con saldo`}
+        />
       </div>
 
       {/* Barra de Búsqueda y Filtros */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-500" />
-          <input
+          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <Input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por factura, cliente o RIF..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/80 pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="pl-9"
           />
         </div>
 
-        <div className="flex items-center gap-1.5 self-start sm:self-auto text-xs">
-          <button
-            onClick={() => setStatusFilter('all')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              statusFilter === 'all'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white'
-            }`}
-          >
-            Todas ({invoices.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('issued')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              statusFilter === 'issued'
-                ? 'bg-amber-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white'
-            }`}
-          >
-            Emitidas
-          </button>
-          <button
-            onClick={() => setStatusFilter('partially_paid')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              statusFilter === 'partially_paid'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white'
-            }`}
-          >
-            Parciales
-          </button>
-          <button
-            onClick={() => setStatusFilter('paid')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              statusFilter === 'paid'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white'
-            }`}
-          >
-            Pagadas
-          </button>
+        <div className="flex items-center gap-1.5 self-start sm:self-auto">
+          {STATUS_FILTERS.map((f) => (
+            <Button
+              key={f.value}
+              size="sm"
+              variant={statusFilter === f.value ? 'default' : 'outline'}
+              onClick={() => setStatusFilter(f.value)}
+            >
+              {f.value === 'all' ? `${f.label} (${invoices.length})` : f.label}
+            </Button>
+          ))}
         </div>
       </div>
 
       {/* Tabla de Facturas */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
         {filteredInvoices.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-xs space-y-3">
-            <Receipt className="h-8 w-8 mx-auto text-slate-600" />
+          <div className="p-12 text-center text-muted-foreground text-xs space-y-3">
+            <Receipt className="h-8 w-8 mx-auto text-muted-foreground/50" aria-hidden="true" />
             <p>No se encontraron facturas registradas.</p>
-            <button
-              onClick={() => setIsInvoiceModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500"
-            >
-              + Emitir Primera Factura
-            </button>
+            <Button size="sm" onClick={() => setIsInvoiceModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Emitir Primera Factura
+            </Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Factura</th>
-                  <th className="p-3">Cliente / RIF</th>
-                  <th className="p-3">Emisión & Vencimiento</th>
-                  <th className="p-3">Términos</th>
-                  <th className="p-3 text-right">Total Facturado</th>
-                  <th className="p-3 text-right">Saldo Pendiente</th>
-                  <th className="p-3 text-center">Estado</th>
-                  <th className="p-3 text-center">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Factura</TableHead>
+                  <TableHead>Cliente / RIF</TableHead>
+                  <TableHead>Emisión & Vencimiento</TableHead>
+                  <TableHead>Términos</TableHead>
+                  <TableHead className="text-right">Total Facturado</TableHead>
+                  <TableHead className="text-right">Saldo Pendiente</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                  <TableHead className="text-center">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredInvoices.map((inv) => {
                   const customerName =
                     typeof inv.customer === 'object' && inv.customer !== null
@@ -285,57 +252,55 @@ export function InvoicesView({
                   const isPaid = inv.status === 'paid' || balance <= 0;
 
                   return (
-                    <tr key={inv.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-mono font-bold text-white">
+                    <TableRow key={inv.id}>
+                      <TableCell className="font-mono font-bold">
                         <Link
                           href={`/${tenantSlug}/erp/invoices/${inv.id}`}
-                          className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors"
+                          className="flex items-center gap-1.5 hover:underline underline-offset-2"
                           title="Ver detalle de la factura"
                         >
-                          <Receipt className="h-3.5 w-3.5 text-indigo-400" />
-                          <span className="underline decoration-slate-700 underline-offset-2">
-                            {inv.invoiceNumber}
-                          </span>
+                          <Receipt className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                          {inv.invoiceNumber}
                         </Link>
-                      </td>
-                      <td className="p-3">
-                        <div className="font-semibold text-white">{customerName}</div>
-                        <div className="text-[11px] font-mono text-slate-400">{customerTaxId}</div>
-                      </td>
-                      <td className="p-3 text-slate-300">
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-semibold text-foreground">{customerName}</div>
+                        <div className="text-[11px] font-mono text-muted-foreground">{customerTaxId}</div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
                         <div className="flex items-center gap-1 text-[11px]">
-                          <Calendar className="h-3 w-3 text-slate-500" />
+                          <Calendar className="h-3 w-3" aria-hidden="true" />
                           <span>{new Date(inv.issueDate).toLocaleDateString('es-VE')}</span>
                         </div>
                         {inv.dueDate && (
-                          <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-0.5">
-                            <Clock className="h-3 w-3" />
+                          <div className="flex items-center gap-1 text-[10px] opacity-80 mt-0.5">
+                            <Clock className="h-3 w-3" aria-hidden="true" />
                             <span>Vence: {new Date(inv.dueDate).toLocaleDateString('es-VE')}</span>
                           </div>
                         )}
-                      </td>
-                      <td className="p-3">
-                        <span className="capitalize text-[11px] font-medium text-slate-300">
+                      </TableCell>
+                      <TableCell>
+                        <span className="capitalize text-[11px] font-medium text-muted-foreground">
                           {inv.paymentTerms === 'cash' ? 'Contado' : 'Crédito'}
                         </span>
-                      </td>
-                      <td className="p-3 text-right font-mono">
-                        <div className="font-bold text-white">{formatUSD(Number(inv.totalUSD) || 0)}</div>
-                        <div className="text-[10px] text-slate-400">
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        <div className="font-bold">{formatUSD(Number(inv.totalUSD) || 0)}</div>
+                        <div className="text-[10px] text-muted-foreground">
                           ≈ {formatVES(Number(inv.totalVES) || 0)}
                         </div>
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold">
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold">
                         {balance > 0 ? (
                           <>
-                            <div className="text-amber-400">{formatUSD(balance)}</div>
-                            <div className="text-[10px] text-slate-400">≈ {formatVES(balanceVES)}</div>
+                            <div className="text-amber-600 dark:text-amber-400">{formatUSD(balance)}</div>
+                            <div className="text-[10px] font-normal text-muted-foreground">≈ {formatVES(balanceVES)}</div>
                           </>
                         ) : (
-                          <span className="text-emerald-400 font-semibold">$ 0,00</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">$ 0,00</span>
                         )}
-                      </td>
-                      <td className="p-3 text-center">
+                      </TableCell>
+                      <TableCell className="text-center">
                         <Badge
                           variant={
                             inv.status === 'paid'
@@ -347,6 +312,7 @@ export function InvoicesView({
                                   : 'indigo'
                           }
                           size="sm"
+                          dot
                         >
                           {inv.status === 'paid'
                             ? 'Pagada'
@@ -356,21 +322,22 @@ export function InvoicesView({
                                 ? 'Anulada'
                                 : 'Emitida'}
                         </Badge>
-                      </td>
-                      <td className="p-3 text-center">
+                      </TableCell>
+                      <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           {!isPaid && (
-                            <button
+                            <Button
+                              size="sm"
+                              className="h-7 px-2.5 text-[11px]"
                               onClick={() => handleOpenCollect(inv)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-colors"
                             >
-                              <DollarSign className="h-3 w-3" />
-                              <span>Cobrar</span>
-                            </button>
+                              <DollarSign className="h-3 w-3" aria-hidden="true" />
+                              Cobrar
+                            </Button>
                           )}
                           {isPaid && (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-semibold">
-                              <CheckCircle className="h-3 w-3" />
+                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                              <CheckCircle className="h-3 w-3" aria-hidden="true" />
                               <span>Completa</span>
                             </span>
                           )}
@@ -379,22 +346,24 @@ export function InvoicesView({
                             (Array.isArray(inv.items) ? inv.items : []).some(
                               (it) => typeof it.product === 'object' && it.product !== null,
                             ) && (
-                              <button
-                                onClick={() => setReturnInvoice(inv)}
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 title="Registrar devolución de mercancía"
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-600/10 text-amber-300 border border-amber-500/30 hover:bg-amber-600 hover:text-white text-[11px] font-semibold transition-colors"
+                                className="h-7 px-2 text-[11px]"
+                                onClick={() => setReturnInvoice(inv)}
                               >
-                                <Undo2 className="h-3 w-3" />
-                                <span>Devolver</span>
-                              </button>
+                                <Undo2 className="h-3 w-3" aria-hidden="true" />
+                                Devolver
+                              </Button>
                             )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
@@ -412,7 +381,7 @@ export function InvoicesView({
         warehouses={warehouses}
       />
 
-      {/* Modal Cobro */}
+      {/* Modal Devolución */}
       {returnInvoice && (
         <ReturnModal
           isOpen
@@ -436,6 +405,7 @@ export function InvoicesView({
         />
       )}
 
+      {/* Modal Cobro */}
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}

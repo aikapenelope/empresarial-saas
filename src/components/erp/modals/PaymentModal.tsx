@@ -9,7 +9,7 @@ import {
   deleteOrphanReceiptAction,
   uploadReceiptAction,
 } from '@/actions/erpActions';
-import { formatUSD, formatVES } from '../KpiCard';
+import { formatUSD, formatVES } from '../format';
 import { Loader2 } from 'lucide-react';
 
 interface PaymentModalProps {

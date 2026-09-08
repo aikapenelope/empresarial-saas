@@ -16,7 +16,7 @@ import {
   saveCountedItemsAction,
 } from '@/actions/erpActions';
 import { Badge } from './Badge';
-import { formatUSD } from './KpiCard';
+import { formatUSD } from './format';
 import type { InventoryCount } from '@/payload-types';
 
 interface CountsViewProps {

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { createInvoiceAction } from '@/actions/erpActions';
-import { formatUSD, formatVES } from '../KpiCard';
+import { formatUSD, formatVES } from '../format';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
 

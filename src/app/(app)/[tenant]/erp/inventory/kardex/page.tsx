@@ -10,7 +10,7 @@ import {
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { kardexFiltersSchema } from '@/utilities/erpValidation';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
-import { formatUSD } from '@/components/erp/KpiCard';
+import { formatUSD } from '@/components/erp/format';
 import { Badge } from '@/components/erp/Badge';
 
 interface PageProps {

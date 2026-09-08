@@ -3,15 +3,30 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   Users,
   Search,
   Plus,
   DollarSign,
   MessageCircle,
+  Wallet,
+  TriangleAlert,
+  Contact,
 } from 'lucide-react';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
+import { KpiCard } from './KpiCard';
+import { ErpPageHeader } from './ErpPageHeader';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { CustomerModal } from './modals/CustomerModal';
 import { PaymentModal } from './modals/PaymentModal';
 import type { Customer } from '@/payload-types';
@@ -93,166 +108,140 @@ export function CustomersView({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
+      <ErpPageHeader
+        title="Gestión de Clientes & Cobranzas"
+        description="Monitoreo bimonetario de saldos deudores, días de crédito y gestión de cobranza directa por WhatsApp."
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Clientes & Cartera CxC"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedCustomerId(undefined);
+                setIsPaymentModalOpen(true);
+              }}
             >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Clientes & Cartera CxC</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            Gestión de Clientes & Cobranzas
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Monitoreo bimonetario de saldos deudores, días de crédito y gestión de cobranza directa por WhatsApp.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setSelectedCustomerId(undefined);
-              setIsPaymentModalOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Registrar Cobro</span>
-          </button>
-          <button
-            onClick={() => setIsCustomerModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors shadow-sm shadow-indigo-500/20"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>+ Nuevo Cliente</span>
-          </button>
-        </div>
-      </div>
+              <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              Registrar Cobro
+            </Button>
+            <Button size="sm" onClick={() => setIsCustomerModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Nuevo Cliente
+            </Button>
+          </>
+        }
+      />
 
       {/* KPIs de Cartera */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Cartera Deudora Total</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">{formatUSD(totalDebtUSD)}</span>
-            <span className="text-xs font-medium text-emerald-400">≈ {formatVES(totalDebtVES)}</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Cartera Vencida</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-rose-400">{formatUSD(overdueDebtUSD)}</span>
-            <span className="text-xs text-slate-400">
-              ({overdueDebtorsCount} con deuda vencida)
-            </span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Padrón de Clientes</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">{customers.length}</span>
-            <span className="text-xs text-slate-400">registrados en el inquilino</span>
-          </div>
-        </div>
+        <KpiCard
+          title="Cartera Deudora Total"
+          valueUSD={totalDebtUSD}
+          valueVES={totalDebtVES}
+          icon={Wallet}
+        />
+        <KpiCard
+          title="Cartera Vencida"
+          valueUSD={overdueDebtUSD}
+          icon={TriangleAlert}
+          tone="destructive"
+          description={`${overdueDebtorsCount} con deuda vencida`}
+        />
+        <KpiCard
+          title="Padrón de Clientes"
+          valueUSD={String(customers.length)}
+          icon={Contact}
+          description="Registrados en el inquilino"
+        />
       </div>
 
       {/* Búsqueda y Filtros */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-500" />
-          <input
+          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <Input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por cliente, RIF o teléfono..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/80 pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="pl-9"
           />
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto text-xs">
-          <button
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Button
+            size="sm"
+            variant={filterDebtorsOnly ? 'outline' : 'default'}
             onClick={() => setFilterDebtorsOnly(false)}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              !filterDebtorsOnly
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
           >
             Todos ({customers.length})
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
+            variant={filterDebtorsOnly ? 'default' : 'outline'}
             onClick={() => setFilterDebtorsOnly(true)}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              filterDebtorsOnly
-                ? 'bg-amber-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-            }`}
           >
             Sólo con Saldo Deudor ({debtorsCount})
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Tabla de Clientes */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Listado de Clientes & Balances</h2>
-          <span className="text-xs text-slate-400">Ordenado por mayor saldo deudor</span>
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Listado de Clientes & Balances</h2>
+          <span className="text-xs text-muted-foreground">Ordenado por mayor saldo deudor</span>
         </div>
 
         {filteredCustomers.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-xs space-y-3">
-            <Users className="h-8 w-8 mx-auto text-slate-600" />
+          <div className="p-12 text-center text-muted-foreground text-xs space-y-3">
+            <Users className="h-8 w-8 mx-auto text-muted-foreground/50" aria-hidden="true" />
             <p>No se encontraron clientes registrados en este inquilino.</p>
-            <button
-              onClick={() => setIsCustomerModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500"
-            >
-              + Registrar Primer Cliente
-            </button>
+            <Button size="sm" onClick={() => setIsCustomerModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Registrar Primer Cliente
+            </Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Razón Social / Contacto</th>
-                  <th className="p-3">RIF / Cédula</th>
-                  <th className="p-3">Segmento</th>
-                  <th className="p-3 text-right">Límite Crédito</th>
-                  <th className="p-3 text-right">Deuda Actual USD</th>
-                  <th className="p-3 text-right">Deuda Actual VES</th>
-                  <th className="p-3 text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Razón Social / Contacto</TableHead>
+                  <TableHead>RIF / Cédula</TableHead>
+                  <TableHead>Segmento</TableHead>
+                  <TableHead className="text-right">Límite Crédito</TableHead>
+                  <TableHead className="text-right">Deuda Actual USD</TableHead>
+                  <TableHead className="text-right">Deuda Actual VES</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredCustomers.map((c) => {
                   const debt = Number(c.currentDebtUSD) || 0;
                   const debtVES = Number(c.currentDebtVES) || debt * effectiveRate;
                   const overdue = Number(c.overdueDebtUSD) || 0;
+                  const creditLimit = Number(c.creditLimitUSD) || 0;
+                  const creditUsePct =
+                    c.creditAllowed && creditLimit > 0
+                      ? Math.min(100, (debt / creditLimit) * 100)
+                      : null;
 
                   return (
-                    <tr key={c.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3">
+                    <TableRow key={c.id}>
+                      <TableCell>
                         <Link
                           href={`/${tenantSlug}/erp/customers/${c.id}`}
-                          className="font-semibold text-white hover:text-indigo-300"
+                          className="font-semibold text-foreground hover:underline underline-offset-2"
                         >
                           {c.name}
                         </Link>
-                        <div className="text-[11px] text-slate-400">{c.phone || c.email || 'Sin contacto'}</div>
-                      </td>
-                      <td className="p-3 font-mono text-slate-300">{c.taxId}</td>
-                      <td className="p-3">
+                        <div className="text-[11px] text-muted-foreground">{c.phone || c.email || 'Sin contacto'}</div>
+                      </TableCell>
+                      <TableCell className="font-mono text-muted-foreground">{c.taxId}</TableCell>
+                      <TableCell>
                         <Badge
                           variant={
                             c.status === 'vip'
@@ -262,44 +251,66 @@ export function CustomersView({
                                 : 'slate'
                           }
                           size="sm"
+                          dot={c.status === 'vip'}
                         >
                           {c.status || 'general'}
                         </Badge>
-                      </td>
-                      <td className="p-3 text-right font-mono text-slate-400">
-                        {c.creditAllowed ? formatUSD(Number(c.creditLimitUSD) || 0) : 'Contado'}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold">
-                        <span className={debt > 0 ? (overdue > 0 ? 'text-rose-400' : 'text-amber-400') : 'text-slate-400'}>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {c.creditAllowed ? formatUSD(creditLimit) : 'Contado'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        <span
+                          className={
+                            debt > 0
+                              ? overdue > 0
+                                ? 'font-bold text-rose-600 dark:text-rose-400'
+                                : 'font-bold text-amber-600 dark:text-amber-400'
+                              : 'text-muted-foreground'
+                          }
+                        >
                           {formatUSD(debt)}
                         </span>
-                      </td>
-                      <td className="p-3 text-right font-mono text-slate-300">
+                        {creditUsePct !== null && debt > 0 && (
+                          <Progress
+                            value={creditUsePct}
+                            className="mt-1.5 h-1"
+                            aria-label={`Utilización de crédito de ${c.name}: ${creditUsePct.toFixed(0)}%`}
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
                         {debt > 0 ? formatVES(debtVES) : 'Bs. 0,00'}
-                      </td>
-                      <td className="p-3 text-center">
+                      </TableCell>
+                      <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           {debt > 0 && (
-                            <button
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 text-xs"
                               onClick={() => handleOpenPayment(c.id)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white text-xs font-semibold transition-colors"
                             >
-                              <DollarSign className="h-3 w-3" />
-                              <span>Cobrar</span>
-                            </button>
+                              <DollarSign className="h-3 w-3" aria-hidden="true" />
+                              Cobrar
+                            </Button>
                           )}
                           {c.whatsappDebtUrl && debt > 0 && (
-                            <a
-                              href={c.whatsappDebtUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shadow-sm"
-                            >
-                              <MessageCircle className="h-3.5 w-3.5" />
-                              <span>WhatsApp</span>
-                            </a>
+                            <Button size="sm" className="h-7 px-2.5 text-xs" asChild>
+                              <a
+                                href={c.whatsappDebtUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                                WhatsApp
+                              </a>
+                            </Button>
                           )}
-                          <button
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
                             onClick={() => {
                               setEditingCustomer({
                                 id: c.id,
@@ -316,20 +327,19 @@ export function CustomersView({
                               });
                               setIsCustomerModalOpen(true);
                             }}
-                            className="text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold px-2 py-1"
                           >
                             Editar
-                          </button>
+                          </Button>
                           {debt <= 0 && (
-                            <span className="text-[11px] text-slate-400 font-medium">Al día</span>
+                            <span className="text-[11px] text-muted-foreground font-medium">Al día</span>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Users, Receipt, Trophy, FileSpreadsheet } from 'lucide-react';
-import { formatUSD } from './KpiCard';
+import { formatUSD } from './format';
 import { Badge } from './Badge';
 import type { VendorsPageData } from '@/utilities/erpData';
 

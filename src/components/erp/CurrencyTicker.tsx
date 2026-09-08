@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { formatVES } from './KpiCard';
+import { formatVES } from './format';
 
 interface CurrencyTickerProps {
   rates: {

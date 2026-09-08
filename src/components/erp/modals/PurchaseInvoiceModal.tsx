@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { createPurchaseInvoiceAction } from '@/actions/erpActions';
-import { formatUSD } from '../KpiCard';
+import { formatUSD } from '../format';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 
 interface PurchaseInvoiceModalProps {

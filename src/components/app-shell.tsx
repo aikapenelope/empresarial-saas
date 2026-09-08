@@ -69,7 +69,8 @@ export function AppShell({
 					open={commandOpen}
 					onOpenChange={setCommandOpen}
 				/>
-				<div className="flex flex-1 flex-col gap-4">{children}</div>
+				{/* erp-views: escopo del puente bimodal de las vistas heredadas (globals.css) */}
+				<div className="erp-views flex flex-1 flex-col gap-4">{children}</div>
 			</SidebarInset>
 			</SidebarProvider>
 		</TooltipProvider>

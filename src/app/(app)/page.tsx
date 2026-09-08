@@ -1,6 +1,6 @@
 import { getAllTenants } from '@/utilities/erpData';
 import { getLiveExchangeRates } from '@/utilities/exchangeRate';
-import { formatVES } from '@/components/erp/KpiCard';
+import { formatVES } from '@/components/erp/format';
 import { Sparkles, ShieldCheck, Cpu, Database, LogIn } from 'lucide-react';
 import { HomeTenantList } from '@/components/erp/HomeTenantList';
 import Link from 'next/link';

@@ -13,7 +13,7 @@ import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { POSView } from '@/components/erp/POSView';
-import { formatVES } from '@/components/erp/KpiCard';
+import { formatVES } from '@/components/erp/format';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;

@@ -8,7 +8,7 @@ import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { PrintButton } from '@/components/erp/PrintButton';
 import { IssueDeliveryNoteButton } from '@/components/erp/IssueDeliveryNoteButton';
 import { Badge } from '@/components/erp/Badge';
-import { formatUSD, formatVES } from '@/components/erp/KpiCard';
+import { formatUSD, formatVES } from '@/components/erp/format';
 
 interface PageProps {
   params: Promise<{ tenant: string; id: string }>;

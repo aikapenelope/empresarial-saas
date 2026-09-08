@@ -2,8 +2,26 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Wallet, TriangleAlert, Users, FileText } from 'lucide-react';
-import { formatUSD } from './KpiCard';
+import { Wallet, TriangleAlert, Users, FileText } from 'lucide-react';
+import { KpiCard } from './KpiCard';
+import { formatUSD } from './format';
+import { ErpPageHeader } from './ErpPageHeader';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import type { AgingRow, AgingSummary, VendorAgingRow } from '@/utilities/arAging';
 
 interface AccountsReceivableViewProps {
@@ -17,10 +35,27 @@ interface AccountsReceivableViewProps {
   asOf: string;
 }
 
+/** Buckets del kardex de cartera con su token de estado funcional. */
+const AGING_BUCKETS: Array<{
+  key: keyof Pick<
+    AgingSummary,
+    'currentUSD' | 'bucket1_30' | 'bucket31_60' | 'bucket61_90' | 'bucket90Plus'
+  >;
+  label: string;
+  barClass: string;
+}> = [
+  { key: 'currentUSD', label: 'Corriente', barClass: 'bg-chart-2' },
+  { key: 'bucket1_30', label: '1–30', barClass: 'bg-chart-3' },
+  { key: 'bucket31_60', label: '31–60', barClass: 'bg-amber-500' },
+  { key: 'bucket61_90', label: '61–90', barClass: 'bg-orange-500' },
+  { key: 'bucket90Plus', label: '+90', barClass: 'bg-rose-500' },
+];
+
 /**
- * Cartera con antigüedad (Sprint 21): saldos abiertos por cliente en buckets
- * 0-30/31-60/61-90/90+ días de vencido. Filtro por vendedor para el canal;
- * drilldown al detalle del cliente.
+ * Cartera con antigüedad (Sprint 21 → reskin Sprint 35): saldos abiertos por
+ * cliente en buckets 0-30/31-60/61-90/90+ días de vencido. Filtro por vendedor
+ * para el canal; drilldown al detalle del cliente. Incluye la barra apilada
+ * de composición de la cartera (distribución por bucket).
  */
 export function AccountsReceivableView({
   tenantSlug,
@@ -54,177 +89,206 @@ export function AccountsReceivableView({
     };
   }, [filteredRows, summary, isVendor, vendorFilter]);
 
+  const totalForBar = filteredSummary.totalUSD;
+  const overdueSharePct =
+    totalForBar > 0 ? (filteredSummary.overdueUSD / totalForBar) * 100 : 0;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
+      <ErpPageHeader
+        title="Cuentas por Cobrar — Antigüedad"
+        description={`Saldos abiertos por cliente con días de vencido (corte ${new Date(asOf).toLocaleDateString('es-VE')}).`}
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Cartera CxC"
+        actions={
+          !isVendor && vendors.length > 0 ? (
+            <Select
+              value={String(vendorFilter)}
+              onValueChange={(v) =>
+                setVendorFilter(v === 'all' ? 'all' : v === 'none' ? 'none' : Number(v))
+              }
             >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Cartera CxC</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Cuentas por Cobrar — Antigüedad</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Saldos abiertos por cliente con días de vencido (corte {new Date(asOf).toLocaleDateString('es-VE')}).
-          </p>
-        </div>
-
-        {!isVendor && vendors.length > 0 && (
-          <select
-            value={String(vendorFilter)}
-            onChange={(e) =>
-              setVendorFilter(e.target.value === 'all' ? 'all' : e.target.value === 'none' ? 'none' : Number(e.target.value))
-            }
-            className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-          >
-            <option value="all">Todo el canal</option>
-            <option value="none">Sin vendedor asignado</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+              <SelectTrigger className="w-full min-w-52 sm:w-fit" size="sm" aria-label="Filtro por vendedor">
+                <SelectValue placeholder="Vendedor" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                <SelectItem value="all">Todo el canal</SelectItem>
+                <SelectItem value="none">Sin vendedor asignado</SelectItem>
+                {vendors.map((v) => (
+                  <SelectItem key={v.id} value={String(v.id)}>
+                    {v.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : undefined
+        }
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Total CxC</p>
-          <div className="mt-1 flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-indigo-400" />
-            <span className="text-xl font-bold text-white">{formatUSD(filteredSummary.totalUSD)}</span>
+        <KpiCard
+          title="Total CxC"
+          valueUSD={filteredSummary.totalUSD}
+          icon={Wallet}
+          description={`${filteredSummary.openInvoiceCount} factura(s) abierta(s)`}
+          sparklineColor="var(--chart-2)"
+        />
+        <KpiCard
+          title="Vencido +90 días"
+          valueUSD={filteredSummary.bucket90Plus}
+          icon={TriangleAlert}
+          tone="destructive"
+        />
+        <KpiCard
+          title="Vencido total"
+          valueUSD={filteredSummary.overdueUSD}
+          icon={TriangleAlert}
+          tone="warning"
+        />
+        <KpiCard
+          title="Clientes con Vencido"
+          valueUSD={String(filteredSummary.customersWithOverdue)}
+          icon={Users}
+        />
+      </div>
+
+      {/* Composición de la cartera: barra apilada por bucket de antigüedad */}
+      <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Composición de la Cartera</h2>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">{filteredSummary.openInvoiceCount} factura(s) abierta(s)</p>
+          <span className="text-xs tabular-nums font-medium text-rose-600 dark:text-rose-400">
+            {overdueSharePct.toFixed(1)}% vencido
+          </span>
         </div>
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Vencido +90 días</p>
-          <div className="mt-1 flex items-center gap-2">
-            <TriangleAlert className="h-4 w-4 text-rose-400" />
-            <span className="text-xl font-bold text-rose-400">{formatUSD(filteredSummary.bucket90Plus)}</span>
-          </div>
+        <div
+          className="flex h-3 w-full overflow-hidden rounded-full bg-muted"
+          role="img"
+          aria-label={`Distribución de la cartera por antigüedad: ${AGING_BUCKETS.map(
+            (b) => `${b.label} ${((Number(filteredSummary[b.key]) / (totalForBar || 1)) * 100).toFixed(1)}%`,
+          ).join(', ')}`}
+        >
+          {AGING_BUCKETS.map((b) => {
+            const value = Number(filteredSummary[b.key]) || 0;
+            if (value <= 0 || totalForBar <= 0) return null;
+            return (
+              <div
+                key={b.key}
+                className={b.barClass}
+                style={{ width: `${(value / totalForBar) * 100}%` }}
+                title={`${b.label}: ${((value / totalForBar) * 100).toFixed(1)}%`}
+              />
+            );
+          })}
         </div>
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Vencido total</p>
-          <div className="mt-1 flex items-center gap-2">
-            <TriangleAlert className="h-4 w-4 text-amber-400" />
-            <span className="text-xl font-bold text-amber-400">{formatUSD(filteredSummary.overdueUSD)}</span>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Clientes con Vencido</p>
-          <div className="mt-1 flex items-center gap-2">
-            <Users className="h-4 w-4 text-indigo-400" />
-            <span className="text-xl font-bold text-white">{filteredSummary.customersWithOverdue}</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {AGING_BUCKETS.map((b) => (
+            <span key={b.key} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className={`h-2 w-2 rounded-full ${b.barClass}`} aria-hidden="true" />
+              {b.label}
+            </span>
+          ))}
         </div>
       </div>
 
       {/* Tabla por cliente */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-indigo-400" />
-            <h2 className="text-sm font-semibold text-white">Cartera por Cliente</h2>
+            <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Cartera por Cliente</h2>
           </div>
-          <span className="text-xs text-slate-400">{filteredRows.length} cliente(s) con saldo</span>
+          <span className="text-xs text-muted-foreground">{filteredRows.length} cliente(s) con saldo</span>
         </div>
 
         {filteredRows.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-10">
+          <p className="text-xs text-muted-foreground text-center py-10">
             No hay saldos abiertos con estos filtros.
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Cliente</th>
-                  <th className="p-3">Vendedor</th>
-                  <th className="p-3 text-right">Corriente</th>
-                  <th className="p-3 text-right">1–30</th>
-                  <th className="p-3 text-right">31–60</th>
-                  <th className="p-3 text-right">61–90</th>
-                  <th className="p-3 text-right">+90</th>
-                  <th className="p-3 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead className="text-right">Corriente</TableHead>
+                  <TableHead className="text-right">1–30</TableHead>
+                  <TableHead className="text-right">31–60</TableHead>
+                  <TableHead className="text-right">61–90</TableHead>
+                  <TableHead className="text-right">+90</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredRows.map((r) => (
-                  <tr key={r.customerId} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="p-3">
+                  <TableRow key={r.customerId}>
+                    <TableCell>
                       <Link
                         href={`/${tenantSlug}/erp/customers/${r.customerId}`}
-                        className="text-slate-200 font-semibold hover:text-indigo-300 underline decoration-slate-700 underline-offset-2"
+                        className="font-semibold text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
                       >
                         {r.customerName}
                       </Link>
-                      <span className="ml-2 text-[10px] text-slate-500">{r.invoiceCount} fact.</span>
-                    </td>
-                    <td className="p-3 text-slate-400">{r.vendorName}</td>
-                    <td className="p-3 text-right font-mono text-slate-300">{formatUSD(r.currentUSD)}</td>
-                    <td className="p-3 text-right font-mono text-slate-300">{formatUSD(r.bucket1_30)}</td>
-                    <td className="p-3 text-right font-mono text-amber-300">{formatUSD(r.bucket31_60)}</td>
-                    <td className="p-3 text-right font-mono text-orange-300">{formatUSD(r.bucket61_90)}</td>
-                    <td className="p-3 text-right font-mono font-bold text-rose-400">{formatUSD(r.bucket90Plus)}</td>
-                    <td className="p-3 text-right font-mono font-bold text-white">{formatUSD(r.totalUSD)}</td>
-                  </tr>
+                      <span className="ml-2 text-[10px] text-muted-foreground">{r.invoiceCount} fact.</span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{r.vendorName}</TableCell>
+                    <TableCell className="text-right font-mono">{formatUSD(r.currentUSD)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatUSD(r.bucket1_30)}</TableCell>
+                    <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{formatUSD(r.bucket31_60)}</TableCell>
+                    <TableCell className="text-right font-mono text-orange-600 dark:text-orange-400">{formatUSD(r.bucket61_90)}</TableCell>
+                    <TableCell className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">{formatUSD(r.bucket90Plus)}</TableCell>
+                    <TableCell className="text-right font-mono font-bold">{formatUSD(r.totalUSD)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-slate-800 bg-slate-950/60 font-semibold">
-                  <td className="p-3 text-slate-300" colSpan={2}>
-                    Total
-                  </td>
-                  <td className="p-3 text-right font-mono text-slate-200">{formatUSD(filteredSummary.currentUSD)}</td>
-                  <td className="p-3 text-right font-mono text-slate-200">{formatUSD(filteredSummary.bucket1_30)}</td>
-                  <td className="p-3 text-right font-mono text-amber-300">{formatUSD(filteredSummary.bucket31_60)}</td>
-                  <td className="p-3 text-right font-mono text-orange-300">{formatUSD(filteredSummary.bucket61_90)}</td>
-                  <td className="p-3 text-right font-mono text-rose-400">{formatUSD(filteredSummary.bucket90Plus)}</td>
-                  <td className="p-3 text-right font-mono text-white">{formatUSD(filteredSummary.totalUSD)}</td>
-                </tr>
-              </tfoot>
-            </table>
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={2} className="font-semibold">Total</TableCell>
+                  <TableCell className="text-right font-mono">{formatUSD(filteredSummary.currentUSD)}</TableCell>
+                  <TableCell className="text-right font-mono">{formatUSD(filteredSummary.bucket1_30)}</TableCell>
+                  <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{formatUSD(filteredSummary.bucket31_60)}</TableCell>
+                  <TableCell className="text-right font-mono text-orange-600 dark:text-orange-400">{formatUSD(filteredSummary.bucket61_90)}</TableCell>
+                  <TableCell className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">{formatUSD(filteredSummary.bucket90Plus)}</TableCell>
+                  <TableCell className="text-right font-mono font-bold">{formatUSD(filteredSummary.totalUSD)}</TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
           </div>
         )}
       </div>
 
       {/* Resumen por vendedor */}
       {!isVendor && vendorRows.length > 1 && (
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-          <div className="p-4 border-b border-slate-800/80 flex items-center gap-2">
-            <Users className="h-4 w-4 text-indigo-400" />
-            <h2 className="text-sm font-semibold text-white">Cartera por Vendedor</h2>
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Cartera por Vendedor</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Vendedor</th>
-                  <th className="p-3 text-right">Corriente</th>
-                  <th className="p-3 text-right">Vencido</th>
-                  <th className="p-3 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead className="text-right">Corriente</TableHead>
+                  <TableHead className="text-right">Vencido</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {vendorRows.map((v) => (
-                  <tr key={`${v.vendorId ?? 'none'}`} className="hover:bg-slate-800/30">
-                    <td className="p-3 text-slate-200 font-semibold">{v.vendorName}</td>
-                    <td className="p-3 text-right font-mono text-slate-300">{formatUSD(v.currentUSD)}</td>
-                    <td className="p-3 text-right font-mono text-amber-300">{formatUSD(v.overdueUSD)}</td>
-                    <td className="p-3 text-right font-mono font-bold text-white">{formatUSD(v.totalUSD)}</td>
-                  </tr>
+                  <TableRow key={`${v.vendorId ?? 'none'}`}>
+                    <TableCell className="font-semibold">{v.vendorName}</TableCell>
+                    <TableCell className="text-right font-mono">{formatUSD(v.currentUSD)}</TableCell>
+                    <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{formatUSD(v.overdueUSD)}</TableCell>
+                    <TableCell className="text-right font-mono font-bold">{formatUSD(v.totalUSD)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}

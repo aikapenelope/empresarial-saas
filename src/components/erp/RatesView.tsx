@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, TrendingUp, History } from 'lucide-react';
-import { formatUSD, formatVES } from './KpiCard';
+import { formatUSD, formatVES } from './format';
 import { ManualRateForm } from './modals/ManualRateForm';
 import type { RatesPageData } from '@/utilities/erpData';
 

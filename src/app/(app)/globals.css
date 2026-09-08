@@ -4,11 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── PUENTE DE MIGRACIÓN (Fase 8 / Sprint 32) ───
+/* ─── PUENTE DE MIGRACIÓN (Fase 8 / Sprint 32-35) ───
    Las vistas del ERP anteriores al design system usan la paleta decorativa
-   indigo-* del tema antiguo. Este mapeo las re-skinnea a la escala neutra
-   monocroma del sistema SIN editar cada archivo: una decisión central y
-   retirables por partes cuando cada vista migre a tokens semánticos.
+   indigo-* y la escala slate-* del tema antiguo (tablas, headers, KPIs a mano).
+   Este mapeo las re-skinnea a la escala neutra monocroma del sistema SIN
+   editar cada archivo: una decisión central y retirable por partes cuando
+   cada vista migre a tokens semánticos.
    Los colores de ESTADO (emerald/amber/rose de badges y alertas) NO se
    mapean: son información funcional, no decoración. */
 @theme {
@@ -18,6 +19,16 @@
   --color-indigo-500: oklch(0.60 0 0);
   --color-indigo-600: oklch(0.42 0 0);
   --color-indigo-700: oklch(0.36 0 0);
+
+  --color-slate-200: oklch(0.92 0 0);
+  --color-slate-300: oklch(0.87 0 0);
+  --color-slate-400: oklch(0.71 0 0);
+  --color-slate-500: oklch(0.64 0 0);
+  --color-slate-600: oklch(0.45 0 0);
+  --color-slate-700: oklch(0.37 0 0);
+  --color-slate-800: oklch(0.27 0 0);
+  --color-slate-900: oklch(0.21 0 0);
+  --color-slate-950: oklch(0.145 0 0);
 }
 
 /* Valores del modo CLARO: acentos oscurecidos para contraste AA sobre blanco.
@@ -28,6 +39,26 @@ html:not(.dark) {
   --color-indigo-500: oklch(0.52 0 0);
   --color-indigo-600: oklch(0.38 0 0);
   --color-indigo-700: oklch(0.32 0 0);
+
+  --color-slate-200: oklch(0.35 0 0);
+  --color-slate-300: oklch(0.42 0 0);
+  --color-slate-400: oklch(0.50 0 0);
+  --color-slate-500: oklch(0.55 0 0);
+  --color-slate-600: oklch(0.62 0 0);
+  --color-slate-700: oklch(0.82 0 0);
+  --color-slate-800: oklch(0.88 0 0);
+  --color-slate-900: oklch(0.955 0 0);
+  --color-slate-950: oklch(0.97 0 0);
+}
+
+/* text-white explícito de las vistas heredadas: sobre fondos claros (cards
+   mapeadas) debe leerse como primer plano. Los controles con fondo oscuro
+   (botones/enlaces con bg primario puenteado) conservan texto claro. */
+html:not(.dark) .erp-views .text-white {
+  color: var(--foreground);
+}
+html:not(.dark) .erp-views :is(button, a, [role='button'], [type='submit']).text-white {
+  color: var(--primary-foreground);
 }
 
 

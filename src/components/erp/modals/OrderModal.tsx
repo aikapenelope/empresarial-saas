@@ -5,7 +5,7 @@ import { useSyncOnKeyChange } from '../hooks/useSyncOnKeyChange';
 import { Modal } from './Modal';
 import { createOrderAction, updateOrderAction } from '@/actions/erpActions';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
-import { formatUSD, formatVES } from '../KpiCard';
+import { formatUSD, formatVES } from '../format';
 import { Plus, Trash2, Loader2 } from 'lucide-react';
 
 interface OrderModalProps {
