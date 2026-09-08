@@ -2,7 +2,8 @@ import React from 'react';
 import { notFound } from 'next/navigation';
 import {
   getTenantBySlug,
-  getOrdersList,
+  getOrdersPage,
+  getOrdersTotals,
   getCustomersWithDebt,
   getProductsCatalog,
   getCashRegistersWithDetails,
@@ -12,13 +13,17 @@ import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { OrdersView } from '@/components/erp/OrdersView';
+import { ordersListFiltersSchema } from '@/utilities/erpValidation';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
+  searchParams: Promise<{ from?: string; to?: string; status?: string; page?: string }>;
 }
 
-export default async function OrdersPage({ params }: PageProps) {
+export default async function OrdersPage({ params, searchParams }: PageProps) {
   const { tenant: tenantSlug } = await params;
+  const sp = await searchParams;
+  const filters = ordersListFiltersSchema.parse(sp);
   let tenant: Awaited<ReturnType<typeof getTenantBySlug>> = null;
   try {
     tenant = await getTenantBySlug(tenantSlug);
@@ -33,10 +38,11 @@ export default async function OrdersPage({ params }: PageProps) {
     notFound();
   }
 
-  let orders, customers, products, registers, warehouses, effectiveRateData;
+  let orders, ordersTotals, customers, products, registers, warehouses, effectiveRateData;
   try {
-    [orders, customers, products, registers, warehouses, effectiveRateData] = await Promise.all([
-      getOrdersList(tenant.id),
+    [orders, ordersTotals, customers, products, registers, warehouses, effectiveRateData] = await Promise.all([
+      getOrdersPage(tenant.id, filters),
+      getOrdersTotals(tenant.id, filters),
       getCustomersWithDebt(tenant.id),
       getProductsCatalog(tenant.id),
       getCashRegistersWithDetails(tenant.id),
@@ -62,9 +68,12 @@ export default async function OrdersPage({ params }: PageProps) {
 
       <OrdersView
   salesDocumentDefault={tenant.salesConfig?.salesDocumentDefault ?? 'factura'}
+        filters={{ from: filters.from, to: filters.to, status: filters.status }}
+        pagination={{ page: orders.page, totalPages: orders.totalPages, totalDocs: orders.totalDocs }}
+        totals={ordersTotals}
         tenantId={tenant.id}
         tenantSlug={tenant.slug}
-        orders={orders}
+        orders={orders.docs}
         customers={customers.map((c) => ({
           id: c.id,
           name: c.name,

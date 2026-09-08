@@ -528,6 +528,87 @@ export async function getQuotesPage(
   };
 }
 
+/**
+ * Pedidos paginados por fecha de creación y estado (Sprint 44). Los pedidos no
+ * tienen `issueDate` propia: su período es el `createdAt` del documento.
+ */
+export async function getOrdersPage(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<PaginatedList<Order>> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'createdAt'));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const res = await payload.find({
+    collection: 'orders',
+    where: { and },
+    depth: 1,
+    sort: '-createdAt',
+    page: filters.page || 1,
+    limit: 50,
+    user,
+    overrideAccess: false,
+  });
+
+  return {
+    docs: res.docs as Order[],
+    totalDocs: res.totalDocs,
+    totalPages: res.totalPages,
+    page: res.page || 1,
+  };
+}
+
+export interface OrdersTotals {
+  openCount: number;
+  pendingCount: number;
+  pendingUSD: number;
+  closedCount: number;
+}
+
+/** KPIs de pedidos sobre el conjunto FILTRADO completo (select mínimo, sin conteo extra). */
+export async function getOrdersTotals(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<OrdersTotals> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'createdAt'));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const res = await payload.find({
+    collection: 'orders',
+    where: { and },
+    depth: 0,
+    limit: 5000,
+    pagination: false,
+    select: { status: true, totalUSD: true },
+    sort: '-createdAt',
+    user,
+    overrideAccess: false,
+  });
+
+  let openCount = 0;
+  let pendingCount = 0;
+  let pendingUSD = 0;
+  let closedCount = 0;
+  for (const o of res.docs as Array<Pick<Order, 'status' | 'totalUSD'>>) {
+    if (o.status === 'draft' || o.status === 'confirmed') openCount += 1;
+    if (o.status === 'confirmed') {
+      pendingCount += 1;
+      pendingUSD += Number(o.totalUSD) || 0;
+    }
+    if (o.status === 'invoiced' || o.status === 'canceled') closedCount += 1;
+  }
+
+  return { openCount, pendingCount, pendingUSD: Number(pendingUSD.toFixed(2)), closedCount };
+}
+
 export interface SalesBookEntry {
   date: string;
   invoiceNumber: string;
