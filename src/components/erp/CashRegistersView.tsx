@@ -31,7 +31,7 @@ import {
 import { CashRegisterModal } from './modals/CashRegisterModal';
 import { CashClosureModal } from './modals/CashClosureModal';
 import { OpenShiftModal } from './modals/OpenShiftModal';
-import type { CashRegister, Warehouse, CashClosure } from '@/payload-types';
+import type { CashRegister, Warehouse, CashClosure, CustomerPayment } from '@/payload-types';
 
 interface CashRegistersViewProps {
   tenantId: number;
@@ -40,7 +40,8 @@ interface CashRegistersViewProps {
   warehouses: Warehouse[];
   closures: CashClosure[];
   openCount: number;
-  effectiveRate: number;
+  /** Pagos recibidos: base del mix de métodos (recaudación real). */
+  payments: CustomerPayment[];
 }
 
 export function CashRegistersView({
@@ -50,7 +51,7 @@ export function CashRegistersView({
   warehouses,
   closures,
   openCount,
-  effectiveRate,
+  payments,
 }: CashRegistersViewProps) {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isClosureModalOpen, setIsClosureModalOpen] = useState(false);
@@ -133,10 +134,7 @@ export function CashRegistersView({
       </div>
 
       {/* Mix de métodos de pago (pieza distintiva del módulo) */}
-      <MethodMixCard
-        declared={closures.map((cl) => cl.declaredTotals ?? {})}
-        effectiveRate={effectiveRate}
-      />
+      <MethodMixCard payments={payments} />
 
       {/* Grid de Cajas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useSyncOnKeyChange } from './hooks/useSyncOnKeyChange';
 import Link from 'next/link';
 import {
   ShoppingCart,
@@ -113,6 +114,35 @@ export function POSView({
   const priceFor = (product: { priceUSD: number; priceTiers?: Array<{ tier: string; priceUSD: number }> | null }) =>
     effectivePriceForTier(product, activeTier);
 
+  const prevTierRef = useRef<string>(activeTier);
+
+  // Cambio de cliente/tier: re-precia sólo las líneas "automáticas" — aquéllas
+  // cuyo precio sigue siendo el efectivo del tier ANTERIOR (mismo criterio que
+  // QuickQuoteBuilder). Las editadas manualmente por el cajero se conservan.
+  useSyncOnKeyChange(activeTier, () => {
+    setCart((prev) =>
+      prev.map((line) => {
+        const product = products.find((p) => p.id === line.productId);
+        if (!product) return line;
+        const prevPrice = effectivePriceForTier(product, prevTierRef.current);
+        const nextPrice = effectivePriceForTier(product, activeTier);
+        // Sólo re-precia si el precio actual sigue siendo el efectivo previo.
+        if (Math.abs(line.unitPriceUSD - prevPrice) < 0.005) {
+          return { ...line, unitPriceUSD: nextPrice };
+        }
+        return line;
+      }),
+    );
+    prevTierRef.current = activeTier;
+  });
+
+  // Al cambiar el producto seleccionado o el tier activo, el input refleja el
+  // precio efectivo del catálogo (punto de partida editable del cajero).
+  useSyncOnKeyChange(`${selectedSku}::${activeTier}`, () => {
+    const prod = products.find((p) => p.sku === selectedSku);
+    if (prod) setUnitPriceUSD(effectivePriceForTier(prod, activeTier));
+  });
+
   const totalUSD = useMemo(
     () => cart.reduce((acc, it) => acc + it.quantity * it.unitPriceUSD, 0),
     [cart],
@@ -127,10 +157,14 @@ export function POSView({
       return;
     }
     setError(null);
+    // El precio facturado es el del input: tier efectivo por defecto o el
+    // ajuste manual del cajero (incluye 0, p. ej. regalos/cortesías — éste
+    // prevalece sobre el tier).
     const tieredUnitPrice = priceFor(prod);
+    const linePrice = Number.isFinite(unitPriceUSD) && unitPriceUSD >= 0 ? unitPriceUSD : tieredUnitPrice;
     setCart((prev) => {
       const existing = prev.find(
-        (l) => l.productId === prod.id && l.unitPriceUSD === tieredUnitPrice,
+        (l) => l.productId === prod.id && l.unitPriceUSD === linePrice,
       );
       if (existing) {
         return prev.map((l) =>
@@ -144,7 +178,7 @@ export function POSView({
           sku: prod.sku,
           description: prod.name,
           quantity,
-          unitPriceUSD: tieredUnitPrice,
+          unitPriceUSD: linePrice,
         },
       ];
     });
@@ -287,7 +321,7 @@ export function POSView({
                   onChange={(e) => {
                     setSelectedSku(e.target.value);
                     const prod = products.find((p) => p.sku === e.target.value);
-                    if (prod) setUnitPriceUSD(prod.priceUSD);
+                    if (prod) setUnitPriceUSD(effectivePriceForTier(prod, activeTier));
                   }}
                   className={posSelectClass}
                 >

@@ -583,7 +583,7 @@ Cada módulo tiene ahora UNA pieza visual distintiva bajo el mismo sistema, más
 
 1. **Cotizaciones — Embudo Comercial** (`QuoteFunnel`): composición por estado + tasa de conversión (aceptadas+convertidas/total), server-compatible.
 2. **Kardex — Timeline vertical** (`KardexTimeline`): feed legible con rail por dirección (entrada/salida/transferencia), badge de tipo, montajes firmados y enlace a factura; reemplaza la tabla plana de 8 columnas (Sprint 21).
-3. **Cajas — Mix de Métodos** (`MethodMixCard`): donut recharts monocromo (--chart-N) con la recaudación agregada de arqueos homogeneizada a USD (efectivo USD/VES, POS, pago móvil, Zelle/Binance). La página ahora pasa `effectiveRate`.
+3. **Cajas — Mix de Métodos** (`MethodMixCard`): recaudación real agregada desde los pagos recibidos (efectivo USD/VES, POS, pago móvil, transferencia, Zelle/Binance), homogeneizada a USD con la tasa snapshot de cada método — no con la vigente (fix Devin #49).
 4. **Tasas — Spread entre Fuentes** (`RateSpreadCard`): desviación BCV/Binance/Paralelo contra la tasa efectiva, con la fuente vigente resaltada (server-compatible).
 5. **Auditoría — Feed de actividad**: avatar-inicial del actor + "quién hizo qué a cuál documento" en lenguaje natural, en vez de tabla plana (Sprint 22).
 6. **Alertas — Feed por severidad**: tarjetas con acento por severidad (crítica/advertencia/info) y acciones inline.
@@ -598,6 +598,20 @@ Cada módulo tiene ahora UNA pieza visual distintiva bajo el mismo sistema, más
 - [x] **InventoryImportView**: pasos con Card, preview y resultados con Table shadcn, estados error/parse con tokens.
 - [x] **QuickQuoteBuilder**: Card/Input/Button; badge de tier activo en totales.
 - **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde.
+
+### 🔧 Ronda de reparación Devin (PRs #49/#50) — `fix/devin-round-49-50`
+
+Hallazgos de Devin Review reparados (agrupados, una sola ronda por protocolo):
+
+**POS (PR #50):**
+- [x] 🔴 **Precio editado ignorado**: `handleAddLine` ahora factura el precio del input (ajuste manual del cajero prevalece; el tier queda como valor por defecto del input, resincronizado al cambiar producto/cliente vía `useSyncOnKeyChange`).
+- [x] 🔴 **Precios huérdicos al cambiar cliente**: cambio de cliente/tier re-precia las líneas automáticas (criterio QuickQuoteBuilder: sólo si el precio sigue siendo el efectivo del tier anterior); los overrides manuales se conservan.
+
+**Cajas (PR #49):**
+- [x] 🟡 **Arqueo ≠ recaudación**: el Mix de Métodos ahora agrega los `CustomerPayments` (lo cobrado), no los conteos físicos del arqueo (que incluyen fondo de apertura).
+- [x] 🟡 **Transferencias excluidas**: `transfer_ves` tiene su bucket en el mix.
+- [x] 🟡 **Totales históricos mutables**: cada método usa su `amountUSD` persistido o se deriva con SU tasa snapshot (`methods[].exchangeRate`), nunca la tasa vigente.
+- Nueva pieza de datos: `getCustomerPaymentsList` en `erpData`; `customer-payments` añadido al union de colecciones.
 
 ### 📄 Sprint 38 — Ola 4 (PR `feat/ui-docs-detail-s38`): detalles de documento, templates, home y wrappers
 
