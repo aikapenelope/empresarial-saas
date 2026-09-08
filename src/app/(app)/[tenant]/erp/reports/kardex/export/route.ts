@@ -2,8 +2,16 @@ import { getPayload } from 'payload';
 import config from '@payload-config';
 import type { Where } from 'payload';
 import { getTenantBySlug } from '@/utilities/erpData';
-import { ErpAccessError, requireErpTenantAccess } from '@/utilities/erpAuth';
-import { buildBusinessDateRange, businessDateRangeSchema } from '@/utilities/erpValidation';
+import {
+  ErpAccessError,
+  requireErpTenantAccess,
+  ERP_REPORT_ROLES,
+} from '@/utilities/erpAuth';
+import {
+  buildBusinessDateRange,
+  businessDateRangeSchema,
+  formatBusinessDate,
+} from '@/utilities/erpValidation';
 import { csvCell } from '@/utilities/csv';
 import type { StockMovement } from '@/payload-types';
 
@@ -39,9 +47,11 @@ export async function GET(
       return Response.json({ error: 'Inquilino no encontrado.' }, { status: 404 });
     }
 
-    // El usuario verificado viaja a la Local API: con `overrideAccess:false`
-    // el control de acceso de la colección necesita la identidad real.
-    const user = await requireErpTenantAccess(tenant.id);
+    // El kardex completo del inquilino es un reporte tenant-wide: reservado a
+    // los roles administrativos (mismo RBAC que la página de reportes). El
+    // usuario verificado viaja a la Local API: con `overrideAccess:false` el
+    // control de acceso de la colección necesita la identidad real.
+    const user = await requireErpTenantAccess(tenant.id, ERP_REPORT_ROLES);
 
     // Mismo contrato que las páginas RSC: una fecha malformada se descarta en
     // lugar de llegar a `toISOString()` y responder 500.
@@ -81,7 +91,7 @@ export async function GET(
           : '';
       lines.push(
         [
-          new Date(m.createdAt).toISOString().slice(0, 10),
+          formatBusinessDate(m.createdAt),
           csvCell(m.reference),
           TYPE_LABELS[m.movementType] || m.movementType,
           csvCell(productName),

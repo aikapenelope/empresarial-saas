@@ -624,3 +624,25 @@ export function buildBusinessDateRange(
 
   return conditions;
 }
+
+// Formato del DÍA DE NEGOCIO compartido por el preview de reportes y los
+// exports CSV: la zona horaria de negocio es America/Caracas (UTC-4, sin DST)
+// y formatear sin `timeZone` usa la del servidor — una venta de las 21:00 en
+// Caracas (01:00 UTC del día siguiente) se mostraría "mañana" y saldría del
+// período filtrado. `en-CA` produce YYYY-MM-DD: el mismo formato que los
+// inputs from/to del período.
+const businessDayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Caracas',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * Fecha de negocio (Caracas) de un timestamp como YYYY-MM-DD; '' si el valor
+ * no es una fecha válida — el mismo contrato tolerante de los filtros.
+ */
+export function formatBusinessDate(value: unknown): string {
+  const date = value instanceof Date ? value : new Date(String(value ?? ''));
+  return Number.isNaN(date.getTime()) ? '' : businessDayFormatter.format(date);
+}

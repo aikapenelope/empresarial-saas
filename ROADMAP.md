@@ -639,6 +639,14 @@ Hallazgos de Devin Review reparados (agrupados, una sola ronda por protocolo):
 - [x] **Navegación:** entrada "Reportes & Exports" en el grupo Finanzas.
 - **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde.
 
+### 🔧 Ronda de reparación Devin 2 (mismo PR) — reportes
+
+Hallazgos de la segunda revisión de Devin, reparados agrupados:
+
+- [x] 🟥 **RBAC de reportes tenant-wide:** la página `/erp/reports` y los 3 exports (libro de ventas, cartera, kardex) exigen `ERP_REPORT_ROLES` (`super-admin`/`tenant-admin`/`supervisor`) vía `requireErpTenantAccess` — el padrón completo (facturas, saldos, kardex) ya no es descargable por roles operativos; el vendedor conserva su cartera acotada a SU canal en la vista de CxC.
+- [x] 🟡 **Día de negocio en fechas:** `formatBusinessDate` (America/Caracas, YYYY-MM-DD) compartida por el preview y los exports libro de ventas/kardex — una venta de las 21:00 Caracas ya no se muestra ni exporta "mañana" por el timezone del servidor.
+- [x] 🟡 **"Con saldo" real:** `getInvoicesTotals` expone `outstandingCount` (facturas con `balanceUSD > 0`); borradores y anuladas saldadas ya no cuentan como pendientes en el KPI de facturas.
+
 ### Pendiente Fase 10 (siguientes)
 - Extender BusinessFiltersBar a Cotizaciones (getter ya existe), Pedidos, Compras y Pagos recibidos.
 - Reporte de IVA/libro de compras cuando el negocio lo defina.

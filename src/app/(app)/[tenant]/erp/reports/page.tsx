@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Download, FileText, Scale, Boxes } from 'lucide-react';
 import { getTenantBySlug, getSalesBookReport, getCustomersWithDebt } from '@/utilities/erpData';
-import { businessListFiltersSchema } from '@/utilities/erpValidation';
+import { businessListFiltersSchema, formatBusinessDate } from '@/utilities/erpValidation';
 import { formatUSD, formatVES } from '@/components/erp/format';
 import { ErpPageHeader } from '@/components/erp/ErpPageHeader';
 import { KpiCard } from '@/components/erp/KpiCard';
@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ErpAccessError } from '@/utilities/erpAuth';
+import { ErpAccessError, requireErpTenantAccess, ERP_REPORT_ROLES } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
 interface PageProps {
@@ -42,6 +42,18 @@ export default async function ReportsPage({ params, searchParams }: PageProps) {
 
   if (!tenant) {
     notFound();
+  }
+
+  // Los reportes exponen el padrón tenant-wide (todas las facturas, saldos y
+  // el kardex completo): quedan reservados a los roles administrativos — el
+  // vendedor conserva su cartera acotada en la vista de CxC, no aquí.
+  try {
+    await requireErpTenantAccess(tenant.id, ERP_REPORT_ROLES);
+  } catch (error: unknown) {
+    if (error instanceof ErpAccessError) {
+      return <ErpAccessDenied status={error.status} />;
+    }
+    throw error;
   }
 
   const q = businessListFiltersSchema.parse(sp);
@@ -162,7 +174,7 @@ export default async function ReportsPage({ params, searchParams }: PageProps) {
                 {preview.map((e, idx) => (
                   <TableRow key={`${e.invoiceNumber}-${idx}`}>
                     <TableCell className="text-muted-foreground text-[11px]">
-                      {new Date(e.date).toLocaleDateString('es-VE')}
+                      {formatBusinessDate(e.date)}
                     </TableCell>
                     <TableCell className="font-mono font-bold">{e.invoiceNumber}</TableCell>
                     <TableCell>{e.customerName}</TableCell>

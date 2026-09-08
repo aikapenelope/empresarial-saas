@@ -630,6 +630,9 @@ export interface InvoiceListTotals {
   invoicedVES: number;
   balanceUSD: number;
   paidCount: number;
+  /** Facturas con saldo realmente pendiente (balanceUSD > 0): borradores y
+   * anuladas saldadas NO cuentan, a diferencia de `count - paidCount`. */
+  outstandingCount: number;
 }
 
 /**
@@ -665,12 +668,15 @@ export async function getInvoicesTotals(
   let invoicedVES = 0;
   let balanceUSD = 0;
   let paidCount = 0;
+  let outstandingCount = 0;
 
   for (const inv of res.docs as Pick<Invoice, 'totalUSD' | 'totalVES' | 'balanceUSD' | 'status'>[]) {
     invoicedUSD += Number(inv.totalUSD) || 0;
     invoicedVES += Number(inv.totalVES) || 0;
-    balanceUSD += Number(inv.balanceUSD) || 0;
+    const invBalance = Number(inv.balanceUSD) || 0;
+    balanceUSD += invBalance;
     if (inv.status === 'paid') paidCount += 1;
+    if (invBalance > 0) outstandingCount += 1;
   }
 
   return {
@@ -679,6 +685,7 @@ export async function getInvoicesTotals(
     invoicedVES: Number(invoicedVES.toFixed(2)),
     balanceUSD: Number(balanceUSD.toFixed(2)),
     paidCount,
+    outstandingCount,
   };
 }
 

@@ -53,6 +53,7 @@ interface InvoicesViewProps {
     invoicedVES: number;
     balanceUSD: number;
     paidCount: number;
+    outstandingCount: number;
   };
   filters: { from?: string; to?: string; status?: string };
   customers: Array<{ id: number; name: string; taxId: string; currentDebtUSD?: number | null }>;
@@ -182,7 +183,7 @@ export function InvoicesView({
           title="Estado de Documentos"
           valueUSD={String(totals.count)}
           icon={ListChecks}
-          description={`${totals.paidCount} pagadas / ${totals.count - totals.paidCount} con saldo`}
+          description={`${totals.paidCount} pagadas / ${totals.outstandingCount} con saldo`}
         />
       </div>
 

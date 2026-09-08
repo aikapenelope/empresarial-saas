@@ -1,5 +1,9 @@
 import { getTenantBySlug, getCustomersWithDebt } from '@/utilities/erpData';
-import { ErpAccessError, requireErpTenantAccess } from '@/utilities/erpAuth';
+import {
+  ErpAccessError,
+  requireErpTenantAccess,
+  ERP_REPORT_ROLES,
+} from '@/utilities/erpAuth';
 import { csvCell } from '@/utilities/csv';
 
 /**
@@ -19,10 +23,12 @@ export async function GET(
       return Response.json({ error: 'Inquilino no encontrado.' }, { status: 404 });
     }
 
+    // El padrón completo con saldos es sensible: reservado a los roles
+    // administrativos ANTES de consultar (el vendedor conserva su cartera
+    // acotada a su canal en la vista de CxC, no este export tenant-wide).
+    await requireErpTenantAccess(tenant.id, ERP_REPORT_ROLES);
+
     const customers = await getCustomersWithDebt(tenant.id);
-    // Doble verificación de operador (getCustomersWithDebt ya exige sesión del
-    // tenant; los reportes de cartera son sensible a saldos).
-    await requireErpTenantAccess(tenant.id);
 
     const money = (v: unknown) => Number(v || 0).toFixed(2);
 
