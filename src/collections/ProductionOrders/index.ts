@@ -12,6 +12,7 @@ import {
   resolveTenantId,
 } from '../../utilities/inventoryLedger';
 import { sql } from '@payloadcms/db-postgres';
+import { runIsolatedContext } from '../../utilities/requestContext';
 
 const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
   data,
@@ -85,7 +86,6 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
       id: targetProductId,
       depth: 0,
       req,
-      context: { ...req.context, skipInventoryRecalculation: true },
     });
     const pTenant = extractId(prodDoc?.tenant);
     if (!pTenant) {
@@ -117,7 +117,6 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
         id: targetBomId,
         depth: 0,
         req,
-        context: { ...req.context, skipInventoryRecalculation: true },
       });
       const bTenant = extractId(bomDoc?.tenant);
       if (bTenant && String(activeTenantId) !== String(bTenant)) {
@@ -131,7 +130,6 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
         id: sourceWhId,
         depth: 0,
         req,
-        context: { ...req.context, skipInventoryRecalculation: true },
       });
       const sTenant = extractId(sWhDoc?.tenant);
       if (sTenant && String(activeTenantId) !== String(sTenant)) {
@@ -145,7 +143,6 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
         id: targetWhId,
         depth: 0,
         req,
-        context: { ...req.context, skipInventoryRecalculation: true },
       });
       const tTenant = extractId(tWhDoc?.tenant);
       if (tTenant && String(activeTenantId) !== String(tTenant)) {
@@ -161,10 +158,6 @@ const beforeValidateProductionOrder: CollectionBeforeValidateHook = async ({
       id: targetBomId,
       depth: 0,
       req,
-      context: {
-        ...req.context,
-        skipInventoryRecalculation: true,
-      },
     });
     if (bomDoc && String(extractId(bomDoc.product)) !== String(targetProductId)) {
       throw new Error('La fórmula / receta (BOM) seleccionada no corresponde al producto a fabricar.');
@@ -209,20 +202,22 @@ const afterChangeProductionOrder: CollectionAfterChangeHook = async ({
     );
 
     // Save final costs on the production order doc with allowInternalCostUpdate
-    await req.payload.update({
-      collection: 'production-orders',
-      id: doc.id,
-      data: {
-        totalCostUSD: result.totalBatchCostUSD,
-        unitCostUSD: result.unitCostUSD,
-      },
-      req,
-      context: {
-        ...req.context,
-        skipInventoryRecalculation: true,
-        allowInternalCostUpdate: true,
-      },
-    });
+    await runIsolatedContext(req, () =>
+      req.payload.update({
+          collection: 'production-orders',
+          id: doc.id,
+          data: {
+            totalCostUSD: result.totalBatchCostUSD,
+            unitCostUSD: result.unitCostUSD,
+          },
+          req,
+          context: {
+            ...req.context,
+            skipInventoryRecalculation: true,
+            allowInternalCostUpdate: true,
+          },
+        }),
+      );
   }
 
   return doc;

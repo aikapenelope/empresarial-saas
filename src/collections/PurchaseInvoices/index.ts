@@ -60,7 +60,6 @@ const beforeValidatePurchaseInvoice: CollectionBeforeValidateHook = async ({
       id: supplierId,
       depth: 0,
       req,
-      context: { ...req.context, skipBalanceRecalculation: true },
     });
 
     if (!supplier) {
@@ -99,7 +98,6 @@ const beforeValidatePurchaseInvoice: CollectionBeforeValidateHook = async ({
       id: warehouseId,
       depth: 0,
       req,
-      context: { ...req.context, skipBalanceRecalculation: true },
     });
     const whTenant = extractId(warehouse?.tenant);
     if (whTenant && effectiveTenantId && String(whTenant) !== String(effectiveTenantId)) {
@@ -124,7 +122,6 @@ const beforeValidatePurchaseInvoice: CollectionBeforeValidateHook = async ({
         id: pid,
         depth: 0,
         req,
-        context: { ...req.context, skipBalanceRecalculation: true },
       });
       const prodTenant = extractId(prod?.tenant);
       if (prodTenant && effectiveTenantId && String(prodTenant) !== String(effectiveTenantId)) {

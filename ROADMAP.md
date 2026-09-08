@@ -661,6 +661,51 @@ Hallazgos de la segunda revisión de Devin, reparados agrupados:
 
 ---
 
+# 🧭 Fase 11: Higiene de contexto, documento fiscal flexible y ciclo completo (Sprints 40–44)
+
+> **Objetivo:** Cerrar la deuda técnica de flags de contexto, adaptar el documento de venta al nuevo escenario regulatorio venezolano (nota de entrega por defecto / factura opcional), hacer el IVA/IGTF configurable, llevar los documentos al cliente por correo y extender los filtros de negocio. Todo probado en CI (regla AGENTS §5.15: cero tests en la Mac del usuario).
+
+### 🧹 Sprint 40 — Higiene de contexto (PR `fix/sprint40-context-hygiene`)
+
+- [x] **Lecturas sin flag:** `financeLedger:92`, `PurchaseInvoices:63/102/127`, `SupplierPayments:65/220`, `BillOfMaterials:17/81`, `ProductionOrders:88/120/134/148/166` — las lecturas no disparan hooks que suprimir; solo contaminaban el `req.context` del request (hallazgo verificado contra `createLocalReq` de Payload y Context7).
+- [x] **Escrituras aisladas con `runIsolatedContext`:** `ProductionOrders` (costos finales del afterChange), `inventoryImport:224` (loop de importación), `erpActions:381/459` (transfer/adjust).
+- [x] **Flag muerto removido:** `viaShareActions` ×2 (sin consumidor).
+- [x] **Test de regresión (CI):** recepción de compra → `supplier.currentDebtUSD` = total recibido (antes quedaba en 0 por el flag contaminante).
+- **Criterio de cierre:** `tsc`/`eslint` locales + suite completa en CI en verde.
+
+### 📄 Sprint 41 — Nota de entrega por defecto / factura opcional
+
+- [ ] **Config de tenant:** `salesConfig.salesDocumentDefault: 'nota_entrega' | 'factura'` (default nuevos inquilinos: `nota_entrega`), editable en `SettingsView` vía `updateTenantSettingsAction`.
+- [ ] **`issueInvoiceFromDeliveryNoteAction`:** facturar desde remisión emitida reutilizando `createInvoiceCore` + lock del pedido padre. Invariante kardex intacto: la remisión no descarga; la factura publica `sale_out` una sola vez.
+- [ ] **UI:** botón "Facturar" en detalle de remisión; POS/venta rápida respetan el default del inquilino.
+- [ ] **Tests CI:** nota no toca kardex; factura desde nota descarga exactamente una vez.
+
+### 🧾 Sprint 42 — IVA/IGTF configurable + libro fiscal
+
+- [ ] **Config de tenant:** `taxConfig.igtfPct` (3), `applyIgtfOnFxPayments`, `generalRatePct` (16), `suntuarioPct` opcional — decretos del SENIAT sin cambios de código.
+- [ ] **Snapshot fiscal por factura:** `taxBaseUSD`/`taxUSD` calculados en `createInvoiceCore` desde el `taxRate` del producto (migración).
+- [ ] **IGTF a nivel de pago:** recargo en `createPaymentAction`/mix de caja para métodos en divisa.
+- [ ] **Libro de ventas CSV:** columnas `base_usd, tasa_pct, iva_usd, igtf_usd` (libro de compras análogo).
+- [ ] **Tests CI:** líneas mixtas (exenta/8/16) → desglose; pago en divisa → IGTF.
+
+### 📧 Sprint 43 — Email del ciclo completo (base ya existe: `sendDocumentEmailAction` + Resend + `after()`)
+
+- [ ] **Extender `ShareableCollection` a `invoices`** con ruta pública `/share/invoice/[token]` y botón de envío en el detalle.
+- [ ] **Auto-envío por inquilino:** `emailConfig.autoSend: { quote, invoice, note }` — el action encola en `after()` (patrón existente, cero blocking).
+- [ ] **CRM ya existe** (`Customers` con email/segmento/tier/vendedor): solo se consume `customer.email` como destinatario por defecto.
+- [ ] **Pendiente operativo:** dominio verificado en Resend para `defaultFromAddress`.
+
+### 🔎 Sprint 44 — Filtros de negocio en los 4 listados restantes
+
+- [ ] **Getters paginados server-side** (`getOrdersPage` y faltantes de compras/pagos) replicando `getInvoicesPage`: `where` compuesto + `select` + `buildBusinessDateRange` + 50/página.
+- [ ] **Wire:** `BusinessFiltersBar` en QuotesView (getter ya existe), OrdersView, PurchasesView y pagos de cartera.
+- [ ] **Criterio:** ningún listado trae el histórico completo del inquilino.
+
+### Backlog post-Fase 11 (exportable de Cendaro #70, evaluado 2026-09-08)
+Equivalencias UOM (comprar por caja / vender por unidad) · módulo de aprobaciones · marcas de producto · detalle de inventario por almacén · WhatsApp dedicado. **Cendaro NO tiene** IVA calculado (campo `tax` plano), email runtime ni filtros server-side — ahí vamos adelante.
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.

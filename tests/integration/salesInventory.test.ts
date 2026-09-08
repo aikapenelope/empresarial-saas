@@ -356,5 +356,15 @@ describe('kardex — recepción de compra multi-línea', () => {
     // La recepción publica purchase_in por línea (purchasesLedger)
     expect(await currentStock(prodP1)).toBe(4);
     expect(await currentStock(prodP2)).toBe(5);
+
+    // Regresión S40: las lecturas de beforeValidate (con flag
+    // skipBalanceRecalculation) contaminaban req.context y saltaban el
+    // recálculo de deuda — el proveedor debía quedar con el total recibido.
+    const supplierAfter = (await payload.findByID({
+      collection: 'suppliers',
+      id: supplierId,
+      overrideAccess: true,
+    })) as unknown as Supplier;
+    expect(Number(supplierAfter.currentDebtUSD)).toBe(23);
   });
 });

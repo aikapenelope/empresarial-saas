@@ -271,7 +271,6 @@ export async function sendDocumentEmailAction(input: unknown): Promise<{
           depth: 0,
           limit: 1,
           overrideAccess: true,
-          context: { viaShareActions: true },
         });
         const quote = res.docs[0];
         if (quote && quote.status === 'draft') {
@@ -280,7 +279,6 @@ export async function sendDocumentEmailAction(input: unknown): Promise<{
             id: quote.id,
             data: { status: 'sent' },
             overrideAccess: true,
-            context: { viaShareActions: true },
           });
         }
       }
