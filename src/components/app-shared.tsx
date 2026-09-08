@@ -58,6 +58,7 @@ const NAV_ITEMS: Array<{
 	{ routeKey: "suppliers", title: "Proveedores & CxP", segment: "suppliers", icon: Truck },
 	{ routeKey: "templates", title: "Plantillas Industriales", segment: "templates", icon: Layers },
 	{ routeKey: "rates", title: "Tasas de Cambio", segment: "rates", icon: TrendingUp },
+	{ routeKey: "reports", title: "Reportes & Exports", segment: "reports", icon: FileText },
 	{ routeKey: "settings", title: "Ajustes de Empresa", segment: "settings", icon: Settings },
 ];
 
@@ -69,7 +70,7 @@ const NAV_GROUPS: Array<{ label: string; routeKeys: string[] }> = [
 	},
 	{
 		label: "Finanzas",
-		routeKeys: ["customers", "receivables", "purchases", "suppliers", "cash-registers", "rates"],
+		routeKeys: ["customers", "receivables", "purchases", "suppliers", "cash-registers", "rates", "reports"],
 	},
 	{
 		label: "Inventario",

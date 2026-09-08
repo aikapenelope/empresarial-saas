@@ -19,6 +19,7 @@ import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
 import { ErpPageHeader } from './ErpPageHeader';
+import { BusinessFiltersBar } from './BusinessFiltersBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,11 +34,28 @@ import { InvoiceModal } from './modals/InvoiceModal';
 import { PaymentModal } from './modals/PaymentModal';
 import { ReturnModal } from './modals/ReturnModal';
 import type { Invoice } from '@/payload-types';
+import type { PayableInvoiceOption } from '@/utilities/erpData';
 
 interface InvoicesViewProps {
   tenantId: number;
   tenantSlug: string;
   invoices: Invoice[];
+  /**
+   * Padrón COMPLETO de facturas cobrables del inquilino (no la página visible):
+   * el modal de cobro debe poder imputar a cualquier factura abierta aunque
+   * los filtros de fecha/estado o la paginación la oculten del listado.
+   */
+  payableInvoices: PayableInvoiceOption[];
+  listMeta: { page: number; totalPages: number; totalDocs: number };
+  totals: {
+    count: number;
+    invoicedUSD: number;
+    invoicedVES: number;
+    balanceUSD: number;
+    paidCount: number;
+    outstandingCount: number;
+  };
+  filters: { from?: string; to?: string; status?: string };
   customers: Array<{ id: number; name: string; taxId: string; currentDebtUSD?: number | null }>;
   products: Array<{ id: number; name: string; sku: string; priceUSD: number; unitOfMeasure: string }>;
   effectiveRate: number;
@@ -45,17 +63,21 @@ interface InvoicesViewProps {
   warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
 }
 
-const STATUS_FILTERS = [
-  { value: 'all', label: 'Todas' },
+const STATUS_OPTIONS = [
   { value: 'issued', label: 'Emitidas' },
   { value: 'partially_paid', label: 'Parciales' },
   { value: 'paid', label: 'Pagadas' },
-] as const;
+  { value: 'voided', label: 'Anuladas' },
+];
 
 export function InvoicesView({
   tenantId,
   tenantSlug,
   invoices,
+  payableInvoices,
+  listMeta,
+  totals,
+  filters,
   customers,
   products,
   effectiveRate,
@@ -69,23 +91,9 @@ export function InvoicesView({
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | undefined>(undefined);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'issued' | 'partially_paid' | 'paid'>('all');
 
-  // Métricas
-  let totalInvoicedUSD = 0;
-  let totalBalanceUSD = 0;
-  let paidCount = 0;
-
-  for (const inv of invoices) {
-    totalInvoicedUSD += Number(inv.totalUSD) || 0;
-    totalBalanceUSD += Number(inv.balanceUSD) || 0;
-    if (inv.status === 'paid') paidCount++;
-  }
-
-  const totalInvoicedVES = totalInvoicedUSD * effectiveRate;
-  const totalBalanceVES = totalBalanceUSD * effectiveRate;
-
-  // Filtrado reactivo
+  // Filtrado reactivo del texto sobre la página visible (el rango de fechas y
+  // el estado son server-side vía BusinessFiltersBar).
   const filteredInvoices = invoices.filter((inv) => {
     const customerName =
       typeof inv.customer === 'object' && inv.customer !== null
@@ -96,30 +104,17 @@ export function InvoicesView({
         ? (inv.customer as { taxId?: string }).taxId || ''
         : '';
 
-    const matchesSearch =
+    return (
       inv.invoiceNumber.toLowerCase().includes(search.toLowerCase()) ||
       customerName.toLowerCase().includes(search.toLowerCase()) ||
-      customerTaxId.toLowerCase().includes(search.toLowerCase());
-
-    const matchesStatus = statusFilter === 'all' ? true : inv.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
+      customerTaxId.toLowerCase().includes(search.toLowerCase())
+    );
   });
 
-  // Preparar lista de facturas para el modal de cobro
-  const invoicesForPayment = invoices.map((inv) => {
-    const custId =
-      typeof inv.customer === 'object' && inv.customer !== null
-        ? (inv.customer as { id: number }).id
-        : Number(inv.customer);
-    return {
-      id: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      customerId: custId,
-      balanceUSD: Number(inv.balanceUSD) || 0,
-      balanceVES: Number(inv.balanceVES) || 0,
-    };
-  });
+  // La lista de facturas del modal de cobro NO se deriva de `invoices` (la
+  // página visible): llega ya preparada del servidor como `payableInvoices`
+  // (padrón completo de abiertas), porque el rango de fechas, el estado y la
+  // paginación server-side ocultarían facturas perfectamente pagables.
 
   const handleOpenCollect = (inv: Invoice) => {
     const custId =
@@ -160,30 +155,39 @@ export function InvoicesView({
         }
       />
 
-      {/* KPIs de Facturación */}
+      {/* Filtros server-side (rango de fechas + estado + paginación) */}
+      <BusinessFiltersBar
+        basePath={`/${tenantSlug}/erp/invoices`}
+        current={filters}
+        statusOptions={STATUS_OPTIONS}
+        statusLabel="Estado"
+        pagination={listMeta}
+      />
+
+      {/* KPIs de Facturación (del conjunto filtrado completo, server-side) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KpiCard
           title="Total Facturado"
-          valueUSD={totalInvoicedUSD}
-          valueVES={totalInvoicedVES}
+          valueUSD={totals.invoicedUSD}
+          valueVES={totals.invoicedVES}
           icon={FileStack}
         />
         <KpiCard
           title="Saldo Pendiente por Cobrar"
-          valueUSD={totalBalanceUSD}
-          valueVES={totalBalanceVES}
+          valueUSD={totals.balanceUSD}
+          valueVES={totals.balanceUSD * effectiveRate}
           icon={Wallet}
           tone="warning"
         />
         <KpiCard
           title="Estado de Documentos"
-          valueUSD={String(invoices.length)}
+          valueUSD={String(totals.count)}
           icon={ListChecks}
-          description={`${paidCount} pagadas / ${invoices.length - paidCount} con saldo`}
+          description={`${totals.paidCount} pagadas / ${totals.outstandingCount} con saldo`}
         />
       </div>
 
-      {/* Barra de Búsqueda y Filtros */}
+      {/* Búsqueda de texto sobre la página visible */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
@@ -195,19 +199,9 @@ export function InvoicesView({
             className="pl-9"
           />
         </div>
-
-        <div className="flex items-center gap-1.5 self-start sm:self-auto">
-          {STATUS_FILTERS.map((f) => (
-            <Button
-              key={f.value}
-              size="sm"
-              variant={statusFilter === f.value ? 'default' : 'outline'}
-              onClick={() => setStatusFilter(f.value)}
-            >
-              {f.value === 'all' ? `${f.label} (${invoices.length})` : f.label}
-            </Button>
-          ))}
-        </div>
+        <span className="text-xs text-muted-foreground self-start sm:self-auto">
+          {filteredInvoices.length} en esta página
+        </span>
       </div>
 
       {/* Tabla de Facturas */}
@@ -413,7 +407,7 @@ export function InvoicesView({
         tenantSlug={tenantSlug}
         rate={effectiveRate}
         customers={customers}
-        invoices={invoicesForPayment}
+        invoices={payableInvoices}
         defaultCustomerId={selectedCustomerId}
         defaultInvoiceId={selectedInvoiceId}
       />

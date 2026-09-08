@@ -71,6 +71,18 @@ export async function requireErpTenantAccess(
   return user;
 }
 
+/**
+ * Roles autorizados para los REPORTES tenant-wide (libro de ventas, cartera
+ * por antigüedad y kardex): exponen el padrón completo del inquilino, así que
+ * el vendedor — cuya cartera queda acotada a SU canal en la vista de CxC — y
+ * los roles operativos no pueden descargarlos.
+ */
+export const ERP_REPORT_ROLES: Array<User['role']> = [
+  'super-admin',
+  'tenant-admin',
+  'supervisor',
+];
+
 /** Verifica privilegios administrativos (super-admin) para operaciones globales. */
 export async function requireSuperAdmin(): Promise<User> {
   const user = await getErpUser();

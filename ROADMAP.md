@@ -625,6 +625,35 @@ Hallazgos de Devin Review reparados (agrupados, una sola ronda por protocolo):
 
 ---
 
+# 📊 Fase 10: Reportes, Filtros de negocio y escala
+
+> **Objetivo:** Cerrar la deuda de escala (listados que traían el histórico completo del inquilino) y dar a la operación reportes con filtros de período y exports CSV — sin colecciones nuevas, reutilizando los datos existentes.
+
+### 📈 Sprint 39 — Filtros server-side + Libro de Ventas + Exports (PR `feat/reports-filters-s39`)
+
+- [x] **Contrato compartido URL→RSC:** `businessListFiltersSchema` (+ variantes por enum de estado de facturas/cotizaciones) y `buildBusinessDateRange` (calendario Venezuela UTC-4, borde exclusivo "hasta" — extraído del patrón del kardex para toda la plataforma).
+- [x] **Listados paginados server-side:** `getInvoicesPage`/`getQuotesPage` (page/limit 50, filtros from/to/status) — las vistas dejan de traer el histórico completo; `getInvoicesList` permanece para modales/POS.
+- [x] **KPIs agregados con `select`:** `getInvoicesTotals` suma sobre el conjunto filtrado completo con `select` de 4 campos + `pagination:false` (patrón de agregados de la Local API).
+- [x] **Facturas migrada al modelo:** `BusinessFiltersBar` compartida (form GET server-side, cero JS + paginación con filtros preservados); búsqueda de texto queda sobre la página visible; los KPIs respetan los filtros.
+- [x] **Reportes & Exports (`/erp/reports`):** Libro de Ventas del período (preview + KPIs USD/VES históricos por tasa snapshot) y exports CSV: libro de ventas, cartera por antigüedad (ledger vigente), kardex completo/filtrado — route handlers con `pagination:false`, Zod y guard de sesión.
+- [x] **Navegación:** entrada "Reportes & Exports" en el grupo Finanzas.
+- **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde.
+
+### 🔧 Ronda de reparación Devin 2 (mismo PR) — reportes
+
+Hallazgos de la segunda revisión de Devin, reparados agrupados:
+
+- [x] 🟥 **RBAC de reportes tenant-wide:** la página `/erp/reports` y los 3 exports (libro de ventas, cartera, kardex) exigen `ERP_REPORT_ROLES` (`super-admin`/`tenant-admin`/`supervisor`) vía `requireErpTenantAccess` — el padrón completo (facturas, saldos, kardex) ya no es descargable por roles operativos; el vendedor conserva su cartera acotada a SU canal en la vista de CxC.
+- [x] 🟡 **Día de negocio en fechas:** `formatBusinessDate` (America/Caracas, YYYY-MM-DD) compartida por el preview y los exports libro de ventas/kardex — una venta de las 21:00 Caracas ya no se muestra ni exporta "mañana" por el timezone del servidor.
+- [x] 🟡 **"Con saldo" real:** `getInvoicesTotals` expone `outstandingCount` (facturas con `balanceUSD > 0`); borradores y anuladas saldadas ya no cuentan como pendientes en el KPI de facturas.
+
+### Pendiente Fase 10 (siguientes)
+- Extender BusinessFiltersBar a Cotizaciones (getter ya existe), Pedidos, Compras y Pagos recibidos.
+- Reporte de IVA/libro de compras cuando el negocio lo defina.
+- Interiores de los 22 modales (pulido UI continuo).
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.
