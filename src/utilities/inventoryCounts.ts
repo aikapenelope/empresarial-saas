@@ -1,5 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
+import { runIsolatedContext } from './requestContext';
 import { extractId, getActiveDb, lockStockBalances } from './inventoryLedger';
 import type { InventoryCount, Product } from '@/payload-types';
 
@@ -111,7 +112,6 @@ export async function completeInventoryCount({
       depth: 0,
       req,
       overrideAccess: true,
-      context: { ...req.context, skipInventoryRecalculation: true },
     })) as Product | undefined;
 
     if (!product) {
@@ -121,10 +121,11 @@ export async function completeInventoryCount({
     const unitCost = Number(product.costUSD) || 0;
     const isEntry = delta > 0;
 
-    await req.payload.create({
-      collection: 'stock-movements',
-      data: {
-        reference: `CONTEO-${count.id}`,
+    await runIsolatedContext(req, () =>
+      req.payload.create({
+        collection: 'stock-movements',
+        data: {
+          reference: `CONTEO-${count.id}`,
         movementType: isEntry ? 'adjustment_positive' : 'adjustment_negative',
         product: productId,
         ...(isEntry
@@ -134,15 +135,16 @@ export async function completeInventoryCount({
         unitCostUSD: unitCost,
         totalCostUSD: Number((Math.abs(delta) * unitCost).toFixed(2)),
         tenant: tenantId as number,
-        reason: `Ajuste por conteo cíclico #${count.id} en ${warehouseId}`,
-      },
-      req,
-      overrideAccess: true,
-      context: {
-        ...req.context,
-        allowInternalStockUpdate: true,
-      },
-    });
+          reason: `Ajuste por conteo cíclico #${count.id} en ${warehouseId}`,
+        },
+        req,
+        overrideAccess: true,
+        context: {
+          ...req.context,
+          allowInternalStockUpdate: true,
+        },
+      }),
+    );
   }
 
   await req.payload.update({

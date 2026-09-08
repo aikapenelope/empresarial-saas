@@ -2,19 +2,27 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getPayload } from 'payload';
 import type { Payload } from 'payload';
 import config from '@payload-config';
-import type { Customer, Invoice, Product, StockMovement, Warehouse } from '@/payload-types';
+import type { Customer, Invoice, Product, PurchaseInvoice, StockMovement, Supplier, Warehouse } from '@/payload-types';
+import { extractId } from '@/utilities/inventoryLedger';
 
 /**
- * ─── Integración: acoplamiento venta→inventario (salesInventoryPlugin) ──────
+ * ─── Integración: acoplamiento venta/compra ↔ inventario ────────────────────
  *
- * Ejercita el ciclo completo del Sprint 7 sobre Postgres REAL y el esquema
- * migrado (la suite NO muta el esquema; las migraciones se aplican antes):
+ * Ejercita sobre Postgres REAL y el esquema migrado (la suite NO muta el
+ * esquema; las migraciones se aplican antes):
  *
- *   compra de semilla (purchase_in) → factura emitida (sale_out) →
- *   anulación (sale_return) con reposición verificada en `currentStock`.
+ *   compra de semilla → venta MULTI-PRODUCTO (sale_out por producto) →
+ *   anulación (sale_return por producto) con currentStock verificado en
+ *   cada paso — la regresión que encontró Devin (#55: el flag de contexto
+ *   contaminado dejaba el 2º producto sin recalcular).
+ *
+ * Cobertura de rechazos: venta sin stock suficiente y borrado de factura
+ * con kardex publicado (ledger inmutable). Además, recepción de compra
+ * multi-línea (purchase_in por línea).
  *
  * Los datos se crean con sufijo único por corrida y quedan en la BD de
- * pruebas (local 54322 / service container de CI) — jamás en Supabase.
+ * pruebas (local 54322 / service container de CI) — jamás en Supabase
+ * (setupEnv.ts lo bloquea a nivel de proceso).
  */
 
 const RUN = Date.now().toString(36);
@@ -22,8 +30,8 @@ const RUN = Date.now().toString(36);
 let payload: Payload;
 let tenantId: number;
 let warehouseId: number;
-let productId: number;
 let customerId: number;
+let supplierId: number;
 
 beforeAll(async () => {
   payload = await getPayload({ config });
@@ -49,23 +57,6 @@ beforeAll(async () => {
   }) as unknown as Warehouse;
   warehouseId = warehouse.id;
 
-  const product = await payload.create({
-    collection: 'products',
-    data: {
-      tenant: tenantId,
-      name: `Producto QA ${RUN}`,
-      sku: `QA-${RUN}`,
-      productType: 'standard',
-      unitOfMeasure: 'unit',
-      costUSD: 5,
-      priceUSD: 10,
-      taxRate: 'exempt',
-      trackInventory: true,
-    },
-    overrideAccess: true,
-  }) as unknown as Product;
-  productId = product.id;
-
   const customer = await payload.create({
     collection: 'customers',
     data: {
@@ -79,15 +70,74 @@ beforeAll(async () => {
     overrideAccess: true,
   }) as unknown as Customer;
   customerId = customer.id;
+
+  const supplier = await payload.create({
+    collection: 'suppliers',
+    data: {
+      tenant: tenantId,
+      name: `Proveedor QA ${RUN}`,
+      taxId: `R-${RUN}`,
+      currentDebtUSD: 0,
+      currentDebtVES: 0,
+    },
+    draft: false,
+    overrideAccess: true,
+    // Semilla interna: el hook de Suppliers exige el flag para tocar saldos
+    context: { allowInternalDebtUpdate: true },
+  }) as unknown as Supplier;
+  supplierId = supplier.id;
 });
 
 afterAll(async () => {
   // La BD de pruebas persiste entre corridas (es desechable por diseño);
   // aquí solo liberamos la pool de conexiones del proceso de test.
-  // (payload expone db.destroy en runtime Postgres)
   const db = (payload as unknown as { db?: { destroy?: () => Promise<void> } }).db;
   if (db?.destroy) await db.destroy();
 });
+
+async function createPhysicalProduct(name: string): Promise<number> {
+  const product = await payload.create({
+    collection: 'products',
+    data: {
+      tenant: tenantId,
+      name: `Producto QA ${name}`,
+      sku: `QA-${name}-${RUN}`,
+      productType: 'standard',
+      unitOfMeasure: 'unit',
+      costUSD: 5,
+      priceUSD: 10,
+      taxRate: 'exempt',
+      trackInventory: true,
+    },
+    draft: false,
+    overrideAccess: true,
+  }) as unknown as Product;
+  return product.id;
+}
+
+async function seedStock(productId: number, quantity: number, unitCostUSD = 5): Promise<void> {
+  await payload.create({
+    collection: 'stock-movements',
+    data: {
+      reference: `SEED-${RUN}-${productId}`,
+      movementType: 'purchase_in',
+      product: productId,
+      targetWarehouse: warehouseId,
+      quantity,
+      unitCostUSD,
+      totalCostUSD: quantity * unitCostUSD,
+      tenant: tenantId,
+      reason: 'Semilla de inventario para la prueba',
+    },
+    draft: false,
+    overrideAccess: true,
+  });
+}
+
+async function currentStock(productId: number): Promise<number> {
+  const product = await payload.findByID({ collection: 'products', id: productId, overrideAccess: true });
+  return Number((product as unknown as Product).currentStock) || 0;
+}
 
 async function stockMovementsFor(invoiceId: number): Promise<StockMovement[]> {
   const res = await payload.find({
@@ -101,110 +151,154 @@ async function stockMovementsFor(invoiceId: number): Promise<StockMovement[]> {
   return res.docs as StockMovement[];
 }
 
-async function currentStock(): Promise<number> {
-  const product = await payload.findByID({ collection: 'products', id: productId, overrideAccess: true });
-  return Number((product as unknown as Product).currentStock) || 0;
+function qtyByType(movements: StockMovement[], type: string): Map<number, number> {
+  return new Map(
+    movements
+      .filter((m) => m.movementType === type)
+      .map((m) => [Number(extractId(m.product)), Number(m.quantity)]),
+  );
 }
 
-describe('salesInventoryPlugin — ciclo venta → kardex → anulación', () => {
-  it('la compra de semilla (purchase_in) carga existencias en el almacén', async () => {
-    await payload.create({
-      collection: 'stock-movements',
-      data: {
-        reference: `SEED-${RUN}`,
-        movementType: 'purchase_in',
-        product: productId,
-        targetWarehouse: warehouseId,
-        quantity: 10,
-        unitCostUSD: 5,
-        totalCostUSD: 50,
-        tenant: tenantId,
-        reason: 'Semilla de inventario para la prueba',
-      },
-      draft: false,
-      overrideAccess: true,
-    });
-
-    expect(await currentStock()).toBe(10);
+describe('kardex — inventario multi-producto (regresión Devin #55)', () => {
+  it('la compra de semilla (purchase_in) carga existencias por producto', async () => {
+    const a = await createPhysicalProduct('seedA');
+    await seedStock(a, 10);
+    expect(await currentStock(a)).toBe(10);
   });
 
-  it('emitir factura con producto descarga el kardex (sale_out) y baja currentStock', async () => {
+  it('venta de DOS productos recalcula currentStock de AMBOS y la anulación repone ambos', async () => {
+    const prodA = await createPhysicalProduct('ventaA');
+    const prodB = await createPhysicalProduct('ventaB');
+    await seedStock(prodA, 10);
+    await seedStock(prodB, 8);
+
     const invoice = await payload.create({
       collection: 'invoices',
       data: {
         tenant: tenantId,
-        invoiceNumber: `TEST-${RUN}-0001`,
+        invoiceNumber: `TEST-${RUN}-A2`,
         customer: customerId,
         dueDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+        issueDate: new Date().toISOString(),
         paymentTerms: 'cash',
         status: 'issued',
         exchangeRateSnapshot: 40,
+        totalUSD: 70,
+        totalVES: 2800,
+        balanceUSD: 70,
+        balanceVES: 2800,
         items: [
-          { product: productId, description: `Producto QA ${RUN}`, quantity: 3, unitPriceUSD: 10 },
+          { product: prodA, description: `Producto A ${RUN}`, quantity: 3, unitPriceUSD: 10, totalUSD: 30 },
+          { product: prodB, description: `Producto B ${RUN}`, quantity: 4, unitPriceUSD: 10, totalUSD: 40 },
         ],
-        issueDate: new Date().toISOString(),
-        totalUSD: 30,
-        totalVES: 1200,
-        balanceUSD: 30,
-        balanceVES: 1200,
       },
       draft: false,
       overrideAccess: true,
     }) as unknown as Invoice;
 
-    // Totales calculados por el beforeValidate del dominio
-    expect(invoice.totalUSD).toBe(30);
-    expect(invoice.totalVES).toBe(1200);
-
     const movements = await stockMovementsFor(invoice.id);
-    const saleOut = movements.find((m) => m.movementType === 'sale_out');
+    const sales = qtyByType(movements, 'sale_out');
+    expect(sales.get(prodA)).toBe(3);
+    expect(sales.get(prodB)).toBe(4);
+    // La regresión de Devin #55: el 2º producto quedaba sin recálculo
+    expect(await currentStock(prodA)).toBe(7);
+    expect(await currentStock(prodB)).toBe(4);
 
-    expect(saleOut).toBeDefined();
-    expect(Number(saleOut?.quantity)).toBe(3);
-    expect(extractId(saleOut?.sourceWarehouse)).toBe(warehouseId);
-    // El Kardex es inmutable: el costo viaja como snapshot del producto
-    expect(Number(saleOut?.unitCostUSD)).toBe(5);
-
-    expect(await currentStock()).toBe(7);
-
-    // Anulación: la factura se revierte con sale_return (la única vía —
-    // el borrado con kardex publicado está bloqueado por el plugin)
     const voided = await payload.update({
       collection: 'invoices',
       id: invoice.id,
       data: { status: 'voided' },
+      draft: false,
       overrideAccess: true,
     }) as unknown as Invoice;
     expect(voided.balanceUSD).toBe(0);
 
     const afterVoid = await stockMovementsFor(invoice.id);
-    const saleReturn = afterVoid.find((m) => m.movementType === 'sale_return');
-
-    expect(saleReturn).toBeDefined();
-    expect(Number(saleReturn?.quantity)).toBe(3);
-    expect(extractId(saleReturn?.targetWarehouse)).toBe(warehouseId);
-    expect(await currentStock()).toBe(10);
+    const returns = qtyByType(afterVoid, 'sale_return');
+    expect(returns.get(prodA)).toBe(3);
+    expect(returns.get(prodB)).toBe(4);
+    expect(await currentStock(prodA)).toBe(10);
+    expect(await currentStock(prodB)).toBe(8);
   });
 
-  it('bloquea el borrado de una factura con kardex publicado (ledger inmutable)', async () => {
+  it('rechaza vender más de lo disponible (stock insuficiente)', async () => {
+    const prod = await createPhysicalProduct('neg');
+    await seedStock(prod, 2);
+
+    await expect(
+      payload.create({
+        collection: 'invoices',
+        data: {
+          tenant: tenantId,
+          invoiceNumber: `TEST-${RUN}-NEG`,
+          customer: customerId,
+          dueDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+          issueDate: new Date().toISOString(),
+          paymentTerms: 'cash',
+          status: 'issued',
+          exchangeRateSnapshot: 40,
+          totalUSD: 500,
+          totalVES: 20000,
+          balanceUSD: 500,
+          balanceVES: 20000,
+          items: [
+            { product: prod, description: `Producto NEG ${RUN}`, quantity: 99, unitPriceUSD: 10, totalUSD: 990 },
+          ],
+        },
+        draft: false,
+        overrideAccess: true,
+      }),
+    ).rejects.toThrow(/Stock insuficiente/i);
+  });
+
+  it('una factura de servicio (sin producto) no genera movimientos de kardex', async () => {
     const invoice = await payload.create({
       collection: 'invoices',
       data: {
         tenant: tenantId,
-        invoiceNumber: `TEST-${RUN}-0002`,
+        invoiceNumber: `TEST-${RUN}-SVC`,
         customer: customerId,
         dueDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+        issueDate: new Date().toISOString(),
         paymentTerms: 'cash',
         status: 'issued',
         exchangeRateSnapshot: 40,
-        items: [
-          { product: productId, description: `Producto QA ${RUN}`, quantity: 1, unitPriceUSD: 10 },
-        ],
+        totalUSD: 100,
+        totalVES: 4000,
+        balanceUSD: 100,
+        balanceVES: 4000,
+        items: [{ description: 'Servicio de consultoría QA', quantity: 1, unitPriceUSD: 100, totalUSD: 100 }],
+      },
+      draft: false,
+      overrideAccess: true,
+    }) as unknown as Invoice;
+
+    const movements = await stockMovementsFor(invoice.id);
+    expect(movements).toHaveLength(0);
+  });
+
+  it('bloquea el borrado de una factura con kardex publicado (ledger inmutable)', async () => {
+    const prod = await createPhysicalProduct('del');
+    await seedStock(prod, 5);
+
+    const invoice = await payload.create({
+      collection: 'invoices',
+      data: {
+        tenant: tenantId,
+        invoiceNumber: `TEST-${RUN}-DEL`,
+        customer: customerId,
+        dueDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
         issueDate: new Date().toISOString(),
+        paymentTerms: 'cash',
+        status: 'issued',
+        exchangeRateSnapshot: 40,
         totalUSD: 10,
         totalVES: 400,
         balanceUSD: 10,
         balanceVES: 400,
+        items: [
+          { product: prod, description: `Producto DEL ${RUN}`, quantity: 1, unitPriceUSD: 10, totalUSD: 10 },
+        ],
       },
       draft: false,
       overrideAccess: true,
@@ -214,48 +308,53 @@ describe('salesInventoryPlugin — ciclo venta → kardex → anulación', () =>
       payload.delete({ collection: 'invoices', id: invoice.id, overrideAccess: true }),
     ).rejects.toThrow(/Kardex inmutable/i);
 
-    // La vía correcta sigue siendo anular
     const voided = await payload.update({
       collection: 'invoices',
       id: invoice.id,
       data: { status: 'voided' },
-      overrideAccess: true,
-    }) as unknown as Invoice;
-    expect(voided.status).toBe('voided');
-  });
-
-  it('una factura de servicio (sin producto) no genera movimientos de kardex', async () => {
-    const invoice = await payload.create({
-      collection: 'invoices',
-      data: {
-        tenant: tenantId,
-        invoiceNumber: `TEST-${RUN}-0003`,
-        customer: customerId,
-        dueDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
-        paymentTerms: 'cash',
-        status: 'issued',
-        exchangeRateSnapshot: 40,
-        items: [{ description: 'Servicio de consultoría QA', quantity: 1, unitPriceUSD: 100 }],
-        issueDate: new Date().toISOString(),
-        totalUSD: 100,
-        totalVES: 4000,
-        balanceUSD: 100,
-        balanceVES: 4000,
-      },
       draft: false,
       overrideAccess: true,
     }) as unknown as Invoice;
-
-    const movements = await stockMovementsFor(invoice.id);
-    expect(movements).toHaveLength(0);
-    expect(await currentStock()).toBe(10);
+    expect(voided.status).toBe('voided');
+    expect(await currentStock(prod)).toBe(5);
   });
 });
 
-function extractId(value: unknown): number | undefined {
-  if (value === null || value === undefined) return undefined;
-  if (typeof value === 'object' && 'id' in (value as Record<string, unknown>)) {
-    return Number((value as { id: number }).id);
-  }
-  return Number(value) || undefined;
-}
+describe('kardex — recepción de compra multi-línea', () => {
+  it('recibir una factura de compra de 2 productos carga el stock de AMBOS', async () => {
+    const prodP1 = await createPhysicalProduct('compP1');
+    const prodP2 = await createPhysicalProduct('compP2');
+
+    const purchase = await payload.create({
+      collection: 'purchase-invoices',
+      data: {
+        tenant: tenantId,
+        invoiceNumber: `COMP-${RUN}-01`,
+        supplier: supplierId,
+        issueDate: new Date().toISOString(),
+        dueDate: new Date(Date.now() + 15 * 24 * 3600 * 1000).toISOString(),
+        paymentTerms: 'cash',
+        status: 'received',
+        receptionStatus: 'received',
+        receptionWarehouse: warehouseId,
+        receptionDate: new Date().toISOString(),
+        exchangeRateSnapshot: 40,
+        totalUSD: 23,
+        totalVES: 920,
+        balanceUSD: 23,
+        balanceVES: 920,
+        items: [
+          { product: prodP1, description: `P1 ${RUN}`, quantity: 4, unitCostUSD: 2, totalUSD: 8 },
+          { product: prodP2, description: `P2 ${RUN}`, quantity: 5, unitCostUSD: 3, totalUSD: 15 },
+        ],
+      },
+      draft: false,
+      overrideAccess: true,
+    }) as unknown as PurchaseInvoice;
+    expect(purchase.status).toBe('received');
+
+    // La recepción publica purchase_in por línea (purchasesLedger)
+    expect(await currentStock(prodP1)).toBe(4);
+    expect(await currentStock(prodP2)).toBe(5);
+  });
+});

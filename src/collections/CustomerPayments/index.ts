@@ -58,10 +58,6 @@ const beforeValidatePayment: CollectionBeforeValidateHook = async ({ data, req }
           id: invoiceId,
           depth: 0,
           req,
-          context: {
-            ...req.context,
-            skipBalanceRecalculation: true,
-          },
         });
 
         if (!invoice) {
@@ -195,10 +191,6 @@ const beforeDeletePayment: CollectionBeforeDeleteHook = async ({ id: _id, req })
     id: _id,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
   });
 
   if (doc?.status === 'confirmed' && Array.isArray(doc.allocations)) {

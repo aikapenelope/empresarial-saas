@@ -17,6 +17,17 @@ loadDotenv();
 const testDatabaseUrl =
   process.env.TEST_DATABASE_URL || 'postgresql://postgres@127.0.0.1:54322/empresarial_dev';
 
+// Guardarraíl anti-producción (hallazgo Devin #55): la suite crea registros
+// reales persistentes, así que SOLO acepta Postgres en loopback. Cualquier
+// host remoto (Supabase, staging, otro proyecto) aborta antes de conectar.
+const parsedDbUrl = new URL(testDatabaseUrl);
+if (!['localhost', '127.0.0.1', '::1'].includes(parsedDbUrl.hostname)) {
+  throw new Error(
+    `TEST_DATABASE_URL debe apuntar a un Postgres LOCAL (loopback); se recibió "${parsedDbUrl.hostname}". ` +
+      'La suite escribe registros de negocio reales: jamás debe apuntar a Supabase ni a staging.',
+  );
+}
+
 process.env.DATABASE_URI = testDatabaseUrl;
 process.env.DATABASE_DIRECT_URL = testDatabaseUrl;
 
