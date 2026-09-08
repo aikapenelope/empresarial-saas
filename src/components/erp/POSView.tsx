@@ -158,9 +158,10 @@ export function POSView({
     }
     setError(null);
     // El precio facturado es el del input: tier efectivo por defecto o el
-    // ajuste manual del cajero (éste prevalece sobre el tier).
+    // ajuste manual del cajero (incluye 0, p. ej. regalos/cortesías — éste
+    // prevalece sobre el tier).
     const tieredUnitPrice = priceFor(prod);
-    const linePrice = Number.isFinite(unitPriceUSD) && unitPriceUSD > 0 ? unitPriceUSD : tieredUnitPrice;
+    const linePrice = Number.isFinite(unitPriceUSD) && unitPriceUSD >= 0 ? unitPriceUSD : tieredUnitPrice;
     setCart((prev) => {
       const existing = prev.find(
         (l) => l.productId === prod.id && l.unitPriceUSD === linePrice,

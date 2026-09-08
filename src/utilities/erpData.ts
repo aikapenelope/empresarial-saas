@@ -462,15 +462,20 @@ export async function getCashClosuresList(tenantId: number): Promise<CashClosure
 }
 
 /**
- * Pagos recibidos del inquilino (recaudación real con métodos y tasa snapshot).
- * Base del mix de métodos de pago (fix Devin #49): agrega lo COBRADO, no los
- * conteos físicos del arqueo (que incluyen fondo de apertura).
+ * Pagos CONFIRMADOS del inquilino (recaudación real con métodos y tasa
+ * snapshot). Base del mix de métodos de pago (fix Devin #49): agrega lo
+ * COBRADO — pending/rejected no son recaudación y no cuentan.
  */
 export async function getCustomerPaymentsList(tenantId: number): Promise<CustomerPayment[]> {
   const user = await requireErpTenantAccess(tenantId);
   return findAllDocs<CustomerPayment>({
     collection: 'customer-payments',
-    where: { tenant: { equals: tenantId } },
+    where: {
+      and: [
+        { tenant: { equals: tenantId } },
+        { status: { equals: 'confirmed' } },
+      ],
+    },
     depth: 0,
     sort: '-createdAt',
     user,
