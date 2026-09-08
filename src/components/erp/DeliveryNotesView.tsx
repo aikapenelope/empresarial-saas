@@ -25,7 +25,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { issueInvoiceFromOrderAction, voidDeliveryNoteAction } from '@/actions/erpActions';
+import { voidDeliveryNoteAction } from '@/actions/erpActions';
+import { InvoiceDeliveryNoteModal } from './modals/InvoiceDeliveryNoteModal';
 import { ShareDocButtons } from './ShareDocButtons';
 import type { DeliveryNote } from '@/payload-types';
 
@@ -33,6 +34,7 @@ interface DeliveryNotesViewProps {
   tenantId: number;
   tenantSlug: string;
   notes: DeliveryNote[];
+  cashRegisters?: Array<{ id: number; name: string; currentStatus: string }>;
 }
 
 const STATUS_BADGE: Record<string, { variant: 'slate' | 'amber' | 'emerald' | 'rose'; label: string }> = {
@@ -40,35 +42,17 @@ const STATUS_BADGE: Record<string, { variant: 'slate' | 'amber' | 'emerald' | 'r
   voided: { variant: 'rose', label: 'Anulada' },
 };
 
-export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotesViewProps) {
+export function DeliveryNotesView({
+  tenantId,
+  tenantSlug,
+  notes,
+  cashRegisters = [],
+}: DeliveryNotesViewProps) {
   const [busyNoteId, setBusyNoteId] = useState<number | undefined>(undefined);
-  const [invoicingNoteId, setInvoicingNoteId] = useState<number | undefined>(undefined);
+  const [invoicingNote, setInvoicingNote] = useState<DeliveryNote | undefined>(undefined);
 
   const issued = notes.filter((n) => n.status === 'issued');
   const issuedValue = issued.reduce((acc, n) => acc + (Number(n.totalUSD) || 0), 0);
-
-  // Factura el pedido padre (Sprint 41): entrega documentada con nota, factura
-  // opcional a demanda. El action rechaza si el pedido ya fue facturado.
-  const handleInvoice = async (note: DeliveryNote) => {
-    const orderId = typeof note.order === 'object' && note.order !== null ? note.order.id : note.order;
-    if (!orderId) {
-      toast.error('La remisión no tiene pedido asociado.');
-      return;
-    }
-    setInvoicingNoteId(note.id);
-    const res = await issueInvoiceFromOrderAction({
-      tenantId,
-      tenantSlug,
-      orderId: Number(orderId),
-      paymentTerms: 'credit',
-    });
-    setInvoicingNoteId(undefined);
-    if (res.success) {
-      toast.success('Factura emitida desde la remisión.');
-    } else {
-      toast.error(res.error || 'No se pudo facturar.');
-    }
-  };
 
   const handleVoid = async (noteId: number) => {
     setBusyNoteId(noteId);
@@ -218,8 +202,8 @@ export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotes
                                 size="sm"
                                 variant="outline"
                                 className="h-7 px-2 text-[11px]"
-                                onClick={() => handleInvoice(n)}
-                                disabled={invoicingNoteId === n.id}
+                                onClick={() => setInvoicingNote(n)}
+                                disabled={Boolean(invoicingNote)}
                               >
                                 <FileText className="h-3 w-3" aria-hidden="true" />
                                 <span>Facturar</span>
@@ -246,6 +230,25 @@ export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotes
           </div>
         )}
       </div>
+
+      {invoicingNote && (
+        <InvoiceDeliveryNoteModal
+          isOpen
+          onClose={() => setInvoicingNote(undefined)}
+          tenantId={tenantId}
+          tenantSlug={tenantSlug}
+          note={{
+            id: invoicingNote.id,
+            noteNumber: invoicingNote.noteNumber,
+            orderId:
+              typeof invoicingNote.order === 'object' && invoicingNote.order !== null
+                ? invoicingNote.order.id
+                : Number(invoicingNote.order),
+          }}
+          cashRegisters={cashRegisters}
+          onInvoiced={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }
