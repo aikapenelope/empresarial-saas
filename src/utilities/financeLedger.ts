@@ -1,5 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
+import { runIsolatedContext } from './requestContext';
 
 export interface RecalculateBalanceResult {
   currentDebtUSD: number;
@@ -131,10 +132,6 @@ export async function getInvoicePaidAmount(
     limit: 500,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
   });
 
   let totalPaid = 0;
@@ -248,7 +245,8 @@ export async function recalculateCustomerBalance(
   const roundedVES = Number(currentDebtVES.toFixed(2));
   const roundedOverdueUSD = Number(overdueDebtUSD.toFixed(2));
 
-  await req.payload.update({
+  await runIsolatedContext(req, () =>
+  req.payload.update({
     collection: 'customers',
     id: customerId,
     data: {
@@ -261,7 +259,8 @@ export async function recalculateCustomerBalance(
       ...req.context,
       skipBalanceRecalculation: true,
     },
-  });
+  }),
+  );
 
   return {
     currentDebtUSD: roundedUSD,
@@ -346,7 +345,8 @@ export async function applyPaymentAllocations(
       newStatus = 'partially_paid';
     }
 
-    await req.payload.update({
+    await runIsolatedContext(req, () =>
+    req.payload.update({
       collection: 'invoices',
       id: invoiceId,
       data: {
@@ -359,7 +359,8 @@ export async function applyPaymentAllocations(
         ...req.context,
         skipBalanceRecalculation: true,
       },
-    });
+    }),
+    );
   }
 }
 
@@ -424,7 +425,8 @@ export async function reversePaymentAllocations(
       newStatus = 'partially_paid';
     }
 
-    await req.payload.update({
+    await runIsolatedContext(req, () =>
+    req.payload.update({
       collection: 'invoices',
       id: invoiceId,
       data: {
@@ -437,6 +439,7 @@ export async function reversePaymentAllocations(
         ...req.context,
         skipBalanceRecalculation: true,
       },
-    });
+    }),
+    );
   }
 }

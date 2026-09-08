@@ -1,5 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
+import { runIsolatedContext } from './requestContext';
 import { extractId, getActiveDb, lockStockBalances } from './inventoryLedger';
 import type { Invoice, Product, Warehouse } from '@/payload-types';
 
@@ -93,10 +94,6 @@ export async function applySaleStockDeduction(
     id: invoiceId,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
   })) as Invoice | undefined;
 
   if (!invoice) {
@@ -145,10 +142,6 @@ export async function applySaleStockDeduction(
       depth: 0,
       req,
       overrideAccess: true,
-      context: {
-        ...req.context,
-        skipInventoryRecalculation: true,
-      },
     })) as Product | undefined;
 
     if (!product) {
@@ -169,7 +162,8 @@ export async function applySaleStockDeduction(
 
     const unitCost = Number(product.costUSD) || 0;
 
-    await req.payload.create({
+    await runIsolatedContext(req, () =>
+    req.payload.create({
       collection: 'stock-movements',
       data: {
         reference: `VENTA-${invoice.invoiceNumber}`,
@@ -189,7 +183,8 @@ export async function applySaleStockDeduction(
         ...req.context,
         allowInternalStockUpdate: true,
       },
-    });
+    }),
+    );
 
     movementsCreated++;
   }
@@ -245,10 +240,6 @@ export async function revertSaleFromInventory(
     id: invoiceId,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
   })) as Invoice | undefined;
 
   if (!invoice) {
@@ -274,7 +265,8 @@ export async function revertSaleFromInventory(
       continue; // Ya devuelto completamente (devoluciones parciales previas)
     }
 
-    await req.payload.create({
+    await runIsolatedContext(req, () =>
+    req.payload.create({
       collection: 'stock-movements',
       data: {
         reference: `DEVOL-${invoice.invoiceNumber}`,
@@ -294,7 +286,8 @@ export async function revertSaleFromInventory(
         ...req.context,
         allowInternalStockUpdate: true,
       },
-    });
+    }),
+    );
 
     reversalsCreated++;
   }
@@ -404,7 +397,8 @@ export async function returnSaleLines({
 
       const toReturn = Math.min(remainingRequest, available);
 
-      await req.payload.create({
+      await runIsolatedContext(req, () =>
+      req.payload.create({
         collection: 'stock-movements',
         data: {
           reference: `DEVOL-${invoice.invoiceNumber}`,
@@ -426,7 +420,8 @@ export async function returnSaleLines({
           ...req.context,
           allowInternalStockUpdate: true,
         },
-      });
+      }),
+      );
 
       movementsCreated++;
       remainingRequest = Number((remainingRequest - toReturn).toFixed(4));

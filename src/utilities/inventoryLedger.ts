@@ -1,5 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
+import { runIsolatedContext } from './requestContext';
 import type { BillOfMaterial, Product } from '../payload-types';
 
 export interface WarehouseStockResult {
@@ -189,19 +190,21 @@ export async function recalculateProductTotalStock(
   const rawTotal = result.rows?.[0]?.total_stock;
   const roundedStock = Number(Number(rawTotal || 0).toFixed(4));
 
-  await req.payload.update({
-    collection: 'products',
-    id: productId,
-    data: {
-      currentStock: roundedStock,
-    },
-    req,
-    context: {
-      ...req.context,
-      skipInventoryRecalculation: true,
-      allowInternalStockUpdate: true,
-    },
-  });
+  await runIsolatedContext(req, () =>
+    req.payload.update({
+      collection: 'products',
+      id: productId,
+      data: {
+        currentStock: roundedStock,
+      },
+      req,
+      context: {
+        ...req.context,
+        skipInventoryRecalculation: true,
+        allowInternalStockUpdate: true,
+      },
+    }),
+  );
 
   return roundedStock;
 }
@@ -287,10 +290,6 @@ export async function executeProductionOrder(
     id: orderId,
     depth: 2,
     req,
-    context: {
-      ...req.context,
-      skipInventoryRecalculation: true,
-    },
   });
 
   if (!order) {
@@ -373,7 +372,6 @@ export async function executeProductionOrder(
             id: rawId,
             depth: 0,
             req,
-            context: { ...req.context, skipInventoryRecalculation: true },
           });
 
     const rawName = rawProductDoc?.name || `ID ${rawId}`;
@@ -411,7 +409,8 @@ export async function executeProductionOrder(
     req,
   );
   for (const plan of orderedPlan) {
-    await req.payload.create({
+    await runIsolatedContext(req, () =>
+    req.payload.create({
       collection: 'stock-movements',
       data: {
         reference: `CONSUMO-OP-${order.orderNumber || orderId}`,
@@ -430,7 +429,8 @@ export async function executeProductionOrder(
         ...req.context,
         skipInventoryRecalculation: true,
       },
-    });
+    }),
+    );
 
     // Update raw material total on-hand stock
     await recalculateProductTotalStock(plan.rawMaterialId, req);
@@ -448,7 +448,6 @@ export async function executeProductionOrder(
     id: finishedProductId,
     depth: 0,
     req,
-    context: { ...req.context, skipInventoryRecalculation: true },
   });
 
   const priorStock = Math.max(0, Number(finishedProductDoc?.currentStock) || 0);
@@ -463,7 +462,8 @@ export async function executeProductionOrder(
   }
 
   // Create immutable production output movement
-  await req.payload.create({
+  await runIsolatedContext(req, () =>
+  req.payload.create({
     collection: 'stock-movements',
     data: {
       reference: `PRODUCCION-OP-${order.orderNumber || orderId}`,
@@ -482,10 +482,12 @@ export async function executeProductionOrder(
       ...req.context,
       skipInventoryRecalculation: true,
     },
-  });
+  }),
+  );
 
   // Update finished product stock & weighted average cost
-  await req.payload.update({
+  await runIsolatedContext(req, () =>
+  req.payload.update({
     collection: 'products',
     id: finishedProductId,
     data: {
@@ -496,7 +498,8 @@ export async function executeProductionOrder(
       ...req.context,
       skipInventoryRecalculation: true,
     },
-  });
+  }),
+  );
 
   await recalculateProductTotalStock(finishedProductId, req);
 
@@ -542,7 +545,8 @@ export async function updateProductWeightedCostOnPurchase(
     );
   }
 
-  await req.payload.update({
+  await runIsolatedContext(req, () =>
+  req.payload.update({
     collection: 'products',
     id: productId,
     data: {
@@ -553,7 +557,8 @@ export async function updateProductWeightedCostOnPurchase(
       ...req.context,
       skipInventoryRecalculation: true,
     },
-  });
+  }),
+  );
 
   return newWeightedCostUSD;
 }

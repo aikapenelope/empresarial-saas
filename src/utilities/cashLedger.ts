@@ -1,4 +1,5 @@
 import type { PayloadRequest, Where } from 'payload';
+import { runIsolatedContext } from './requestContext';
 
 export interface ShiftMethodTotals {
   cashUSD: number;
@@ -447,17 +448,19 @@ export async function updateCashRegisterOperationalStatus({
   const numericClosureId =
     normClosure !== null ? (typeof normClosure === 'number' ? normClosure : Number(normClosure)) : null;
 
-  await req.payload.update({
-    collection: 'cash-registers',
-    id: numericRegisterId,
-    data: {
-      currentStatus: newStatus,
-      currentClosure: newStatus === 'open' ? numericClosureId : null,
-    },
-    req,
-    context: {
-      ...req.context,
-      skipStatusValidation: true,
-    },
-  });
+  await runIsolatedContext(req, () =>
+    req.payload.update({
+      collection: 'cash-registers',
+      id: numericRegisterId,
+      data: {
+        currentStatus: newStatus,
+        currentClosure: newStatus === 'open' ? numericClosureId : null,
+      },
+      req,
+      context: {
+        ...req.context,
+        skipStatusValidation: true,
+      },
+    }),
+  );
 }

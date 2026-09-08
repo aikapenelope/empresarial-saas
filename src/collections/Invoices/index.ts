@@ -9,6 +9,7 @@ import {
   getInvoicePaidAmount,
   recalculateCustomerBalance,
 } from '../../utilities/financeLedger';
+import { runIsolatedContext } from '../../utilities/requestContext';
 
 const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
   data,
@@ -207,13 +208,15 @@ const afterChangeInvoice: CollectionAfterChangeHook = async ({
     });
 
     if (changed) {
-      await req.payload.update({
-        collection: 'invoices',
-        id: doc.id,
-        data: { installments: reconciled as never },
-        req,
-        context: { ...req.context, skipBalanceRecalculation: true },
-      });
+      await runIsolatedContext(req, () =>
+        req.payload.update({
+          collection: 'invoices',
+          id: doc.id,
+          data: { installments: reconciled as never },
+          req,
+          context: { ...req.context, skipBalanceRecalculation: true },
+        }),
+      );
     }
   }
 

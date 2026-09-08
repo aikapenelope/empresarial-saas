@@ -1,5 +1,6 @@
 import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
+import { runIsolatedContext } from './requestContext';
 import type { Product } from '@/payload-types';
 
 export interface SupplierRecalculateBalanceResult {
@@ -106,10 +107,6 @@ export async function fetchAllSupplierOpenInvoices(
       page,
       depth: 0,
       req,
-      context: {
-        ...req.context,
-        skipBalanceRecalculation: true,
-      },
     });
 
     allDocs.push(...(res.docs as unknown as Array<Record<string, unknown>>));
@@ -149,10 +146,6 @@ export async function getPurchaseInvoicePaidAmount(
     limit: 500,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
   });
 
   let totalPaid = 0;
@@ -319,21 +312,23 @@ export async function recalculateSupplierBalance(
   const roundedVES = Number(currentDebtVES.toFixed(2));
   const roundedOverdueUSD = Number(overdueDebtUSD.toFixed(2));
 
-  await req.payload.update({
-    collection: 'suppliers',
-    id: supplierId,
-    data: {
-      currentDebtUSD: roundedUSD,
-      currentDebtVES: roundedVES,
-      overdueDebtUSD: roundedOverdueUSD,
-    },
-    req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-      allowInternalDebtUpdate: true,
-    },
-  });
+  await runIsolatedContext(req, () =>
+    req.payload.update({
+      collection: 'suppliers',
+      id: supplierId,
+      data: {
+        currentDebtUSD: roundedUSD,
+        currentDebtVES: roundedVES,
+        overdueDebtUSD: roundedOverdueUSD,
+      },
+      req,
+      context: {
+        ...req.context,
+        skipBalanceRecalculation: true,
+        allowInternalDebtUpdate: true,
+      },
+    }),
+  );
 
   return {
     currentDebtUSD: roundedUSD,
@@ -417,20 +412,22 @@ export async function applySupplierPaymentAllocations(
       newStatus = 'partially_paid';
     }
 
-    await req.payload.update({
-      collection: 'purchase-invoices',
-      id: invoiceId,
-      data: {
-        balanceUSD: newBalUSD,
-        balanceVES: newBalVES,
-        status: newStatus as 'draft' | 'received' | 'partially_paid' | 'paid' | 'voided',
-      },
-      req,
-      context: {
-        ...req.context,
-        skipBalanceRecalculation: true,
-      },
-    });
+    await runIsolatedContext(req, () =>
+      req.payload.update({
+        collection: 'purchase-invoices',
+        id: invoiceId,
+        data: {
+          balanceUSD: newBalUSD,
+          balanceVES: newBalVES,
+          status: newStatus as 'draft' | 'received' | 'partially_paid' | 'paid' | 'voided',
+        },
+        req,
+        context: {
+          ...req.context,
+          skipBalanceRecalculation: true,
+        },
+      }),
+    );
   }
 }
 
@@ -493,20 +490,22 @@ export async function reverseSupplierPaymentAllocations(
       newStatus = 'partially_paid';
     }
 
-    await req.payload.update({
-      collection: 'purchase-invoices',
-      id: invoiceId,
-      data: {
-        balanceUSD: newBalUSD,
-        balanceVES: newBalVES,
-        status: newStatus as 'draft' | 'received' | 'partially_paid' | 'paid' | 'voided',
-      },
-      req,
-      context: {
-        ...req.context,
-        skipBalanceRecalculation: true,
-      },
-    });
+    await runIsolatedContext(req, () =>
+      req.payload.update({
+        collection: 'purchase-invoices',
+        id: invoiceId,
+        data: {
+          balanceUSD: newBalUSD,
+          balanceVES: newBalVES,
+          status: newStatus as 'draft' | 'received' | 'partially_paid' | 'paid' | 'voided',
+        },
+        req,
+        context: {
+          ...req.context,
+          skipBalanceRecalculation: true,
+        },
+      }),
+    );
   }
 }
 
@@ -548,11 +547,6 @@ export async function postPurchaseReceptionMovements(
     id: invoiceId,
     depth: 1,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-      skipInventoryRecalculation: true,
-    },
   });
 
   if (!invoice) {
@@ -584,11 +578,6 @@ export async function postPurchaseReceptionMovements(
             id: productId as number,
             depth: 0,
             req,
-            context: {
-              ...req.context,
-              skipBalanceRecalculation: true,
-              skipInventoryRecalculation: true,
-            },
           });
     if (productDoc.productType === 'service') continue;
 
@@ -597,27 +586,29 @@ export async function postPurchaseReceptionMovements(
 
     const unitCost = Number(item.unitCostUSD) || 0;
 
-    await req.payload.create({
-      collection: 'stock-movements',
-      data: {
-        reference: `COMPRA-${invoice.invoiceNumber}`,
-        movementType: 'purchase_in',
-        product: productId as number,
-        targetWarehouse: warehouseId as number,
-        quantity: qty,
-        unitCostUSD: unitCost,
-        totalCostUSD: Number((qty * unitCost).toFixed(2)),
-        purchaseInvoice: invoiceId as number,
-        tenant: tenantId as number,
-        reason: `Recepción de compra según factura ${invoice.invoiceNumber}`,
-      },
-      req,
-      context: {
-        ...req.context,
-        allowInternalStockUpdate: true,
-        allowInternalCostUpdate: true,
-      },
-    });
+    await runIsolatedContext(req, () =>
+      req.payload.create({
+        collection: 'stock-movements',
+        data: {
+          reference: `COMPRA-${invoice.invoiceNumber}`,
+          movementType: 'purchase_in',
+          product: productId as number,
+          targetWarehouse: warehouseId as number,
+          quantity: qty,
+          unitCostUSD: unitCost,
+          totalCostUSD: Number((qty * unitCost).toFixed(2)),
+          purchaseInvoice: invoiceId as number,
+          tenant: tenantId as number,
+          reason: `Recepción de compra según factura ${invoice.invoiceNumber}`,
+        },
+        req,
+        context: {
+          ...req.context,
+          allowInternalStockUpdate: true,
+          allowInternalCostUpdate: true,
+        },
+      }),
+    );
 
     movementsCreated++;
   }

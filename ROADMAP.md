@@ -316,11 +316,18 @@ Cada sprint concluye con:
 ### ⚡ Sprint 18: Rendimiento, Paginación y Pruebas E2E
 > **Objetivo:** Cierre no funcional de la capa de presentación (ítem pendiente del Sprint 6 original).
 
-- [ ] **Paginación server-side** en listas grandes (facturas, clientes, productos, kardex): `limit` + botón "cargar más" o cursor, manteniendo los agregados sin truncar.
+- [x] **Paginación server-side** en listados de negocio (facturas, cotizaciones): completada por el Sprint 39 (`getInvoicesPage`/`getQuotesPage` + `BusinessFiltersBar`); extensiones a pedidos/compras/pagos quedan en Pendiente Fase 10.
+- [x] **Infraestructura de tests (vitest) + CI en GitHub Actions** (PR `test/sprint18-vitest-ci`):
+  - `tests/unit/`: utilidades puras — calendario de negocio UTC-4 (`buildBusinessDateRange`), `formatBusinessDate` (America/Caracas), schemas Zod tolerantes y neutralización de fórmulas CSV.
+  - `tests/integration/`: Local API contra Postgres REAL (cluster local `scripts/db-local.sh` :54322 / service container de CI), con migraciones aplicadas ANTES — primer flujo probado: compra → venta → anulación con kardex y `currentStock` verificados.
+  - `.github/workflows/ci.yml`: Postgres 17 efímero por run + `pnpm migrate` + `typecheck` + `lint` + `vitest`. El build de producción NO se duplica (Vercel lo cubre en el PR).
+  - 🐞 **Bug de producción encontrado por el test:** los flags de contexto (`skipInventoryRecalculation`/`skipBalanceRecalculation`) pasados a operaciones de LECTURA (`findByID`/`find`) mutan `req.context` de toda la petición (Payload `createLocalReq` hace merge) y desactivaban en cascada los recálculos posteriores — `currentStock` jamás se actualizaba al crear movimientos. Corregido en la cadena venta→inventario (StockMovements, salesLedger, inventoryLedger, financeLedger): los flags solo viven en escrituras, donde sí rompen la recursión.
+  - 🐞 **Ronda Devin #55 — el fix anterior era insuficiente:** las ESCRITURAS internas también contaminan (`recalculateProductTotalStock` actualiza el producto con flags en el contexto compartido → en una venta de N productos solo el Nº1 recalculaba; igual en recepciones multi-línea y producción). Solución estructural: utilitario `runIsolatedContext` (requestContext.ts) que ejecuta cada operación interna con el flag aislado y RESTAURA el contexto del llamador. Aplicado en inventoryLedger, salesLedger, purchasesLedger, financeLedger, cashLedger, inventoryCounts, Invoices (cuotas) + lectura blindada en CustomerPayments. Tests nuevos: venta de 2 productos (recalcula AMBOS), recepción de compra multi-línea, rechazo por stock insuficiente. Deuda de la misma clase documentada: sites en inventoryImport, ProductionOrders (colección) y BillOfMaterials.
+  - 🔒 **setupEnv blindado (hallazgo Devin #55):** `TEST_DATABASE_URL` solo acepta hosts en loopback — la suite no puede apuntar a Supabase/staging ni por accidente.
 - [ ] **Core Web Vitals:** auditoría Lighthouse en Vercel (LCP/CLS/INP), optimizar bundles de vistas cliente (`next/dynamic` para modales pesados) y revisar First Load JS.
-- [ ] **Pruebas E2E con Playwright** sobre los flujos críticos: venta de contado en POS con caja abierta (recibo + kardex), cobro FIFO, anulación con reversión, conversión de cotización, importación de inventario, conteo cíclico con ajustes, aislamiento multi-tenant (usuario B no ve inquilino A).
-- [ ] **CI:** ejecutar E2E contra preview de Vercel en cada PR.
-- **Entregable:** PR `feat/sprint-18-e2e-perf`.
+- [ ] **Pruebas E2E con Playwright** sobre los flujos críticos: venta de contado en POS con caja abierta (recibo + kardex), cobro FIFO, anulación con reversión, conversión de cotización, importación de inventario, conteo cíclico con ajustes, aislamiento multi-tenant (usuario B no ve inquilino A). El kardex/venta ya queda cubierto a nivel de integración.
+- [ ] **CI (extensión):** correr la suite Playwright en el workflow de CI contra el build local del runner (sin gastar cuota de Vercel).
+- **Entregable:** PR `test/sprint18-vitest-ci` (infra + CI) → PR posterior `feat/sprint-18-e2e-perf` (Playwright + CWV).
 
 ---
 
