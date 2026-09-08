@@ -1,14 +1,25 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ClipboardList, Truck } from 'lucide-react';
+import { ClipboardList, Truck } from 'lucide-react';
 import { getTenantBySlug, getOrderDetail } from '@/utilities/erpData';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
+import { ErpPageHeader } from '@/components/erp/ErpPageHeader';
 import { PrintButton } from '@/components/erp/PrintButton';
 import { IssueDeliveryNoteButton } from '@/components/erp/IssueDeliveryNoteButton';
 import { Badge } from '@/components/erp/Badge';
 import { formatUSD, formatVES } from '@/components/erp/format';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface PageProps {
   params: Promise<{ tenant: string; id: string }>;
@@ -60,188 +71,183 @@ export default async function OrderDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       {/* Header (no imprime) */}
-      <div className="no-print flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp/orders`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Pedidos
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-mono font-semibold text-indigo-400">{order.orderNumber}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {order.status === 'confirmed' && (
-            <IssueDeliveryNoteButton
-              tenantId={tenant.id}
-              tenantSlug={tenantSlug}
-              order={{ id: order.id, orderNumber: order.orderNumber }}
-              lines={(Array.isArray(order.items) ? order.items : []).map((it, index) => ({
-                index,
-                description: it.description,
-                sku: it.sku,
-                ordered: Number(it.quantity) || 0,
-                dispatched: data.dispatchedByIndex[index] || 0,
-              }))}
-            />
-          )}
-          {invoiceId && (
-            <Link
-              href={`/${tenantSlug}/erp/invoices/${invoiceId}`}
-              className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-600/10 text-xs font-semibold text-indigo-300 hover:bg-indigo-600 hover:text-white transition-colors"
-            >
-              Ver Factura Emitida
-            </Link>
-          )}
-          <PrintButton label="Imprimir Pedido" />
-        </div>
+      <div className="no-print">
+        <ErpPageHeader
+          title={order.orderNumber || `Pedido #${order.id}`}
+          breadcrumbHref={`/${tenantSlug}/erp/orders`}
+          breadcrumbLabel="Pedidos"
+          actions={
+            <>
+              {order.status === 'confirmed' && (
+                <IssueDeliveryNoteButton
+                  tenantId={tenant.id}
+                  tenantSlug={tenantSlug}
+                  order={{ id: order.id, orderNumber: order.orderNumber }}
+                  lines={(Array.isArray(order.items) ? order.items : []).map((it, index) => ({
+                    index,
+                    description: it.description,
+                    sku: it.sku,
+                    ordered: Number(it.quantity) || 0,
+                    dispatched: data.dispatchedByIndex[index] || 0,
+                  }))}
+                />
+              )}
+              {invoiceId && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/${tenantSlug}/erp/invoices/${invoiceId}`}>Ver Factura Emitida</Link>
+                </Button>
+              )}
+              <PrintButton label="Imprimir Pedido" />
+            </>
+          }
+        />
       </div>
 
       {/* Contenido imprimible */}
       <div className="print-area space-y-6">
         {/* Ficha del pedido */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 space-y-4">
+        <Card className="rounded-xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                <ClipboardList className="h-6 w-6 text-indigo-400" />
+              <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                <ClipboardList className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
                 {order.orderNumber}
               </h1>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 {customer ? `${customer.name} · ${customer.taxId}` : 'Cliente'}
               </p>
             </div>
             <div className="text-right space-y-1">
-              <Badge variant={badge.variant} size="sm">
+              <Badge variant={badge.variant} size="sm" dot={order.status === 'confirmed'}>
                 {badge.label}
               </Badge>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-muted-foreground">
                 {order.issueDate ? new Date(order.issueDate).toLocaleDateString('es-VE') : '—'}
                 {order.confirmedAt
                   ? ` · Confirmado ${new Date(order.confirmedAt).toLocaleDateString('es-VE')}`
                   : ''}
               </p>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-muted-foreground">
                 Tier: <span className="uppercase">{order.priceTierSnapshot || 'retail'}</span>
               </p>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Líneas */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                <th className="p-3">Descripción</th>
-                <th className="p-3">SKU</th>
-                <th className="p-3 text-right">Cant.</th>
-                <th className="p-3 text-right">Despachada</th>
-                <th className="p-3 text-right">Precio (USD)</th>
-                <th className="p-3 text-right">Desc. %</th>
-                <th className="p-3 text-right">Total (USD)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {(Array.isArray(order.items) ? order.items : []).map((it, idx) => {
-                const ordered = Number(it.quantity) || 0;
-                const dispatched = data.dispatchedByIndex[idx] || 0;
-                return (
-                  <tr key={idx}>
-                    <td className="p-3 text-white">{it.description}</td>
-                    <td className="p-3 font-mono text-slate-400">{it.sku || '—'}</td>
-                    <td className="p-3 text-right font-mono text-slate-200">{ordered}</td>
-                    <td className="p-3 text-right font-mono text-emerald-400">
-                      {dispatched > 0 ? `${dispatched}${dispatched >= ordered ? ' ✓' : ''}` : '—'}
-                    </td>
-                    <td className="p-3 text-right font-mono text-slate-200">{formatUSD(Number(it.unitPriceUSD) || 0)}</td>
-                    <td className="p-3 text-right font-mono text-slate-400">
-                      {Number(it.discountPct) > 0 ? `${it.discountPct}%` : '—'}
-                    </td>
-                    <td className="p-3 text-right font-mono font-bold text-white">
-                      {formatUSD(Number(it.totalUSD) || 0)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead className="text-right">Cant.</TableHead>
+                  <TableHead className="text-right">Despachada</TableHead>
+                  <TableHead className="text-right">Precio (USD)</TableHead>
+                  <TableHead className="text-right">Desc. %</TableHead>
+                  <TableHead className="text-right">Total (USD)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(Array.isArray(order.items) ? order.items : []).map((it, idx) => {
+                  const ordered = Number(it.quantity) || 0;
+                  const dispatched = data.dispatchedByIndex[idx] || 0;
+                  return (
+                    <TableRow key={idx}>
+                      <TableCell>{it.description}</TableCell>
+                      <TableCell className="font-mono text-muted-foreground">{it.sku || '—'}</TableCell>
+                      <TableCell className="text-right font-mono">{ordered}</TableCell>
+                      <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">
+                        {dispatched > 0 ? `${dispatched}${dispatched >= ordered ? ' ✓' : ''}` : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{formatUSD(Number(it.unitPriceUSD) || 0)}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {Number(it.discountPct) > 0 ? `${it.discountPct}%` : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold">
+                        {formatUSD(Number(it.totalUSD) || 0)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
 
         {/* Totales */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 space-y-2">
+        <Card className="rounded-xl p-5 space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Tasa aplicada:</span>
-            <span className="font-mono text-slate-200">{formatUSD(rate)} / USD</span>
+            <span className="text-muted-foreground">Tasa aplicada:</span>
+            <span className="font-mono">{formatUSD(rate)} / USD</span>
           </div>
-          <div className="flex items-center justify-between text-base font-bold text-white border-t border-slate-800/80 pt-2">
+          <div className="flex items-center justify-between text-base font-bold text-foreground border-t border-border pt-2">
             <span>Total Pedido (USD):</span>
-            <span className="font-mono text-amber-400">{formatUSD(Number(order.totalUSD) || 0)}</span>
+            <span className="font-mono text-amber-600 dark:text-amber-400">{formatUSD(Number(order.totalUSD) || 0)}</span>
           </div>
-          <div className="flex items-center justify-between text-sm text-slate-300">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>Total Pedido (VES):</span>
             <span className="font-mono">{formatVES(Number(order.totalVES) || 0)}</span>
           </div>
-        </div>
+        </Card>
 
         {/* Remisiones emitidas */}
         {data.deliveryNotes.length > 0 && (
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden">
-            <div className="p-4 border-b border-slate-800/80 flex items-center gap-2">
-              <Truck className="h-4 w-4 text-indigo-400" />
-              <h2 className="text-sm font-semibold text-white">Remisiones Emitidas</h2>
-              <span className="text-xs text-slate-400 ml-auto">{data.deliveryNotes.length} remisión(es)</span>
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="p-4 border-b border-border flex items-center gap-2">
+              <Truck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-foreground">Remisiones Emitidas</h2>
+              <span className="text-xs text-muted-foreground ml-auto">{data.deliveryNotes.length} remisión(es)</span>
             </div>
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Nro.</th>
-                  <th className="p-3">Fecha</th>
-                  <th className="p-3 text-right">Líneas</th>
-                  <th className="p-3 text-right">Valor (USD)</th>
-                  <th className="p-3 text-center">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {data.deliveryNotes.map((n) => (
-                  <tr key={n.id} className="hover:bg-slate-800/30">
-                    <td className="p-3 font-mono font-bold text-white">
-                      <Link
-                        href={`/${tenantSlug}/erp/delivery-notes/${n.id}`}
-                        className="hover:text-indigo-300 underline decoration-slate-700 underline-offset-2"
-                      >
-                        {n.noteNumber}
-                      </Link>
-                    </td>
-                    <td className="p-3 text-slate-400 text-[11px]">
-                      {n.issueDate ? new Date(n.issueDate).toLocaleDateString('es-VE') : '—'}
-                    </td>
-                    <td className="p-3 text-right font-mono text-slate-200">
-                      {Array.isArray(n.items) ? n.items.length : 0}
-                    </td>
-                    <td className="p-3 text-right font-mono text-slate-200">{formatUSD(Number(n.totalUSD) || 0)}</td>
-                    <td className="p-3 text-center">
-                      <Badge variant={n.status === 'voided' ? 'rose' : 'emerald'} size="sm">
-                        {n.status === 'voided' ? 'Anulada' : 'Emitida'}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Nro.</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead className="text-right">Líneas</TableHead>
+                    <TableHead className="text-right">Valor (USD)</TableHead>
+                    <TableHead className="text-center">Estado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.deliveryNotes.map((n) => (
+                    <TableRow key={n.id}>
+                      <TableCell className="font-mono font-bold">
+                        <Link
+                          href={`/${tenantSlug}/erp/delivery-notes/${n.id}`}
+                          className="underline decoration-border underline-offset-2 hover:decoration-foreground"
+                        >
+                          {n.noteNumber}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-[11px]">
+                        {n.issueDate ? new Date(n.issueDate).toLocaleDateString('es-VE') : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {Array.isArray(n.items) ? n.items.length : 0}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{formatUSD(Number(n.totalUSD) || 0)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={n.status === 'voided' ? 'rose' : 'emerald'} size="sm" dot={n.status !== 'voided'}>
+                          {n.status === 'voided' ? 'Anulada' : 'Emitida'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         )}
 
         {/* Notas */}
         {order.notes && (
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5">
-            <p className="text-[10px] uppercase font-semibold text-slate-400 mb-1">Notas / Instrucciones</p>
-            <p className="text-xs text-slate-300 whitespace-pre-wrap">{order.notes}</p>
-          </div>
+          <Card className="rounded-xl p-5">
+            <p className="text-[10px] uppercase font-semibold text-muted-foreground mb-1">Notas / Instrucciones</p>
+            <p className="text-xs text-foreground whitespace-pre-wrap">{order.notes}</p>
+          </Card>
         )}
       </div>
     </div>

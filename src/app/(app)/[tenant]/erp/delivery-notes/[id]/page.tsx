@@ -1,12 +1,23 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Truck } from 'lucide-react';
+import { Truck } from 'lucide-react';
 import { getTenantBySlug, getDeliveryNoteDetail } from '@/utilities/erpData';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
+import { ErpPageHeader } from '@/components/erp/ErpPageHeader';
 import { PrintButton } from '@/components/erp/PrintButton';
 import { Badge } from '@/components/erp/Badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface PageProps {
   params: Promise<{ tenant: string; id: string }>;
@@ -53,91 +64,84 @@ export default async function DeliveryNoteDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-6">
       {/* Header (no imprime) */}
-      <div className="no-print flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp/delivery-notes`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Remisiones
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-mono font-semibold text-indigo-400">{note.noteNumber}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {order && (
-            <Link
-              href={`/${tenantSlug}/erp/orders/${(order as { id: number }).id}`}
-              className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-600/10 text-xs font-semibold text-indigo-300 hover:bg-indigo-600 hover:text-white transition-colors"
-            >
-              Ver Pedido
-            </Link>
-          )}
-          <PrintButton label="Imprimir Remisión" />
-        </div>
+      <div className="no-print">
+        <ErpPageHeader
+          title={`Remisión ${note.noteNumber || `#${note.id}`}`}
+          breadcrumbHref={`/${tenantSlug}/erp/delivery-notes`}
+          breadcrumbLabel="Remisiones"
+          actions={
+            <>
+              {order && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/${tenantSlug}/erp/orders/${(order as { id: number }).id}`}>Ver Pedido</Link>
+                </Button>
+              )}
+              <PrintButton label="Imprimir Remisión" />
+            </>
+          }
+        />
       </div>
 
       {/* Contenido imprimible */}
       <div className="print-area space-y-6">
         {/* Ficha */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 space-y-4">
+        <Card className="rounded-xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                <Truck className="h-6 w-6 text-indigo-400" />
+              <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                <Truck className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
                 Remisión {note.noteNumber}
               </h1>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 {customer ? `${customer.name} · ${customer.taxId}` : 'Cliente'}
               </p>
             </div>
             <div className="text-right space-y-1">
-              <Badge variant={badge.variant} size="sm">
+              <Badge variant={badge.variant} size="sm" dot={note.status !== 'voided'}>
                 {badge.label}
               </Badge>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-muted-foreground">
                 {note.issueDate ? new Date(note.issueDate).toLocaleDateString('es-VE') : '—'}
               </p>
               {order && (
-                <p className="text-[11px] font-mono text-slate-400">
+                <p className="text-[11px] font-mono text-muted-foreground">
                   Pedido: {(order as { orderNumber: string }).orderNumber}
                 </p>
               )}
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Líneas despachadas */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                <th className="p-3">Descripción</th>
-                <th className="p-3">SKU</th>
-                <th className="p-3 text-right">Cantidad</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {(Array.isArray(note.items) ? note.items : []).map((it, idx) => (
-                <tr key={idx}>
-                  <td className="p-3 text-white">{it.description}</td>
-                  <td className="p-3 font-mono text-slate-400">{it.sku || '—'}</td>
-                  <td className="p-3 text-right font-mono font-bold text-white">{it.quantity}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead className="text-right">Cantidad</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(Array.isArray(note.items) ? note.items : []).map((it, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{it.description}</TableCell>
+                    <TableCell className="font-mono text-muted-foreground">{it.sku || '—'}</TableCell>
+                    <TableCell className="text-right font-mono font-bold">{it.quantity}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
 
         {/* Notas */}
         {note.notes && (
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5">
-            <p className="text-[10px] uppercase font-semibold text-slate-400 mb-1">Notas de Entrega</p>
-            <p className="text-xs text-slate-300 whitespace-pre-wrap">{note.notes}</p>
-          </div>
+          <Card className="rounded-xl p-5">
+            <p className="text-[10px] uppercase font-semibold text-muted-foreground mb-1">Notas de Entrega</p>
+            <p className="text-xs text-foreground whitespace-pre-wrap">{note.notes}</p>
+          </Card>
         )}
       </div>
     </div>
