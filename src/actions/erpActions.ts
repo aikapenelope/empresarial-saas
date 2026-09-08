@@ -12,6 +12,8 @@ import {
   requireErpTenantAccess,
   requireSuperAdmin,
 } from '@/utilities/erpAuth';
+import { prepareDocumentEmail } from './shareActions';
+import { after } from 'next/server';
 import { computeInvoiceTax, computeIgtfUSD } from '../utilities/tax';
 import type { CatalogTaxRate } from '../utilities/tax';
 import { getActiveDb } from '@/utilities/inventoryLedger';
@@ -918,6 +920,29 @@ export async function createQuoteAction(input: CreateQuoteInput) {
         req,
       });
     });
+
+    // Auto-envío (Sprint 43): presupuesto al correo del cliente vía Resend,
+    // fuera del camino crítico (after() de Next). Sólo si el inquilino lo
+    // tiene activo y el cliente tiene email registrado.
+    const tenantFresh = await payload.findByID({
+      collection: 'tenants',
+      id: parsed.tenantId,
+      depth: 0,
+    });
+    const customerFresh = await payload.findByID({
+      collection: 'customers',
+      id: parsed.customerId,
+      depth: 0,
+    });
+    const customerEmail = customerFresh?.email || '';
+    if (
+      (tenantFresh?.emailConfig?.autoSendQuoteEmail ?? true) &&
+      customerEmail &&
+      doc?.id
+    ) {
+      const prepared = await prepareDocumentEmail('quotes', parsed.tenantId, doc.id, customerEmail);
+      await after(prepared.send);
+    }
 
     revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);
     revalidatePath(`/${parsed.tenantSlug}/erp`);
@@ -3333,6 +3358,7 @@ export interface UpdateTenantSettingsInput {
   manualExchangeRate?: number;
   autoSyncRate: boolean;
   salesDocumentDefault?: 'nota_entrega' | 'factura';
+  autoSendQuoteEmail?: boolean;
 }
 
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
@@ -3356,6 +3382,9 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
         // Solo se persiste cuando viene explícito: no se pisa lo ya guardado
         ...(parsed.salesDocumentDefault
           ? { salesConfig: { salesDocumentDefault: parsed.salesDocumentDefault } }
+          : {}),
+        ...(parsed.autoSendQuoteEmail !== undefined
+          ? { emailConfig: { autoSendQuoteEmail: parsed.autoSendQuoteEmail } }
           : {}),
       },
     });

@@ -218,6 +218,12 @@ export interface Tenant {
     igtfPct?: number | null;
     applyIgtfOnFxPayments?: boolean | null;
   };
+  emailConfig?: {
+    /**
+     * Requiere RESEND_API_KEY configurada. El cliente recibe un enlace público del presupuesto vía Resend; sin email del cliente no hay envío.
+     */
+    autoSendQuoteEmail?: boolean | null;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -1412,6 +1418,11 @@ export interface TenantsSelect<T extends boolean = true> {
         generalRatePct?: T;
         igtfPct?: T;
         applyIgtfOnFxPayments?: T;
+      };
+  emailConfig?:
+    | T
+    | {
+        autoSendQuoteEmail?: T;
       };
   updatedAt?: T;
   createdAt?: T;

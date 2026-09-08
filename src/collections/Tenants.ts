@@ -142,6 +142,23 @@ export const Tenants: CollectionConfig = {
         },
       ],
     },
+    {
+      name: 'emailConfig',
+      label: 'Envío Automático de Documentos (Email)',
+      type: 'group',
+      fields: [
+        {
+          name: 'autoSendQuoteEmail',
+          label: 'Enviar el presupuesto automáticamente al email del cliente al crearlo',
+          type: 'checkbox',
+          defaultValue: true,
+          admin: {
+            description:
+              'Requiere RESEND_API_KEY configurada. El cliente recibe un enlace público del presupuesto vía Resend; sin email del cliente no hay envío.',
+          },
+        },
+      ],
+    },
   ],
   timestamps: true,
 };

@@ -692,12 +692,12 @@ Hallazgos de la segunda revisión de Devin, reparados agrupados:
 - [x] **Tests unitarios CI:** líneas mixtas exenta/8/16, decreto 16,5%, métodos VES sin IGTF, desactivable por inquilino.
 - [ ] **S42.2 (diferido):** IGTF visible en el recibo POS + libro de compras (CxP) cuando el negocio lo pida.
 
-### 📧 Sprint 43 — Email del ciclo completo (base ya existe: `sendDocumentEmailAction` + Resend + `after()`)
+### 📧 Sprint 43 — Auto-envío de presupuestos por email (PR `feat/sprint43-email-invoices`)
 
-- [ ] **Extender `ShareableCollection` a `invoices`** con ruta pública `/share/invoice/[token]` y botón de envío en el detalle.
-- [ ] **Auto-envío por inquilino:** `emailConfig.autoSend: { quote, invoice, note }` — el action encola en `after()` (patrón existente, cero blocking).
-- [ ] **CRM ya existe** (`Customers` con email/segmento/tier/vendedor): solo se consume `customer.email` como destinatario por defecto.
-- [ ] **Pendiente operativo:** dominio verificado en Resend para `defaultFromAddress`.
+- [x] **Auto-envío por inquilino:** `emailConfig.autoSendQuoteEmail` (default activo) — al crear un presupuesto, si el cliente tiene email, se envía por Resend el enlace público del documento, en `after()` (cero blocking). Toggle en `SettingsView`.
+- [x] **Refactor de seguridad del envío:** `prepareDocumentEmail` (shareActions) resuelve acceso/token/HTML DENTRO del request y devuelve el envío diferible — llamar al action dentro de `after()` rompería (`headers()` no existe en la fase after). Compartido por el envío manual y el automático.
+- [x] **CRM ya existe** (`Customers` con email/segmento/tier/vendedor): `customer.email` es el destinatario por defecto.
+- [ ] **S43.2 (diferido):** extender `ShareableCollection` a `invoices` (campo `shareToken` + migración + render público + botón en detalle) y auto-envío de notas/facturas.
 
 ### 🔎 Sprint 44 — Filtros de negocio en los 4 listados restantes
 

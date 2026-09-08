@@ -231,6 +231,55 @@ export async function ensureShareUrlAction(input: unknown): Promise<{
   }
 }
 
+/**
+ * Prepara el email del documento DENTRO del request (acceso, token, HTML) y
+ * devuelve el envío puro diferible — safe para `after()` de Next.js, donde
+ * `headers()` ya no está disponible. Compartido por el action manual y el
+ * auto-envío del ciclo de venta (Sprint 43).
+ */
+export async function prepareDocumentEmail(
+  collection: ShareableCollection,
+  tenantId: number,
+  documentId: number,
+  email: string,
+): Promise<{ shareUrl: string; whatsappText: string; send: () => Promise<void> }> {
+  // No se reenvían por email documentos en estado final (anulada/rechazada/
+  // convertida): el mail sería una versión desactualizada del ciclo de vida.
+  const { doc, shareUrl } = await loadAndEnsureShare(collection, tenantId, documentId, {
+    allowFinalWithToken: false,
+  });
+  const html = buildDocumentEmailHtml(doc, shareUrl);
+  const subject = `${doc.docTitle} ${doc.number} — ${doc.tenantName}`;
+  const whatsappText = buildWhatsAppText(doc, shareUrl);
+
+  const send = async (): Promise<void> => {
+    const payload = await getPayload({ config });
+    await payload.sendEmail({ to: email, subject, html });
+
+    if (doc.kind === 'quote') {
+      // Primer envío: transición draft -> sent (visible en el listado).
+      const res = await payload.find({
+        collection: 'quotes',
+        where: { and: [{ id: { equals: documentId } }, { tenant: { equals: tenantId } }] },
+        depth: 0,
+        limit: 1,
+        overrideAccess: true,
+      });
+      const quote = res.docs[0];
+      if (quote && quote.status === 'draft') {
+        await payload.update({
+          collection: 'quotes',
+          id: quote.id,
+          data: { status: 'sent' },
+          overrideAccess: true,
+        });
+      }
+    }
+  };
+
+  return { shareUrl, whatsappText, send };
+}
+
 /** Envía el documento por email. El envío (Resend) corre en after() de Next.js. */
 export async function sendDocumentEmailAction(input: unknown): Promise<{
   ok: boolean;
@@ -244,45 +293,16 @@ export async function sendDocumentEmailAction(input: unknown): Promise<{
   }
 
   try {
-    // No se reenvían por email documentos en estado final (anulada/rechazada/
-    // convertida): el mail sería una versión desactualizada del ciclo de vida.
-    const { doc, shareUrl } = await loadAndEnsureShare(
+    const { shareUrl, whatsappText, send } = await prepareDocumentEmail(
       parsed.data.collection,
       parsed.data.tenantId,
       parsed.data.documentId,
-      { allowFinalWithToken: false },
+      parsed.data.email,
     );
-    const html = buildDocumentEmailHtml(doc, shareUrl);
-    const subject = `${doc.docTitle} ${doc.number} — ${doc.tenantName}`;
-    const whatsappText = buildWhatsAppText(doc, shareUrl);
-    const { tenantId, documentId, email } = parsed.data;
 
     // AGENTS §3: el envío de email en serverless corre dentro de after() de
     // Next.js para no bloquear (ni suspender con) la respuesta del action.
-    await after(async () => {
-      const payload = await getPayload({ config });
-      await payload.sendEmail({ to: email, subject, html });
-
-      if (doc.kind === 'quote') {
-        // Primer envío: transición draft -> sent (visible en el listado).
-        const res = await payload.find({
-          collection: 'quotes',
-          where: { and: [{ id: { equals: documentId } }, { tenant: { equals: tenantId } }] },
-          depth: 0,
-          limit: 1,
-          overrideAccess: true,
-        });
-        const quote = res.docs[0];
-        if (quote && quote.status === 'draft') {
-          await payload.update({
-            collection: 'quotes',
-            id: quote.id,
-            data: { status: 'sent' },
-            overrideAccess: true,
-          });
-        }
-      }
-    });
+    await after(send);
 
     return { ok: true, shareUrl, whatsappText };
   } catch (error: unknown) {
