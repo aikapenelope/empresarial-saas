@@ -1,0 +1,68 @@
+name: CI
+
+# ─── Sprint 18: validación en CI (corre UNA vez por PR — protocolo de un solo push) ──
+# El `next build` de producción NO corre aquí: Vercel ya lo ejecuta en el deploy
+# del PR y la cuota del plan gratuito es limitada. Este workflow cubre lo que
+# Vercel NO cubre: typecheck estricto, lint y la suite de tests contra un
+# Postgres real y desechable — cero riesgo para la BD local del proyecto ni
+# para Supabase.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: typecheck · lint · tests (Postgres real)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: empresarial_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PAYLOAD_SECRET: ci-only-secret-0123456789abcdefghijklmnopqrst
+      DATABASE_URI: postgresql://postgres:postgres@127.0.0.1:5432/empresarial_test
+      DATABASE_DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/empresarial_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/empresarial_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck estricto (tsc --noEmit)
+        run: pnpm typecheck
+
+      - name: Lint (eslint)
+        run: pnpm lint
+
+      - name: Migraciones contra el Postgres de CI
+        run: pnpm migrate
+
+      - name: Suite de tests (unit + integración)
+        run: pnpm test

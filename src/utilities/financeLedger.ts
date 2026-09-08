@@ -131,10 +131,6 @@ export async function getInvoicePaidAmount(
     limit: 500,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
   });
 
   let totalPaid = 0;

@@ -81,10 +81,6 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
       id: productId,
       depth: 0,
       req,
-      context: {
-        ...req.context,
-        skipInventoryRecalculation: true,
-      },
     });
 
     if (!product) {
@@ -123,7 +119,6 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         id: sourceId,
         depth: 0,
         req,
-        context: { ...req.context, skipInventoryRecalculation: true },
       });
       const swTenant = extractId(sourceWarehouse?.tenant);
       if (swTenant && String(effectiveTenant) !== String(swTenant)) {
@@ -143,7 +138,6 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         id: targetId,
         depth: 0,
         req,
-        context: { ...req.context, skipInventoryRecalculation: true },
       });
       const twTenant = extractId(targetWarehouse?.tenant);
       if (twTenant && String(effectiveTenant) !== String(twTenant)) {
@@ -167,7 +161,6 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         id: prodOrderId,
         depth: 0,
         req,
-        context: { ...req.context, skipInventoryRecalculation: true },
       });
       if (!prodOrder) {
         throw new Error(`La orden de producción ID ${prodOrderId} no existe.`);
@@ -195,7 +188,6 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         id: invoiceId,
         depth: 0,
         req,
-        context: { ...req.context, skipInventoryRecalculation: true },
       });
       const invTenant = extractId(invoice?.tenant);
       if (invTenant && String(effectiveTenant) !== String(invTenant)) {
@@ -215,11 +207,6 @@ const beforeValidateStockMovement: CollectionBeforeValidateHook = async ({
         id: purchaseInvoiceId,
         depth: 0,
         req,
-        context: {
-          ...req.context,
-          skipInventoryRecalculation: true,
-          skipBalanceRecalculation: true,
-        },
       });
       const piTenant = extractId(purchaseInvoice?.tenant);
       if (piTenant && String(effectiveTenant) !== String(piTenant)) {

@@ -93,10 +93,6 @@ export async function applySaleStockDeduction(
     id: invoiceId,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
   })) as Invoice | undefined;
 
   if (!invoice) {
@@ -145,10 +141,6 @@ export async function applySaleStockDeduction(
       depth: 0,
       req,
       overrideAccess: true,
-      context: {
-        ...req.context,
-        skipInventoryRecalculation: true,
-      },
     })) as Product | undefined;
 
     if (!product) {
@@ -245,10 +237,6 @@ export async function revertSaleFromInventory(
     id: invoiceId,
     depth: 0,
     req,
-    context: {
-      ...req.context,
-      skipBalanceRecalculation: true,
-    },
   })) as Invoice | undefined;
 
   if (!invoice) {

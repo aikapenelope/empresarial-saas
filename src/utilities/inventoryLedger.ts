@@ -373,7 +373,6 @@ export async function executeProductionOrder(
             id: rawId,
             depth: 0,
             req,
-            context: { ...req.context, skipInventoryRecalculation: true },
           });
 
     const rawName = rawProductDoc?.name || `ID ${rawId}`;
@@ -448,7 +447,6 @@ export async function executeProductionOrder(
     id: finishedProductId,
     depth: 0,
     req,
-    context: { ...req.context, skipInventoryRecalculation: true },
   });
 
   const priorStock = Math.max(0, Number(finishedProductDoc?.currentStock) || 0);
