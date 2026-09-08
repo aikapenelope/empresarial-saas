@@ -89,7 +89,16 @@ Reglas derivadas:
   2. Terminar el turno de inmediato.
 - **Responsabilidad del Usuario:** El usuario revisa los builds remotos y los comentarios de Devin en GitHub, y solicitará los ajustes pertinentes en turnos posteriores.
 
-### 5.1 Protocolo de PR de Un Solo Push (Memoria — decisión del usuario, NO revocar)
+### 5.1 Protocolo de BD LOCAL del Proyecto (Memoria de seguridad — NUNCA revocar)
+
+El Postgres instalado en esta Mac (`/opt/homebrew`, puerto 5432, cluster `/tmp/mh-pg`) **pertenece a otras aplicaciones del usuario: PROHIBIDO conectarlo, listar sus bases, modificarlo o apagarlo.**
+
+- El proyecto usa SOLO un cluster aislado y dedicado: **`/tmp/pg-local`, puerto `54322`** (SSL propio con certificado self-signed), gestionado exclusivamente con `scripts/db-local.sh` (`init|start|stop|reset|uri`).
+- Ante cualquier duda de a qué cluster se apunta: verificar SIEMPRE el puerto. `54322` = proyecto. `5432` = prohibido. `/tmp/mh-pg` = prohibido.
+- La BD de producción es Supabase (proyecto `empresarial-saas` = `mzpqwaepkyhktfvgbxcq`); **jamás confundir** con `storelink-db` (`mfcbeyajzjhgfwpxvdxz`).
+- Al terminar de trabajar localmente: `scripts/db-local.sh stop`.
+
+### 5.2 Protocolo de PR de Un Solo Push (Memoria — decisión del usuario, NO revocar)
 A partir de la Fase 8, el ciclo de cada sprint es: **implementar → validación local en verde → UN push → abrir el PR → terminar el turno.**
 - **Prohibido iterar fixes contra el preview/producción del PR** (no volver a pushear "correcciones" tras ver el deploy). Cada push dispara un build de Vercel y el plan gratuito tiene cuota diaria limitada — el usuario la paga.
 - La validación local (`tsc --noEmit`, `eslint`, `next build`) corre ANTES del push, una sola vez, y debe estar en verde.

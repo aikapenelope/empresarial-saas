@@ -68,6 +68,13 @@ const caCert = process.env.SUPABASE_CA_CERT
   ? process.env.SUPABASE_CA_CERT.replace(/\\n/g, '\n')
   : SUPABASE_ROOT_CA;
 
+// BD local de desarrollo/pruebas (scripts/db-local.sh → /tmp/pg-local:54322):
+// su certificado es self-signed, así que ahí se desactiva la verificación de
+// CA (el tráfico va por loopback). Con Supabase se mantiene SSL estricto.
+const isLocalDb = /^(postgres(?:ql)?):\/\/[^@]*@(localhost|127\.0\.0\.1)[:/]/.test(
+  dbConnectionString,
+);
+
 export default buildConfig({
   admin: {
     user: Users.slug,
@@ -139,10 +146,12 @@ export default buildConfig({
       max: isMigration ? 2 : 10, // Optimal for Serverless RSC (10) / Migration CLI (2)
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 15000,
-      ssl: {
-        rejectUnauthorized: true,
-        ...(caCert ? { ca: caCert } : {}),
-      },
+      ssl: isLocalDb
+        ? false
+        : {
+            rejectUnauthorized: true,
+            ...(caCert ? { ca: caCert } : {}),
+          },
     },
     push: false,
     migrationDir: path.resolve(dirname, 'migrations'),
