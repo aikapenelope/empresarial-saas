@@ -91,7 +91,13 @@ export function POSView({
   const [cart, setCart] = useState<CartLine[]>([]);
   const [selectedSku, setSelectedSku] = useState<string>(products[0]?.sku || '');
   const [quantity, setQuantity] = useState<number>(1);
-  const [unitPriceUSD, setUnitPriceUSD] = useState<number>(products[0]?.priceUSD || 0);
+  // Precio del input como STRING: distingue el campo vacío (el cajero borrió,
+  // no debe facturar gratis por accidente) del CERO explícito (cortesía).
+  // Devin #52: un number input vacío coerce a 0 y handleAddLine no podía
+  // diferenciarlos; el string preserva el estado vacío por separado.
+  const [unitPriceInput, setUnitPriceInput] = useState<string>(
+    products[0] ? String(products[0].priceUSD) : '',
+  );
 
   const [customerMode, setCustomerMode] = useState<'walkin' | 'registered'>('walkin');
   const [customerId, setCustomerId] = useState<number>(customers[0]?.id || 0);
@@ -111,9 +117,6 @@ export function POSView({
     customerMode === 'registered'
       ? customers.find((c) => c.id === customerId)?.priceTier || 'retail'
       : 'retail';
-  const priceFor = (product: { priceUSD: number; priceTiers?: Array<{ tier: string; priceUSD: number }> | null }) =>
-    effectivePriceForTier(product, activeTier);
-
   const prevTierRef = useRef<string>(activeTier);
 
   // Cambio de cliente/tier: re-precia sólo las líneas "automáticas" — aquéllas
@@ -140,7 +143,7 @@ export function POSView({
   // precio efectivo del catálogo (punto de partida editable del cajero).
   useSyncOnKeyChange(`${selectedSku}::${activeTier}`, () => {
     const prod = products.find((p) => p.sku === selectedSku);
-    if (prod) setUnitPriceUSD(effectivePriceForTier(prod, activeTier));
+    if (prod) setUnitPriceInput(String(effectivePriceForTier(prod, activeTier)));
   });
 
   const totalUSD = useMemo(
@@ -158,10 +161,20 @@ export function POSView({
     }
     setError(null);
     // El precio facturado es el del input: tier efectivo por defecto o el
-    // ajuste manual del cajero (incluye 0, p. ej. regalos/cortesías — éste
-    // prevalece sobre el tier).
-    const tieredUnitPrice = priceFor(prod);
-    const linePrice = Number.isFinite(unitPriceUSD) && unitPriceUSD >= 0 ? unitPriceUSD : tieredUnitPrice;
+    // ajuste manual del cajero (el 0 explícito = cortesía prevalece). El campo
+    // VACÍO no es válido: exige un valor explícito (Devin #52) para que borrar
+    // el input nunca facture gratis por accidente.
+    const parsedInput = unitPriceInput.trim();
+    if (parsedInput === '') {
+      setError('Indica el precio unitario (0 es válido para cortesías).');
+      return;
+    }
+    const typedPrice = Number(parsedInput);
+    if (!Number.isFinite(typedPrice) || typedPrice < 0) {
+      setError('El precio unitario debe ser un número ≥ 0.');
+      return;
+    }
+    const linePrice = typedPrice;
     setCart((prev) => {
       const existing = prev.find(
         (l) => l.productId === prod.id && l.unitPriceUSD === linePrice,
@@ -321,7 +334,7 @@ export function POSView({
                   onChange={(e) => {
                     setSelectedSku(e.target.value);
                     const prod = products.find((p) => p.sku === e.target.value);
-                    if (prod) setUnitPriceUSD(effectivePriceForTier(prod, activeTier));
+                    if (prod) setUnitPriceInput(String(effectivePriceForTier(prod, activeTier)));
                   }}
                   className={posSelectClass}
                 >
@@ -342,8 +355,8 @@ export function POSView({
                   type="number"
                   min="0"
                   step="0.01"
-                  value={unitPriceUSD}
-                  onChange={(e) => setUnitPriceUSD(Number(e.target.value))}
+                  value={unitPriceInput}
+                  onChange={(e) => setUnitPriceInput(e.target.value)}
                   className="h-11 text-right font-mono text-sm"
                 />
               </div>
