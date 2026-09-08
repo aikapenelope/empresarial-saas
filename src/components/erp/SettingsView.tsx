@@ -26,6 +26,9 @@ interface SettingsViewProps {
     salesConfig?: {
       salesDocumentDefault?: ('nota_entrega' | 'factura') | null;
     } | null;
+    emailConfig?: {
+      autoSendQuoteEmail?: boolean | null;
+    } | null;
   };
   effectiveRate: number;
   bcvRate: number | null;
@@ -54,6 +57,9 @@ export function SettingsView({
   const [salesDocumentDefault, setSalesDocumentDefault] = useState<'nota_entrega' | 'factura'>(
     tenant.salesConfig?.salesDocumentDefault ?? 'factura',
   );
+  const [autoSendQuoteEmail, setAutoSendQuoteEmail] = useState<boolean>(
+    tenant.emailConfig?.autoSendQuoteEmail ?? true,
+  );
   const [manualExchangeRate, setManualExchangeRate] = useState<number>(
     tenant.currencyConfig?.manualExchangeRate || 0,
   );
@@ -74,6 +80,7 @@ export function SettingsView({
       manualExchangeRate,
       autoSyncRate,
       salesDocumentDefault,
+      autoSendQuoteEmail,
     });
 
     setLoading(false);
@@ -133,6 +140,21 @@ export function SettingsView({
                 En modo Nota de Entrega, las entregas se documentan sin factura (escenario regulatorio 2026);
                 la factura se emite después desde la remisión o el pedido, sólo cuando el cliente la pida.
               </p>
+            </div>
+            <div>
+              <label htmlFor="auto-send-quote" className="block font-semibold text-foreground mb-1">
+                Auto-envío de presupuestos
+              </label>
+              <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+                <input
+                  id="auto-send-quote"
+                  type="checkbox"
+                  checked={autoSendQuoteEmail}
+                  onChange={(e) => setAutoSendQuoteEmail(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-[var(--color-primary,currentColor)]"
+                />
+                Enviar el presupuesto por email al crearlo (Resend — requiere RESEND_API_KEY y email del cliente).
+              </label>
             </div>
           </div>
         </Card>

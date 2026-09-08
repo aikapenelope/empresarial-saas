@@ -681,20 +681,23 @@ Hallazgos de la segunda revisión de Devin, reparados agrupados:
 - [ ] **Diferido (S41.2):** POS de mostrador en modo `nota_entrega` (creación directa de notas sin pedido) — requiere decisión de manejo de caja en contado bajo nota.
 - [ ] **Tests CI:** nota no toca kardex; factura desde nota descarga exactamente una vez.
 
-### 🧾 Sprint 42 — IVA/IGTF configurable + libro fiscal
+### 🧾 Sprint 42 — IVA/IGTF configurable + libro fiscal (PR `feat/sprint42-tax-config`)
 
-- [ ] **Config de tenant:** `taxConfig.igtfPct` (3), `applyIgtfOnFxPayments`, `generalRatePct` (16), `suntuarioPct` opcional — decretos del SENIAT sin cambios de código.
-- [ ] **Snapshot fiscal por factura:** `taxBaseUSD`/`taxUSD` calculados en `createInvoiceCore` desde el `taxRate` del producto (migración).
-- [ ] **IGTF a nivel de pago:** recargo en `createPaymentAction`/mix de caja para métodos en divisa.
-- [ ] **Libro de ventas CSV:** columnas `base_usd, tasa_pct, iva_usd, igtf_usd` (libro de compras análogo).
-- [ ] **Tests CI:** líneas mixtas (exenta/8/16) → desglose; pago en divisa → IGTF.
+- [x] **Config de tenant:** `taxConfig.generalRatePct` (16, ajustable por decreto — rango legal 8–16,5%), `taxConfig.igtfPct` (3), `taxConfig.applyIgtfOnFxPayments`. El suntuario queda como campo futuro (lista de rubros aún sin definir por el SENIAT).
+- [x] **Motor fiscal puro** (`src/utilities/tax.ts`): `computeInvoiceTax` (desglose por línea según `taxRate` del catálogo: exenta 0 / reducida 8 / general configurable), `computeIgtfUSD` (métodos en divisa: zelle/binance/efectivo USD) — unit-testeable.
+- [x] **Snapshot fiscal por factura:** `taxBaseUSD`/`taxUSD` calculados en `createInvoiceCore` (batch de `taxRate` del catálogo). **Informativo**: `totalUSD` conserva su semántica (suma de líneas, sin IVA) — saldos, créditos y cobros intactos.
+- [x] **IGTF en cobros:** `customer-payments.igtfUSD` (snapshot informativo al registrar cobro en divisa).
+- [x] **Libro de ventas CSV:** columnas `base_gravable_usd, iva_usd` añadidas (con `total_usd` intacto).
+- [x] **Migración `add_tax_config`** (idempotente) + migración `add_sales_config` del S41.
+- [x] **Tests unitarios CI:** líneas mixtas exenta/8/16, decreto 16,5%, métodos VES sin IGTF, desactivable por inquilino.
+- [ ] **S42.2 (diferido):** IGTF visible en el recibo POS + libro de compras (CxP) cuando el negocio lo pida.
 
-### 📧 Sprint 43 — Email del ciclo completo (base ya existe: `sendDocumentEmailAction` + Resend + `after()`)
+### 📧 Sprint 43 — Auto-envío de presupuestos por email (PR `feat/sprint43-email-invoices`)
 
-- [ ] **Extender `ShareableCollection` a `invoices`** con ruta pública `/share/invoice/[token]` y botón de envío en el detalle.
-- [ ] **Auto-envío por inquilino:** `emailConfig.autoSend: { quote, invoice, note }` — el action encola en `after()` (patrón existente, cero blocking).
-- [ ] **CRM ya existe** (`Customers` con email/segmento/tier/vendedor): solo se consume `customer.email` como destinatario por defecto.
-- [ ] **Pendiente operativo:** dominio verificado en Resend para `defaultFromAddress`.
+- [x] **Auto-envío por inquilino:** `emailConfig.autoSendQuoteEmail` (default activo) — al crear un presupuesto, si el cliente tiene email, se envía por Resend el enlace público del documento, en `after()` (cero blocking). Toggle en `SettingsView`.
+- [x] **Refactor de seguridad del envío:** `prepareDocumentEmail` (shareActions) resuelve acceso/token/HTML DENTRO del request y devuelve el envío diferible — llamar al action dentro de `after()` rompería (`headers()` no existe en la fase after). Compartido por el envío manual y el automático.
+- [x] **CRM ya existe** (`Customers` con email/segmento/tier/vendedor): `customer.email` es el destinatario por defecto.
+- [ ] **S43.2 (diferido):** extender `ShareableCollection` a `invoices` (campo `shareToken` + migración + render público + botón en detalle) y auto-envío de notas/facturas.
 
 ### 🔎 Sprint 44 — Filtros de negocio en los 4 listados restantes
 

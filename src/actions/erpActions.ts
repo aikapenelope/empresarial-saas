@@ -12,6 +12,10 @@ import {
   requireErpTenantAccess,
   requireSuperAdmin,
 } from '@/utilities/erpAuth';
+import { prepareDocumentEmail } from './shareActions';
+import { after } from 'next/server';
+import { computeInvoiceTax, computeIgtfUSD } from '../utilities/tax';
+import type { CatalogTaxRate } from '../utilities/tax';
 import { getActiveDb } from '@/utilities/inventoryLedger';
 import { assertNoOpenShiftForRegister } from '@/utilities/cashLedger';
 import {
@@ -627,6 +631,35 @@ async function createInvoiceCore(
   });
 
   const totalUSD = subtotalUSD;
+
+  // Desglose fiscal (Sprint 42): el IVA se clasifica por el `taxRate` del
+  // producto del catálogo (exempt/reduced/general — la alícuota general es
+  // configurable por inquilino). Informativo para el libro fiscal: totalUSD
+  // conserva su semántica (suma de líneas) y no incluye impuesto.
+  const productIds = [...new Set(parsed.items.map((it) => it.productId).filter(Boolean))] as number[];
+  const taxRateByProduct = new Map<number, CatalogTaxRate>();
+  if (productIds.length > 0) {
+    const catalogRes = await payload.find({
+      collection: 'products',
+      where: { id: { in: productIds } },
+      depth: 0,
+      limit: 1000,
+      pagination: false,
+      select: { taxRate: true },
+      req,
+    });
+    for (const prod of catalogRes.docs) {
+      taxRateByProduct.set(prod.id, prod.taxRate as CatalogTaxRate);
+    }
+  }
+  const generalRatePct = Number(tenant?.taxConfig?.generalRatePct ?? 16);
+  const taxBreakdown = computeInvoiceTax(
+    parsed.items.map((it) => ({
+      totalUSD: it.quantity * it.unitPriceUSD,
+      taxRate: it.productId ? taxRateByProduct.get(it.productId) : 'exempt',
+    })),
+    generalRatePct,
+  );
   const totalVES = totalUSD * rate;
   const isCash = parsed.paymentTerms === 'cash';
 
@@ -686,6 +719,8 @@ async function createInvoiceCore(
       items: formattedItems,
       totalUSD,
       totalVES,
+      taxBaseUSD: taxBreakdown.taxBaseUSD,
+      taxUSD: taxBreakdown.taxUSD,
       balanceUSD: isFullCourtesy ? 0 : totalUSD,
       balanceVES: isFullCourtesy ? 0 : totalVES,
       notes: parsed.notes || undefined,
@@ -755,6 +790,14 @@ async function createInvoiceCore(
     parsed.cashMethod === 'zelle' ||
     parsed.cashMethod === 'binance';
 
+  // IGTF del recibo automático (Devin #58): mismo snapshot que createPaymentAction.
+  const receiptIgtfUSD = computeIgtfUSD(
+    totalUSD,
+    parsed.cashMethod || 'cash_usd',
+    Number(tenant?.taxConfig?.igtfPct ?? 3),
+    tenant?.taxConfig?.applyIgtfOnFxPayments !== false,
+  );
+
   const paymentNumber = await nextDocumentNumber(
     payload,
     'customer-payments',
@@ -769,6 +812,7 @@ async function createInvoiceCore(
       tenant: parsed.tenantId,
       paymentNumber,
       customer: parsed.customerId,
+      igtfUSD: receiptIgtfUSD,
       paymentDate: new Date().toISOString(),
       status: 'confirmed',
       cashRegister: parsed.cashRegisterId || undefined,
@@ -885,6 +929,29 @@ export async function createQuoteAction(input: CreateQuoteInput) {
         req,
       });
     });
+
+    // Auto-envío (Sprint 43): presupuesto al correo del cliente vía Resend,
+    // fuera del camino crítico (after() de Next). Sólo si el inquilino lo
+    // tiene activo y el cliente tiene email registrado.
+    const tenantFresh = await payload.findByID({
+      collection: 'tenants',
+      id: parsed.tenantId,
+      depth: 0,
+    });
+    const customerFresh = await payload.findByID({
+      collection: 'customers',
+      id: parsed.customerId,
+      depth: 0,
+    });
+    const customerEmail = customerFresh?.email || '';
+    if (
+      (tenantFresh?.emailConfig?.autoSendQuoteEmail ?? true) &&
+      customerEmail &&
+      doc?.id
+    ) {
+      const prepared = await prepareDocumentEmail('quotes', parsed.tenantId, doc.id, customerEmail);
+      await after(prepared.send);
+    }
 
     revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);
     revalidatePath(`/${parsed.tenantSlug}/erp`);
@@ -1357,8 +1424,8 @@ export async function issueInvoiceFromOrderAction(input: {
       if (order.status !== 'confirmed') {
         throw new Error(`Confirma el pedido antes de facturar (estado actual: "${order.status}").`);
       }
-      // Sin término explícito se respeta contado: facturar una entrega no
-      // crea crédito implícito (Devin #57).
+      // Sin término explícito se usa CONTADO: facturar una entrega no crea
+      // crédito implícito (Devin #58).
       const effectivePaymentTerms = parsed.paymentTerms || 'cash';
 
       const invoiceParsed = createInvoiceSchema.parse({
@@ -1880,6 +1947,14 @@ export async function createPaymentAction(input: CreatePaymentInput) {
             },
           ],
           totalUSD: amountUSD,
+          // IGTF (Sprint 42): snapshot informativo — obligación del negocio
+          // sobre cobros en divisa según taxConfig del inquilino.
+          igtfUSD: computeIgtfUSD(
+            amountUSD,
+            parsed.method,
+            Number(tenant?.taxConfig?.igtfPct ?? 3),
+            tenant?.taxConfig?.applyIgtfOnFxPayments !== false,
+          ),
           allocations,
           notes: parsed.notes || undefined,
         },
@@ -3295,6 +3370,7 @@ export interface UpdateTenantSettingsInput {
   manualExchangeRate?: number;
   autoSyncRate: boolean;
   salesDocumentDefault?: 'nota_entrega' | 'factura';
+  autoSendQuoteEmail?: boolean;
 }
 
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
@@ -3318,6 +3394,9 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
         // Solo se persiste cuando viene explícito: no se pisa lo ya guardado
         ...(parsed.salesDocumentDefault
           ? { salesConfig: { salesDocumentDefault: parsed.salesDocumentDefault } }
+          : {}),
+        ...(parsed.autoSendQuoteEmail !== undefined
+          ? { emailConfig: { autoSendQuoteEmail: parsed.autoSendQuoteEmail } }
           : {}),
       },
     });
