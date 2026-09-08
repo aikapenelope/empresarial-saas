@@ -346,6 +346,17 @@ export const CustomerPayments: CollectionConfig = {
       ],
     },
     {
+      name: 'igtfUSD',
+      label: 'IGTF Registrado (USD)',
+      type: 'number',
+      defaultValue: 0,
+      min: 0,
+      admin: {
+        readOnly: true,
+        description: 'Snapshot informativo (Sprint 42): IGTF del cobro si el método es divisa (config por inquilino en taxConfig).',
+      },
+    },
+    {
       name: 'totalUSD',
       label: 'Monto Total Percibido (USD)',
       type: 'number',

@@ -109,6 +109,39 @@ export const Tenants: CollectionConfig = {
         },
       ],
     },
+    {
+      name: 'taxConfig',
+      label: 'Configuración Fiscal (IVA / IGTF)',
+      type: 'group',
+      fields: [
+        {
+          name: 'generalRatePct',
+          label: 'Alícuota General IVA (%)',
+          type: 'number',
+          defaultValue: 16,
+          min: 0,
+          max: 100,
+          admin: {
+            description:
+              'Rango legal 8–16,5%: ajustable por decreto del SENIAT sin cambios de código.',
+          },
+        },
+        {
+          name: 'igtfPct',
+          label: 'IGTF sobre Pagos en Divisa (%)',
+          type: 'number',
+          defaultValue: 3,
+          min: 0,
+          max: 100,
+        },
+        {
+          name: 'applyIgtfOnFxPayments',
+          label: 'Registrar IGTF en Cobros en Divisa (Zelle, Binance, Efectivo USD)',
+          type: 'checkbox',
+          defaultValue: true,
+        },
+      ],
+    },
   ],
   timestamps: true,
 };

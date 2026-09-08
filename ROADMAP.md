@@ -681,13 +681,16 @@ Hallazgos de la segunda revisión de Devin, reparados agrupados:
 - [ ] **Diferido (S41.2):** POS de mostrador en modo `nota_entrega` (creación directa de notas sin pedido) — requiere decisión de manejo de caja en contado bajo nota.
 - [ ] **Tests CI:** nota no toca kardex; factura desde nota descarga exactamente una vez.
 
-### 🧾 Sprint 42 — IVA/IGTF configurable + libro fiscal
+### 🧾 Sprint 42 — IVA/IGTF configurable + libro fiscal (PR `feat/sprint42-tax-config`)
 
-- [ ] **Config de tenant:** `taxConfig.igtfPct` (3), `applyIgtfOnFxPayments`, `generalRatePct` (16), `suntuarioPct` opcional — decretos del SENIAT sin cambios de código.
-- [ ] **Snapshot fiscal por factura:** `taxBaseUSD`/`taxUSD` calculados en `createInvoiceCore` desde el `taxRate` del producto (migración).
-- [ ] **IGTF a nivel de pago:** recargo en `createPaymentAction`/mix de caja para métodos en divisa.
-- [ ] **Libro de ventas CSV:** columnas `base_usd, tasa_pct, iva_usd, igtf_usd` (libro de compras análogo).
-- [ ] **Tests CI:** líneas mixtas (exenta/8/16) → desglose; pago en divisa → IGTF.
+- [x] **Config de tenant:** `taxConfig.generalRatePct` (16, ajustable por decreto — rango legal 8–16,5%), `taxConfig.igtfPct` (3), `taxConfig.applyIgtfOnFxPayments`. El suntuario queda como campo futuro (lista de rubros aún sin definir por el SENIAT).
+- [x] **Motor fiscal puro** (`src/utilities/tax.ts`): `computeInvoiceTax` (desglose por línea según `taxRate` del catálogo: exenta 0 / reducida 8 / general configurable), `computeIgtfUSD` (métodos en divisa: zelle/binance/efectivo USD) — unit-testeable.
+- [x] **Snapshot fiscal por factura:** `taxBaseUSD`/`taxUSD` calculados en `createInvoiceCore` (batch de `taxRate` del catálogo). **Informativo**: `totalUSD` conserva su semántica (suma de líneas, sin IVA) — saldos, créditos y cobros intactos.
+- [x] **IGTF en cobros:** `customer-payments.igtfUSD` (snapshot informativo al registrar cobro en divisa).
+- [x] **Libro de ventas CSV:** columnas `base_gravable_usd, iva_usd` añadidas (con `total_usd` intacto).
+- [x] **Migración `add_tax_config`** (idempotente) + migración `add_sales_config` del S41.
+- [x] **Tests unitarios CI:** líneas mixtas exenta/8/16, decreto 16,5%, métodos VES sin IGTF, desactivable por inquilino.
+- [ ] **S42.2 (diferido):** IGTF visible en el recibo POS + libro de compras (CxP) cuando el negocio lo pida.
 
 ### 📧 Sprint 43 — Email del ciclo completo (base ya existe: `sendDocumentEmailAction` + Resend + `after()`)
 

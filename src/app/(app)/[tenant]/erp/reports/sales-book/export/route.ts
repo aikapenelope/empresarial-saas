@@ -65,7 +65,7 @@ export async function GET(
     const money = (v: unknown) => Number(v || 0).toFixed(2);
 
     const lines: string[] = [
-      'fecha,factura,cliente,condicion,estado,total_usd,total_ves,tasa_snapshot',
+      'fecha,factura,cliente,condicion,estado,base_gravable_usd,iva_usd,total_usd,total_ves,tasa_snapshot',
     ];
     for (const inv of res.docs as Invoice[]) {
       const customerName =
@@ -79,6 +79,8 @@ export async function GET(
           csvCell(customerName),
           inv.paymentTerms,
           inv.status,
+          money(inv.taxBaseUSD),
+          money(inv.taxUSD),
           money(inv.totalUSD),
           money(inv.totalVES),
           money(inv.exchangeRateSnapshot),

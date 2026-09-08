@@ -407,6 +407,28 @@ export const Invoices: CollectionConfig = {
       },
     },
     {
+      name: 'taxBaseUSD',
+      label: 'Base Gravable IVA (USD)',
+      type: 'number',
+      defaultValue: 0,
+      min: 0,
+      admin: {
+        readOnly: true,
+        description: 'Snapshot fiscal (Sprint 42): suma de líneas gravadas según el taxRate del producto. Informativo para el libro fiscal — no altera totalUSD.',
+      },
+    },
+    {
+      name: 'taxUSD',
+      label: 'IVA Calculado (USD)',
+      type: 'number',
+      defaultValue: 0,
+      min: 0,
+      admin: {
+        readOnly: true,
+        description: 'IVA del desglose (líneas × alícuota del catálogo, general configurable por inquilino). Informativo.',
+      },
+    },
+    {
       name: 'balanceUSD',
       label: 'Saldo Pendiente (USD)',
       type: 'number',

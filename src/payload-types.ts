@@ -210,6 +210,14 @@ export interface Tenant {
      */
     salesDocumentDefault: 'nota_entrega' | 'factura';
   };
+  taxConfig?: {
+    /**
+     * Rango legal 8–16,5%: ajustable por decreto del SENIAT sin cambios de código.
+     */
+    generalRatePct?: number | null;
+    igtfPct?: number | null;
+    applyIgtfOnFxPayments?: boolean | null;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -446,6 +454,14 @@ export interface Invoice {
   }[];
   totalUSD: number;
   totalVES: number;
+  /**
+   * Snapshot fiscal (Sprint 42): suma de líneas gravadas según el taxRate del producto. Informativo para el libro fiscal — no altera totalUSD.
+   */
+  taxBaseUSD?: number | null;
+  /**
+   * IVA del desglose (líneas × alícuota del catálogo, general configurable por inquilino). Informativo.
+   */
+  taxUSD?: number | null;
   balanceUSD: number;
   balanceVES: number;
   /**
@@ -549,6 +565,10 @@ export interface CustomerPayment {
     receipt?: (number | null) | Media;
     id?: string | null;
   }[];
+  /**
+   * Snapshot informativo (Sprint 42): IGTF del cobro si el método es divisa (config por inquilino en taxConfig).
+   */
+  igtfUSD?: number | null;
   totalUSD: number;
   allocations?:
     | {
@@ -1386,6 +1406,13 @@ export interface TenantsSelect<T extends boolean = true> {
     | {
         salesDocumentDefault?: T;
       };
+  taxConfig?:
+    | T
+    | {
+        generalRatePct?: T;
+        igtfPct?: T;
+        applyIgtfOnFxPayments?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1494,6 +1521,8 @@ export interface InvoicesSelect<T extends boolean = true> {
       };
   totalUSD?: T;
   totalVES?: T;
+  taxBaseUSD?: T;
+  taxUSD?: T;
   balanceUSD?: T;
   balanceVES?: T;
   installments?:
@@ -1533,6 +1562,7 @@ export interface CustomerPaymentsSelect<T extends boolean = true> {
         receipt?: T;
         id?: T;
       };
+  igtfUSD?: T;
   totalUSD?: T;
   allocations?:
     | T

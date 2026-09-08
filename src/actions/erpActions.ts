@@ -12,6 +12,8 @@ import {
   requireErpTenantAccess,
   requireSuperAdmin,
 } from '@/utilities/erpAuth';
+import { computeInvoiceTax, computeIgtfUSD } from '../utilities/tax';
+import type { CatalogTaxRate } from '../utilities/tax';
 import { getActiveDb } from '@/utilities/inventoryLedger';
 import { assertNoOpenShiftForRegister } from '@/utilities/cashLedger';
 import {
@@ -627,6 +629,35 @@ async function createInvoiceCore(
   });
 
   const totalUSD = subtotalUSD;
+
+  // Desglose fiscal (Sprint 42): el IVA se clasifica por el `taxRate` del
+  // producto del catálogo (exempt/reduced/general — la alícuota general es
+  // configurable por inquilino). Informativo para el libro fiscal: totalUSD
+  // conserva su semántica (suma de líneas) y no incluye impuesto.
+  const productIds = [...new Set(parsed.items.map((it) => it.productId).filter(Boolean))] as number[];
+  const taxRateByProduct = new Map<number, CatalogTaxRate>();
+  if (productIds.length > 0) {
+    const catalogRes = await payload.find({
+      collection: 'products',
+      where: { id: { in: productIds } },
+      depth: 0,
+      limit: 1000,
+      pagination: false,
+      select: { taxRate: true },
+      req,
+    });
+    for (const prod of catalogRes.docs) {
+      taxRateByProduct.set(prod.id, prod.taxRate as CatalogTaxRate);
+    }
+  }
+  const generalRatePct = Number(tenant?.taxConfig?.generalRatePct ?? 16);
+  const taxBreakdown = computeInvoiceTax(
+    parsed.items.map((it) => ({
+      totalUSD: it.quantity * it.unitPriceUSD,
+      taxRate: it.productId ? taxRateByProduct.get(it.productId) : 'exempt',
+    })),
+    generalRatePct,
+  );
   const totalVES = totalUSD * rate;
   const isCash = parsed.paymentTerms === 'cash';
 
@@ -686,6 +717,8 @@ async function createInvoiceCore(
       items: formattedItems,
       totalUSD,
       totalVES,
+      taxBaseUSD: taxBreakdown.taxBaseUSD,
+      taxUSD: taxBreakdown.taxUSD,
       balanceUSD: isFullCourtesy ? 0 : totalUSD,
       balanceVES: isFullCourtesy ? 0 : totalVES,
       notes: parsed.notes || undefined,
@@ -1877,6 +1910,14 @@ export async function createPaymentAction(input: CreatePaymentInput) {
             },
           ],
           totalUSD: amountUSD,
+          // IGTF (Sprint 42): snapshot informativo — obligación del negocio
+          // sobre cobros en divisa según taxConfig del inquilino.
+          igtfUSD: computeIgtfUSD(
+            amountUSD,
+            parsed.method,
+            Number(tenant?.taxConfig?.igtfPct ?? 3),
+            tenant?.taxConfig?.applyIgtfOnFxPayments !== false,
+          ),
           allocations,
           notes: parsed.notes || undefined,
         },
