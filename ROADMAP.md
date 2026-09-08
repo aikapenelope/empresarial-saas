@@ -597,7 +597,17 @@ Cada módulo tiene ahora UNA pieza visual distintiva bajo el mismo sistema, más
 - [x] **UsersPanel**: Card/Table shadcn + modal de invitación con primitivas.
 - [x] **InventoryImportView**: pasos con Card, preview y resultados con Table shadcn, estados error/parse con tokens.
 - [x] **QuickQuoteBuilder**: Card/Input/Button; badge de tier activo en totales.
-- **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde. **Migración de vistas: 100% del grupo `(app)`** — restan sólo los interiores de los 22 modales (hoy bimodales vía puente slate de S35) como tarea continua de pulido.
+- **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde.
+
+### 📄 Sprint 38 — Ola 4 (PR `feat/ui-docs-detail-s38`): detalles de documento, templates, home y wrappers
+
+- [x] **Detalles de documento (RSC, imprimibles):** factura (`invoices/[id]` — cabecera, líneas, cuotas, cobros, kardex, auditoría), pedido (`orders/[id]` — líneas con despachado, totales, remisiones) y remisión (`delivery-notes/[id]` — líneas, notas). Todos con `ErpPageHeader` + `Card`/`Table` shadcn y el `print-area` intacto.
+- [x] **Templates:** galería de Cards con tokens; stats del template (almacenes/catálogo/BOM) en caja `bg-muted/40`.
+- [x] **Home público:** hero con tokens (sin gradiente decorativo), feature pills como `Card`, CTA con `Button` shadcn, ticker BCV monocromo; `HomeTenantList` migrado (chips de empresa con hover a `bg-primary`).
+- [x] **Headers wrapper unificados:** 11 páginas RSC que envolvían vistas con su propio `ErpPageHeader` ya no duplican el header artesanal; `pos` y `quotes/quick` (vistas sin header propio) usan `ErpPageHeader` desde el wrapper. `ErpPageHeader` gana prop `badge` (chip de tasa del POS).
+- [x] **Skeleton de factura** (`loading.tsx`) con tokens.
+- **Resultado:** **0 headers/contenedores artesanales** en el grupo `(app)` — la migración visual es nativa de punta a punta. Queda como pulido continuo el interior de los 22 modales (bimodales vía puente slate).
+- **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde.
 
 ---
 

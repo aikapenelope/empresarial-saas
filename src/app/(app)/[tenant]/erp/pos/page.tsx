@@ -1,7 +1,5 @@
 import React from 'react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import {
   getTenantBySlug,
   getCustomersWithDebt,
@@ -12,6 +10,7 @@ import {
 import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
+import { ErpPageHeader } from '@/components/erp/ErpPageHeader';
 import { POSView } from '@/components/erp/POSView';
 import { formatVES } from '@/components/erp/format';
 
@@ -66,31 +65,17 @@ export default async function POSPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Punto de Venta</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            Punto de Venta
-            <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-mono font-medium">
-              Tasa: {formatVES(effectiveRate)}
-            </span>
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Venta de mostrador con recibo automático en el turno de caja y descarga de inventario (Kardex).
-          </p>
-        </div>
-      </div>
+      <ErpPageHeader
+        title="Punto de Venta"
+        description="Venta de mostrador con recibo automático en el turno de caja y descarga de inventario (Kardex)."
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Punto de Venta"
+        badge={
+          <span className="text-xs px-2 py-0.5 rounded-full border border-border bg-muted text-foreground font-mono font-medium">
+            Tasa: {formatVES(effectiveRate)}
+          </span>
+        }
+      />
 
       <POSView
         tenantId={tenant.id}
