@@ -5,6 +5,17 @@ import { UserPlus, Loader2 } from 'lucide-react';
 import { inviteUserAction } from '@/actions/erpActions';
 import { Badge } from './Badge';
 import { Modal } from './modals/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { toast } from 'sonner';
 
 interface UsersPanelProps {
@@ -23,7 +34,7 @@ const ROLE_LABELS: Record<string, string> = {
   employee: 'Empleado',
 };
 
-/** Panel de usuarios del inquilino (Sprint 17): listado + invitación con rol. */
+/** Panel de usuarios del inquilino (Sprint 17 → reskin 37): listado + invitación con rol. */
 export function UsersPanel({ tenantId, tenantSlug, users, canManage }: UsersPanelProps) {
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -62,38 +73,35 @@ export function UsersPanel({ tenantId, tenantSlug, users, canManage }: UsersPane
   };
 
   return (
-    <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden space-y-3 p-5">
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+    <Card className="rounded-xl overflow-hidden space-y-3 p-5">
+      <div className="flex items-center justify-between border-b border-border pb-3">
         <div className="flex items-center gap-2">
-          <UserPlus className="h-4 w-4 text-indigo-400" />
-          <h2 className="text-sm font-semibold text-white">Usuarios del Inquilino</h2>
+          <UserPlus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-foreground">Usuarios del Inquilino</h2>
         </div>
         {canManage && (
-          <button
-            onClick={() => setIsInviteOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            <span>Invitar Usuario</span>
-          </button>
+          <Button size="sm" onClick={() => setIsInviteOpen(true)}>
+            <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
+            Invitar Usuario
+          </Button>
         )}
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead>
-            <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-              <th className="p-3">Nombre</th>
-              <th className="p-3">Email</th>
-              <th className="p-3 text-center">Rol</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/60">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Nombre</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead className="text-center">Rol</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {users.map((u) => (
-              <tr key={u.id} className="hover:bg-slate-800/30">
-                <td className="p-3 font-semibold text-white">{u.name}</td>
-                <td className="p-3 font-mono text-slate-300">{u.email}</td>
-                <td className="p-3 text-center">
+              <TableRow key={u.id}>
+                <TableCell className="font-semibold">{u.name}</TableCell>
+                <TableCell className="font-mono text-muted-foreground">{u.email}</TableCell>
+                <TableCell className="text-center">
                   <Badge
                     variant={
                       u.role === 'tenant-admin' || u.role === 'super-admin'
@@ -106,11 +114,11 @@ export function UsersPanel({ tenantId, tenantSlug, users, canManage }: UsersPane
                   >
                     {ROLE_LABELS[u.role] || u.role}
                   </Badge>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {isInviteOpen && (
@@ -123,43 +131,50 @@ export function UsersPanel({ tenantId, tenantSlug, users, canManage }: UsersPane
         >
           <form onSubmit={handleInvite} className="space-y-4 text-xs">
             {error && (
-              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-600 dark:text-rose-400" role="alert">
                 {error}
               </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Nombre *</label>
-                <input
+                <label className="block font-semibold text-foreground mb-1" htmlFor="invite-name">
+                  Nombre *
+                </label>
+                <Input
+                  id="invite-name"
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ej. María Pérez"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Email *</label>
-                <input
+                <label className="block font-semibold text-foreground mb-1" htmlFor="invite-email">
+                  Email *
+                </label>
+                <Input
+                  id="invite-email"
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="usuario@empresa.com"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Rol *</label>
+                <label className="block font-semibold text-foreground mb-1" htmlFor="invite-role">
+                  Rol *
+                </label>
                 <select
+                  id="invite-role"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground"
                 >
                   <option value="vendor">Vendedor / Representante Comercial</option>
                   <option value="cashier">Cajero / Operador</option>
@@ -168,41 +183,34 @@ export function UsersPanel({ tenantId, tenantSlug, users, canManage }: UsersPane
                 </select>
               </div>
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">
+                <label className="block font-semibold text-foreground mb-1" htmlFor="invite-password">
                   Contraseña Temporal *
                 </label>
-                <input
+                <Input
+                  id="invite-password"
                   type="password"
                   required
                   minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mínimo 8 caracteres"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono focus:border-indigo-500 focus:outline-none"
+                  className="font-mono"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsInviteOpen(false)}
-                className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
-              >
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+              <Button type="button" variant="outline" onClick={() => setIsInviteOpen(false)}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={isPending}
-                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
-              >
-                {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
                 <span>Invitar</span>
-              </button>
+              </Button>
             </div>
           </form>
         </Modal>
       )}
-    </div>
+    </Card>
   );
 }

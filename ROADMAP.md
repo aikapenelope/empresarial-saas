@@ -587,8 +587,17 @@ Cada módulo tiene ahora UNA pieza visual distintiva bajo el mismo sistema, más
 4. **Tasas — Spread entre Fuentes** (`RateSpreadCard`): desviación BCV/Binance/Paralelo contra la tasa efectiva, con la fuente vigente resaltada (server-compatible).
 5. **Auditoría — Feed de actividad**: avatar-inicial del actor + "quién hizo qué a cuál documento" en lenguaje natural, en vez de tabla plana (Sprint 22).
 6. **Alertas — Feed por severidad**: tarjetas con acento por severidad (crítica/advertencia/info) y acciones inline.
-7. **Vistas migradas al patrón Ola 1** (ErpPageHeader + KpiCard + Table shadcn + Input/Button/Select): Quotes, Orders, DeliveryNotes, Suppliers, Vendors (Select shadcn para filtro), Purchases, CashRegisters, Counts, Rates, Alerts, Audit, Kardex (página RSC).
-8. **Pendiente Ola 3:** POS (rediseño dedicado de mostrador: targets XL, ticket fijo, teclado numérico), Settings, InventoryImport, UsersPanel, PricingReportCard, QuickQuoteBuilder y el interior de los modales (hoy bimodales vía puente slate).
+7. **Vistas migradas al patrón Ola 1** (ErpPageHeader + KpiCard + Table shadcn): Quotes, Orders, DeliveryNotes, Suppliers, Vendors (Select shadcn para filtro), Purchases, CashRegisters, Counts, Rates, Alerts, Audit, Kardex (página RSC).
+
+### 🖥️ Sprint 37 — Ola 3 (PR `feat/ui-views-wave3-s37`): POS de mostrador + cierre de la migración
+
+- [x] **POS rediseñado como terminal de mostrador:** targets táctiles XL (selects/inputs `h-11`, botón de cobro `h-14`), cantidades rápidas de un toque (1/2/3/5/10/12), steppers ± por línea del ticket, ticket como lista (no tabla densa), panel de cobro sticky en desktop, visor bimonetario siempre visible, badge del tier activo del cliente. Lógica de venta intacta (tiers, walk-in, turnos de caja, kardex).
+- [x] **SettingsView**: Card + Input + Badge para la fuente de tasa; misma acción y contrato.
+- [x] **PricingReportCard**: Card/Table shadcn; "Generar" abre el reporte automáticamente.
+- [x] **UsersPanel**: Card/Table shadcn + modal de invitación con primitivas.
+- [x] **InventoryImportView**: pasos con Card, preview y resultados con Table shadcn, estados error/parse con tokens.
+- [x] **QuickQuoteBuilder**: Card/Input/Button; badge de tier activo en totales.
+- **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde. **Migración de vistas: 100% del grupo `(app)`** — restan sólo los interiores de los 22 modales (hoy bimodales vía puente slate de S35) como tarea continua de pulido.
 
 ---
 

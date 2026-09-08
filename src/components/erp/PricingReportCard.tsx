@@ -3,6 +3,16 @@
 import React, { useState } from 'react';
 import { formatUSD, formatVES } from './format';
 import { Loader2, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface PricingReportEntry {
   sku: string;
@@ -13,9 +23,10 @@ interface PricingReportEntry {
 }
 
 /**
- * Consumo del reporte `POST /api/pricing/report` (Sprint 16): precios sugeridos
- * en VES con la tasa vigente. Informativo — los ajustes se aplican manualmente
- * (edición de producto o importación) y quedan en price-history.
+ * Consumo del reporte `POST /api/pricing/report` (Sprint 16 → reskin 37):
+ * precios sugeridos en VES con la tasa vigente. Informativo — los ajustes se
+ * aplican manualmente (edición de producto o importación) y quedan en
+ * price-history.
  */
 export function PricingReportCard({ tenantId }: { tenantId: number }) {
   const [open, setOpen] = useState(false);
@@ -43,6 +54,7 @@ export function PricingReportCard({ tenantId }: { tenantId: number }) {
         setError(json.error || 'Error al generar el reporte.');
       } else {
         setReport(json);
+        setOpen(true);
       }
     } catch {
       setError('Error de red al generar el reporte.');
@@ -52,73 +64,76 @@ export function PricingReportCard({ tenantId }: { tenantId: number }) {
   };
 
   return (
-    <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4 space-y-3">
+    <Card className="rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-amber-400" />
-          <h2 className="text-sm font-semibold text-white">Reporte de Precios (VES)</h2>
+          <TrendingUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-foreground">Reporte de Precios (VES)</h2>
         </div>
         <div className="flex items-center gap-2">
           {report && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
               onClick={() => setOpen(!open)}
-              className="text-indigo-400 hover:text-indigo-300 text-xs font-semibold"
             >
               {open ? 'Ocultar' : 'Ver'}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleGenerate}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-50"
           >
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
             <span>{report ? 'Regenerar' : 'Generar'}</span>
-          </button>
+          </Button>
         </div>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300 text-xs">
+        <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-600 dark:text-rose-400 text-xs" role="alert">
           {error}
         </div>
       )}
 
       {open && report && (
         <div className="space-y-2">
-          <p className="text-[11px] text-slate-400">
-            Tasa vigente: <span className="font-mono text-emerald-400">{formatVES(report.effectiveRate)}</span> ({report.rateSource}) ·{' '}
+          <p className="text-[11px] text-muted-foreground">
+            Tasa vigente: <span className="font-mono text-foreground">{formatVES(report.effectiveRate)}</span> ({report.rateSource}) ·{' '}
             {report.totalProducts} producto(s) · generado {new Date(report.generatedAt).toLocaleString('es-VE')}.{' '}
-            <span className="text-slate-500">
+            <span className="text-muted-foreground/80">
               Informativo: los ajustes se aplican editando cada producto y quedan en el historial de precios.
             </span>
           </p>
-          <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-800">
-            <table className="w-full text-left text-[11px]">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-2">SKU</th>
-                  <th className="p-2">Producto</th>
-                  <th className="p-2 text-right">Precio USD</th>
-                  <th className="p-2 text-right">Sugerido VES</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Producto</TableHead>
+                  <TableHead className="text-right">Precio USD</TableHead>
+                  <TableHead className="text-right">Sugerido VES</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {report.products.map((p) => (
-                  <tr key={p.sku} className="hover:bg-slate-800/30">
-                    <td className="p-2 font-mono text-slate-400">{p.sku}</td>
-                    <td className="p-2 text-white">{p.name}</td>
-                    <td className="p-2 text-right font-mono text-slate-200">{formatUSD(p.priceUSD)}</td>
-                    <td className="p-2 text-right font-mono text-emerald-400">
+                  <TableRow key={p.sku}>
+                    <TableCell className="font-mono text-muted-foreground">{p.sku}</TableCell>
+                    <TableCell>{p.name}</TableCell>
+                    <TableCell className="text-right font-mono">{formatUSD(p.priceUSD)}</TableCell>
+                    <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">
                       {formatVES(p.suggestedPriceVES)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

@@ -1,10 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import { updateTenantSettingsAction } from '@/actions/erpActions';
 import { formatVES } from './format';
-import { ArrowLeft, Building2, Coins, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { Building2, Coins, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { ErpPageHeader } from './ErpPageHeader';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from './Badge';
 
 interface SettingsViewProps {
   tenant: {
@@ -76,125 +81,121 @@ export function SettingsView({
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenant.slug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Configuración</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            Ajustes de Empresa & Parámetros Bimonetarios
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Personaliza los datos fiscales, WhatsApp de cobranzas y la política de tasa de cambio de tu organización.
-          </p>
-        </div>
-      </div>
+      <ErpPageHeader
+        title="Ajustes de Empresa & Parámetros Bimonetarios"
+        description="Personaliza los datos fiscales, WhatsApp de cobranzas y la política de tasa de cambio de tu organización."
+        breadcrumbHref={`/${tenant.slug}/erp`}
+        section="Configuración"
+      />
 
       {success && (
-        <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-4 text-emerald-400 text-xs font-semibold animate-in fade-in">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-4 text-emerald-600 dark:text-emerald-400 text-xs font-semibold animate-in fade-in" role="status">
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span>¡Configuración de la empresa guardada y aplicada exitosamente!</span>
         </div>
       )}
 
       {error && (
-        <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-4 text-rose-300 text-xs">
+        <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-4 text-rose-600 dark:text-rose-400 text-xs" role="alert">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6 text-xs">
         {/* Sección 1: Datos Fiscales y de Contacto */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3">
-            <Building2 className="h-4 w-4 text-indigo-400" />
-            <h2 className="text-sm font-semibold text-white">Identificación Fiscal & Corporativa</h2>
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-2 border-b border-border pb-3">
+            <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Identificación Fiscal & Corporativa</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Razón Social / Nombre Comercial *</label>
-              <input
+              <label className="block font-semibold text-foreground mb-1" htmlFor="tenant-name">
+                Razón Social / Nombre Comercial *
+              </label>
+              <Input
+                id="tenant-name"
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">RIF / Cédula Fiscal</label>
-              <input
+              <label className="block font-semibold text-foreground mb-1" htmlFor="tenant-rif">
+                RIF / Cédula Fiscal
+              </label>
+              <Input
+                id="tenant-rif"
                 type="text"
                 value={rifFiscal}
                 onChange={(e) => setRifFiscal(e.target.value)}
                 placeholder="Ej. J-12345678-0"
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono focus:border-indigo-500 focus:outline-none"
+                className="font-mono"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">
+              <label className="block font-semibold text-foreground mb-1" htmlFor="tenant-phone">
                 WhatsApp Oficial de Cobranzas / Teléfono
               </label>
-              <input
+              <Input
+                id="tenant-phone"
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Ej. +584121234567"
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono focus:border-indigo-500 focus:outline-none"
+                className="font-mono"
               />
-              <p className="text-[10px] text-slate-500 mt-1">
+              <p className="text-[10px] text-muted-foreground mt-1">
                 Utilizado para generar los enlaces de cobro automático con mensajes estructurados.
               </p>
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Identificador URL (Slug)</label>
-              <input
+              <label className="block font-semibold text-foreground mb-1" htmlFor="tenant-slug">
+                Identificador URL (Slug)
+              </label>
+              <Input
+                id="tenant-slug"
                 type="text"
                 disabled
                 value={tenant.slug}
-                className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-slate-400 font-mono cursor-not-allowed"
+                className="font-mono cursor-not-allowed"
               />
-              <p className="text-[10px] text-slate-500 mt-1">
+              <p className="text-[10px] text-muted-foreground mt-1">
                 Identificador permanente del inquilino multi-tenant.
               </p>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Sección 2: Configuración Bimonetaria y Tasa */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 backdrop-blur space-y-4">
-          <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3">
-            <Coins className="h-4 w-4 text-emerald-400" />
-            <h2 className="text-sm font-semibold text-white">Política Cambiaria & Moneda Base</h2>
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-2 border-b border-border pb-3">
+            <Coins className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Política Cambiaria & Moneda Base</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Moneda Base Contable</label>
+              <label className="block font-semibold text-foreground mb-1" htmlFor="tenant-currency">
+                Moneda Base Contable
+              </label>
               <select
+                id="tenant-currency"
                 value={baseCurrency}
                 onChange={(e) => setBaseCurrency(e.target.value as 'USD' | 'VES')}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground"
               >
                 <option value="USD">Dólar Estadounidense (USD $)</option>
                 <option value="VES">Bolívar Soberano (VES Bs.)</option>
               </select>
-              <p className="text-[10px] text-slate-500 mt-1">
+              <p className="text-[10px] text-muted-foreground mt-1">
                 Moneda de consolidación de balances deudores y métricas financieras.
               </p>
             </div>
@@ -206,84 +207,81 @@ export function SettingsView({
                   id="autoSyncRate"
                   checked={autoSyncRate}
                   onChange={(e) => setAutoSyncRate(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
+                  className="h-4 w-4 rounded border-input bg-background accent-primary"
                 />
-                <label htmlFor="autoSyncRate" className="font-semibold text-slate-300 cursor-pointer">
+                <label htmlFor="autoSyncRate" className="font-semibold text-foreground cursor-pointer">
                   Sincronizar automáticamente con Tasa Oficial BCV
                 </label>
               </div>
-              <p className="text-[10px] text-slate-500 pl-6">
+              <p className="text-[10px] text-muted-foreground pl-6">
                 Si está activo, las operaciones calcularán el contravalor con el valor oficial del Banco Central de Venezuela.
               </p>
             </div>
           </div>
 
           {/* Tarjeta de Tasa Actual */}
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+          <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[11px] text-slate-400 uppercase font-semibold">Tasa Efectiva en Operaciones</span>
-                <div className="font-mono font-bold text-lg text-emerald-400">
+                <span className="text-[11px] text-muted-foreground uppercase font-semibold">Tasa Efectiva en Operaciones</span>
+                <div className="font-mono font-bold text-lg text-foreground">
                   {formatVES(effectiveRate)}
                 </div>
               </div>
               <div className="text-right">
-                <span className="text-[11px] text-slate-400 uppercase font-semibold">Fuente Activa</span>
-                <div className="font-mono text-xs text-indigo-400 capitalize">
-                  {rateSource === 'auto_bcv'
-                    ? `BCV Oficial (${bcvRate ? formatVES(bcvRate) : 'En Vivo'})`
-                    : 'Tasa Manual de la Empresa'}
+                <span className="text-[11px] text-muted-foreground uppercase font-semibold">Fuente Activa</span>
+                <div className="mt-1">
+                  <Badge variant={rateSource === 'auto_bcv' ? 'emerald' : 'amber'} size="sm" dot>
+                    {rateSource === 'auto_bcv'
+                      ? `BCV Oficial (${bcvRate ? formatVES(bcvRate) : 'En Vivo'})`
+                      : 'Tasa Manual de la Empresa'}
+                  </Badge>
                 </div>
               </div>
             </div>
 
             {!autoSyncRate && (
-              <div className="pt-3 border-t border-slate-800">
-                <label className="block font-semibold text-slate-300 mb-1">
+              <div className="pt-3 border-t border-border">
+                <label className="block font-semibold text-foreground mb-1" htmlFor="manual-rate">
                   Tasa de Cambio Manual de la Empresa (Bs. por 1 USD)
                 </label>
-                <input
+                <Input
+                  id="manual-rate"
                   type="number"
                   step="0.01"
                   min="0"
                   value={manualExchangeRate}
                   onChange={(e) => setManualExchangeRate(Number(e.target.value))}
                   placeholder="Ej. 65.40"
-                  className="w-full sm:w-64 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono focus:border-indigo-500 focus:outline-none"
+                  className="font-mono sm:w-64"
                 />
-                <p className="text-[10px] text-slate-500 mt-1">
+                <p className="text-[10px] text-muted-foreground mt-1">
                   Aplica para facturación y cobros cuando la sincronización automática del BCV está inactiva.
                 </p>
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Botón Guardar */}
-        <div className="flex items-center justify-end gap-3 pt-4">
-          <Link
-            href={`/${tenant.slug}/erp`}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
-          >
-            Volver al Dashboard
-          </Link>
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
-          >
+        <Separator />
+        <div className="flex items-center justify-end gap-3">
+          <Button type="button" variant="outline" asChild>
+            <a href={`/${tenant.slug}/erp`}>Volver al Dashboard</a>
+          </Button>
+          <Button type="submit" disabled={loading} size="lg">
             {loading ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 <span>Guardando Cambios...</span>
               </>
             ) : (
               <>
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
                 <span>Guardar Configuración</span>
               </>
             )}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
