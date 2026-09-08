@@ -3,16 +3,29 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   ClipboardList,
   Plus,
   FileText,
   Ban,
   CheckCircle2,
+  FolderOpen,
+  Timer,
+  Archive,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
+import { KpiCard } from './KpiCard';
+import { ErpPageHeader } from './ErpPageHeader';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { OrderModal } from './modals/OrderModal';
 import { OrderInvoiceModal } from './modals/OrderInvoiceModal';
 import {
@@ -93,91 +106,71 @@ export function OrdersView({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Pedidos</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Pedidos de Venta</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Pedidos confirmados pendientes de despacho: confirma, factura y da seguimiento sin tocar el inventario hasta facturar.
-          </p>
-        </div>
-
-        <button
-          onClick={() => setIsOrderModalOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span>+ Nuevo Pedido</span>
-        </button>
-      </div>
+      <ErpPageHeader
+        title="Pedidos de Venta"
+        description="Pedidos confirmados pendientes de despacho: confirma, factura y da seguimiento sin tocar el inventario hasta facturar."
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Pedidos"
+        actions={
+          <Button size="sm" onClick={() => setIsOrderModalOpen(true)}>
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Nuevo Pedido
+          </Button>
+        }
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Pedidos Abiertos</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">{openOrders.length}</span>
-            <span className="text-xs text-slate-400">borradores + confirmados</span>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Por Facturar</p>
-          <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-            <span className="text-xl font-bold text-amber-400">{pendingInvoicing.length}</span>
-            <span className="text-xs text-slate-400">· {formatUSD(pendingTotal)}</span>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Facturados / Cancelados</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">
-              {orders.filter((o) => o.status === 'invoiced' || o.status === 'canceled').length}
-            </span>
-            <span className="text-xs text-slate-400">histórico cerrado</span>
-          </div>
-        </div>
+        <KpiCard
+          title="Pedidos Abiertos"
+          valueUSD={String(openOrders.length)}
+          icon={FolderOpen}
+          description="Borradores + confirmados"
+        />
+        <KpiCard
+          title="Por Facturar"
+          valueUSD={formatUSD(pendingTotal)}
+          icon={Timer}
+          tone="warning"
+          description={`${pendingInvoicing.length} confirmado(s) pendiente(s) de factura`}
+        />
+        <KpiCard
+          title="Facturados / Cancelados"
+          valueUSD={String(orders.filter((o) => o.status === 'invoiced' || o.status === 'canceled').length)}
+          icon={Archive}
+          description="Histórico cerrado"
+        />
       </div>
 
       {/* Listado */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ClipboardList className="h-4 w-4 text-indigo-400" />
-            <h2 className="text-sm font-semibold text-white">Pedidos del Inquilino</h2>
+            <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Pedidos del Inquilino</h2>
           </div>
-          <span className="text-xs text-slate-400">{orders.length} registro(s)</span>
+          <span className="text-xs text-muted-foreground">{orders.length} registro(s)</span>
         </div>
 
         {orders.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-10">
+          <p className="text-xs text-muted-foreground text-center py-10">
             No hay pedidos registrados todavía.
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Nro.</th>
-                  <th className="p-3">Cliente</th>
-                  <th className="p-3">Tier</th>
-                  <th className="p-3 text-right">Total (USD)</th>
-                  <th className="p-3 text-right">Total (VES)</th>
-                  <th className="p-3 text-center">Estado</th>
-                  <th className="p-3">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Nro.</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Tier</TableHead>
+                  <TableHead className="text-right">Total (USD)</TableHead>
+                  <TableHead className="text-right">Total (VES)</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {orders.map((o) => {
                   const badge = STATUS_BADGE[o.status] || STATUS_BADGE.draft;
                   const invoiceId =
@@ -185,91 +178,93 @@ export function OrdersView({
                       ? o.issuedInvoice.id
                       : o.issuedInvoice;
                   return (
-                    <tr key={o.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-mono font-bold text-white">
+                    <TableRow key={o.id}>
+                      <TableCell className="font-mono font-bold">
                         <Link
                           href={`/${tenantSlug}/erp/orders/${o.id}`}
-                          className="hover:text-indigo-300 underline decoration-slate-700 underline-offset-2"
+                          className="underline decoration-border underline-offset-2 hover:decoration-foreground"
                         >
                           {o.orderNumber}
                         </Link>
-                      </td>
-                      <td className="p-3 text-slate-200">{customerName(o)}</td>
-                      <td className="p-3 text-slate-400 text-[11px] uppercase">{o.priceTierSnapshot || 'retail'}</td>
-                      <td className="p-3 text-right font-mono font-bold text-white">
+                      </TableCell>
+                      <TableCell>{customerName(o)}</TableCell>
+                      <TableCell className="text-muted-foreground text-[11px] uppercase">{o.priceTierSnapshot || 'retail'}</TableCell>
+                      <TableCell className="text-right font-mono font-bold">
                         {formatUSD(Number(o.totalUSD) || 0)}
-                      </td>
-                      <td className="p-3 text-right font-mono text-slate-300">
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
                         {formatVES(Number(o.totalVES) || 0)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant={badge.variant} size="sm">
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={badge.variant} size="sm" dot={o.status === 'confirmed' || o.status === 'invoiced'}>
                           {badge.label}
                         </Badge>
-                      </td>
-                      <td className="p-3">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {o.status === 'draft' && (
                             <>
-                              <button
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-[11px]"
                                 onClick={() => {
                                   setEditingOrder(o);
                                   setIsOrderModalOpen(true);
                                 }}
-                                className="text-slate-400 hover:text-white text-[11px] font-semibold px-2 py-1"
                               >
                                 Editar
-                              </button>
-                              <button
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-[11px]"
                                 onClick={() => handleConfirm(o.id)}
                                 disabled={busyOrderId === o.id}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white font-semibold disabled:opacity-40"
                               >
-                                <CheckCircle2 className="h-3 w-3" />
+                                <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                                 <span>Confirmar</span>
-                              </button>
+                              </Button>
                             </>
                           )}
                           {o.status === 'confirmed' && (
                             <>
-                              <button
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-[11px]"
                                 onClick={() => setInvoicingOrder(o)}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white font-semibold"
                               >
-                                <FileText className="h-3 w-3" />
+                                <FileText className="h-3 w-3" aria-hidden="true" />
                                 <span>Facturar</span>
-                              </button>
-                              <Link
-                                href={`/${tenantSlug}/erp/orders/${o.id}`}
-                                className="text-slate-400 hover:text-white text-[11px] font-semibold px-2 py-1"
-                              >
-                                Remisión
-                              </Link>
-                              <button
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" asChild>
+                                <Link href={`/${tenantSlug}/erp/orders/${o.id}`}>Remisión</Link>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-[11px] text-rose-600 dark:text-rose-400"
                                 onClick={() => handleCancel(o.id)}
                                 disabled={busyOrderId === o.id}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-rose-600/10 text-rose-300 border border-rose-500/30 hover:bg-rose-600 hover:text-white font-semibold disabled:opacity-40"
                               >
-                                <Ban className="h-3 w-3" />
+                                <Ban className="h-3 w-3" aria-hidden="true" />
                                 <span>Cancelar</span>
-                              </button>
+                              </Button>
                             </>
                           )}
                           {invoiceId && (
-                            <Link
-                              href={`/${tenantSlug}/erp/invoices/${invoiceId}`}
-                              className="text-indigo-400 hover:text-indigo-300 text-[11px] font-semibold px-2 py-1 underline decoration-slate-700 underline-offset-2"
-                            >
-                              Ver Factura
-                            </Link>
+                            <Button size="sm" variant="link" className="h-7 px-2 text-[11px]" asChild>
+                              <Link href={`/${tenantSlug}/erp/invoices/${invoiceId}`}>Ver Factura</Link>
+                            </Button>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

@@ -1,11 +1,12 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft, Sparkles, Building2, Package, FlaskConical } from 'lucide-react';
+import { Sparkles, Building2, Package, FlaskConical } from 'lucide-react';
 import { getTenantBySlug, getIndustryTemplatesCatalog } from '@/utilities/erpData';
 import { BUILTIN_TEMPLATES } from '@/utilities/industryTemplates/definitions';
 import { Badge } from '@/components/erp/Badge';
+import { ErpPageHeader } from '@/components/erp/ErpPageHeader';
 import { TemplateApplyButton } from '@/components/erp/TemplateApplyButton';
+import { Card } from '@/components/ui/card';
 import { ErpAccessError, requireErpTenantAccess } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 
@@ -47,28 +48,12 @@ export default async function TemplatesPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Motor de Plantillas</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            Plantillas Industriales & Onboarding Atómico
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Siembra instantánea de catálogos, topología de depósitos, recetas BOM y cajas registradoras en un clic.
-          </p>
-        </div>
-      </div>
+      <ErpPageHeader
+        title="Plantillas Industriales & Onboarding Atómico"
+        description="Siembra instantánea de catálogos, topología de depósitos, recetas BOM y cajas registradoras en un clic."
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Motor de Plantillas"
+      />
 
       {/* Grid de Plantillas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -79,14 +64,14 @@ export default async function TemplatesPage({ params }: PageProps) {
           const bomsCount = builtinMatch?.boms?.length || 0;
 
           return (
-            <div
+            <Card
               key={tpl.slug}
-              className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-6 backdrop-blur flex flex-col justify-between space-y-6 hover:border-slate-700 transition-all hover:shadow-xl hover:shadow-indigo-500/5"
+              className="rounded-2xl p-6 flex flex-col justify-between space-y-6 hover:border-muted-foreground/30 transition-all hover:shadow-lg"
             >
               <div className="space-y-4">
                 <div className="flex items-start justify-between">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-                    <Sparkles className="h-6 w-6" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-foreground border border-border">
+                    <Sparkles className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <Badge variant="indigo" size="sm">
                     {tpl.industryType || 'Industria'}
@@ -94,41 +79,41 @@ export default async function TemplatesPage({ params }: PageProps) {
                 </div>
 
                 <div>
-                  <h3 className="font-bold text-base text-white">{tpl.name}</h3>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">{tpl.description}</p>
+                  <h3 className="font-bold text-base text-foreground">{tpl.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{tpl.description}</p>
                 </div>
 
-                <div className="rounded-xl border border-slate-800/80 bg-slate-950/50 p-3.5 space-y-2 text-xs">
-                  <div className="flex items-center justify-between text-slate-400">
+                <div className="rounded-xl border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-muted-foreground">
                     <span className="flex items-center gap-1.5">
-                      <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                      <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
                       Almacenes Preconfigurados:
                     </span>
-                    <span className="font-semibold text-slate-200">{warehousesCount} depósitos</span>
+                    <span className="font-semibold text-foreground">{warehousesCount} depósitos</span>
                   </div>
 
-                  <div className="flex items-center justify-between text-slate-400">
+                  <div className="flex items-center justify-between text-muted-foreground">
                     <span className="flex items-center gap-1.5">
-                      <Package className="h-3.5 w-3.5 text-slate-400" />
+                      <Package className="h-3.5 w-3.5" aria-hidden="true" />
                       Catálogo Base:
                     </span>
-                    <span className="font-semibold text-slate-200">{productsCount} productos</span>
+                    <span className="font-semibold text-foreground">{productsCount} productos</span>
                   </div>
 
                   {bomsCount > 0 && (
-                    <div className="flex items-center justify-between text-slate-400">
+                    <div className="flex items-center justify-between text-muted-foreground">
                       <span className="flex items-center gap-1.5">
-                        <FlaskConical className="h-3.5 w-3.5 text-indigo-400" />
+                        <FlaskConical className="h-3.5 w-3.5" aria-hidden="true" />
                         Fórmulas BOM:
                       </span>
-                      <span className="font-semibold text-indigo-400">{bomsCount} recetas activas</span>
+                      <span className="font-semibold text-foreground">{bomsCount} recetas activas</span>
                     </div>
                   )}
                 </div>
               </div>
 
               <TemplateApplyButton slug={tpl.slug} tenantId={tenant.id} />
-            </div>
+            </Card>
           );
         })}
       </div>

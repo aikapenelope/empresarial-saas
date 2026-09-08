@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   FileText,
   Plus,
   ArrowRightLeft,
@@ -13,6 +12,17 @@ import {
 } from 'lucide-react';
 import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
+import { ErpPageHeader } from './ErpPageHeader';
+import { QuoteFunnel } from './charts/QuoteFunnel';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { QuoteModal } from './modals/QuoteModal';
 import { ConvertQuoteModal } from './modals/ConvertQuoteModal';
 import { ShareDocButtons } from './ShareDocButtons';
@@ -80,101 +90,87 @@ export function QuotesView({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Cotizaciones</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Cotizaciones</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Vender sin facturar: cotiza, hace seguimiento del estado y convierte a factura en un clic.
-          </p>
-        </div>
+      <ErpPageHeader
+        title="Cotizaciones"
+        description="Vender sin facturar: cotiza, hace seguimiento del estado y convierte a factura en un clic."
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Cotizaciones"
+        actions={
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/${tenantSlug}/erp/quotes/quick`}>
+                <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+                Cotización rápida
+              </Link>
+            </Button>
+            <Button size="sm" onClick={() => setIsQuoteModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Nueva Cotización
+            </Button>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/${tenantSlug}/erp/quotes/quick`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/25 transition-colors"
-          >
-            <Zap className="h-3.5 w-3.5" />
-            <span>Cotización rápida</span>
-          </Link>
-          <button
-            onClick={() => setIsQuoteModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>+ Nueva Cotización</span>
-          </button>
-        </div>
-      </div>
+      {/* Embudo comercial (pieza distintiva del módulo) */}
+      <QuoteFunnel quotes={quotes.map((q) => ({ status: q.status, totalUSD: q.totalUSD }))} tenantSlug={tenantSlug} />
 
       {/* Listado */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-indigo-400" />
-            <h2 className="text-sm font-semibold text-white">Cotizaciones del Inquilino</h2>
+            <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Cotizaciones del Inquilino</h2>
           </div>
-          <span className="text-xs text-slate-400">{quotes.length} registro(s)</span>
+          <span className="text-xs text-muted-foreground">{quotes.length} registro(s)</span>
         </div>
 
         {quotes.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-10">
+          <p className="text-xs text-muted-foreground text-center py-10">
             No hay cotizaciones registradas todavía.
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Nro.</th>
-                  <th className="p-3">Cliente</th>
-                  <th className="p-3">Válida Hasta</th>
-                  <th className="p-3 text-right">Total (USD)</th>
-                  <th className="p-3 text-right">Total (VES)</th>
-                  <th className="p-3 text-center">Estado</th>
-                  <th className="p-3">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Nro.</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Válida Hasta</TableHead>
+                  <TableHead className="text-right">Total (USD)</TableHead>
+                  <TableHead className="text-right">Total (VES)</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                  <TableHead>Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {quotes.map((q) => {
                   const badge = STATUS_BADGE[q.status] || STATUS_BADGE.draft;
                   return (
-                    <tr key={q.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="p-3 font-mono font-bold text-white">{q.quoteNumber}</td>
-                      <td className="p-3 text-slate-200">{customerName(q)}</td>
-                      <td className="p-3 text-slate-400 text-[11px]">
+                    <TableRow key={q.id}>
+                      <TableCell className="font-mono font-bold">{q.quoteNumber}</TableCell>
+                      <TableCell className="text-foreground">{customerName(q)}</TableCell>
+                      <TableCell className="text-muted-foreground text-[11px]">
                         {q.validUntil ? (
                           <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3 text-slate-500" />
+                            <Calendar className="h-3 w-3" aria-hidden="true" />
                             {new Date(q.validUntil).toLocaleDateString('es-VE')}
                           </span>
                         ) : (
                           '—'
                         )}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-white">
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold">
                         {formatUSD(Number(q.totalUSD) || 0)}
-                      </td>
-                      <td className="p-3 text-right font-mono text-slate-300">
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
                         {formatVES(Number(q.totalVES) || 0)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant={badge.variant} size="sm">
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={badge.variant} size="sm" dot={q.status === 'accepted' || q.status === 'converted'}>
                           {badge.label}
                         </Badge>
-                      </td>
-                      <td className="p-3">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {q.status !== 'converted' && q.status !== 'rejected' && (
                             <ShareDocButtons
@@ -186,40 +182,42 @@ export function QuotesView({
                             />
                           )}
                           {(q.status === 'draft' || q.status === 'sent') && (
-                            <button
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-[11px]"
                               onClick={() => {
                                 setEditingQuote(q);
                                 setIsQuoteModalOpen(true);
                               }}
-                              className="text-slate-400 hover:text-white text-[11px] font-semibold px-2 py-1"
                             >
                               Editar
-                            </button>
+                            </Button>
                           )}
                           {convertible(q) && (
-                            <button
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-[11px]"
                               onClick={() => setConvertQuote(q)}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white font-semibold"
                             >
-                              <ArrowRightLeft className="h-3 w-3" />
-                              <span>Convertir</span>
-                            </button>
+                              <ArrowRightLeft className="h-3 w-3" aria-hidden="true" />
+                              Convertir
+                            </Button>
                           )}
                           {statusActions(q).map((status) => (
-                            <button
+                            <Button
                               key={status}
+                              size="sm"
+                              variant={status === 'rejected' ? 'outline' : 'default'}
+                              className="h-7 px-2 text-[11px]"
                               onClick={() => handleStatus(q.id, status as 'sent' | 'accepted' | 'rejected')}
                               disabled={busyQuoteId === q.id}
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded font-semibold border ${
-                                status === 'rejected'
-                                  ? 'bg-rose-600/10 text-rose-300 border-rose-500/30 hover:bg-rose-600 hover:text-white'
-                                  : 'bg-emerald-600/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-600 hover:text-white'
-                              }`}
                             >
                               {status === 'rejected' ? (
-                                <Ban className="h-3 w-3" />
+                                <Ban className="h-3 w-3" aria-hidden="true" />
                               ) : (
-                                <ArrowRightLeft className="h-3 w-3" />
+                                <ArrowRightLeft className="h-3 w-3" aria-hidden="true" />
                               )}
                               <span>
                                 {status === 'sent'
@@ -228,22 +226,22 @@ export function QuotesView({
                                     ? 'Aceptar'
                                     : 'Rechazar'}
                               </span>
-                            </button>
+                            </Button>
                           ))}
                           {q.status === 'converted' &&
                             typeof q.convertedInvoice === 'object' &&
                             q.convertedInvoice !== null && (
-                              <span className="text-[10px] text-slate-500 font-mono">
+                              <span className="text-[10px] text-muted-foreground font-mono">
                                 → {(q.convertedInvoice as { invoiceNumber: string }).invoiceNumber}
                               </span>
                             )}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

@@ -1,17 +1,29 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import {
-  ArrowLeft,
   Truck,
   Plus,
   PackageCheck,
   Wallet,
   Loader2,
+  HandCoins,
+  Timer,
+  ReceiptText,
 } from 'lucide-react';
-import { formatUSD, formatVES } from './format';
+import { formatUSD } from './format';
 import { Badge } from './Badge';
+import { KpiCard } from './KpiCard';
+import { ErpPageHeader } from './ErpPageHeader';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { PurchaseInvoiceModal } from './modals/PurchaseInvoiceModal';
 import { ReceiveWarehouseModal } from './modals/ReceiveWarehouseModal';
 import { SupplierPaymentModal } from './modals/SupplierPaymentModal';
@@ -126,113 +138,88 @@ export function PurchasesView({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Dashboard
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Compras & CxP</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            Compras & Cuentas por Pagar
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Registra compras, recepciona mercancía (entra al Kardex) y paga a tus proveedores.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleOpenPayment()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-600/10 text-xs font-semibold text-emerald-300 hover:bg-emerald-600 hover:text-white transition-colors"
-          >
-            <Wallet className="h-3.5 w-3.5" />
-            <span>Pagar Proveedor</span>
-          </button>
-          <button
-            onClick={() => setIsPurchaseModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>+ Registrar Compra</span>
-          </button>
-        </div>
-      </div>
+      <ErpPageHeader
+        title="Compras & Cuentas por Pagar"
+        description="Registra compras, recepciona mercancía (entra al Kardex) y paga a tus proveedores."
+        breadcrumbHref={`/${tenantSlug}/erp`}
+        section="Compras & CxP"
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => handleOpenPayment()}>
+              <Wallet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              Pagar Proveedor
+            </Button>
+            <Button size="sm" onClick={() => setIsPurchaseModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Registrar Compra
+            </Button>
+          </>
+        }
+      />
 
       {receiveError && (
-        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-300">
+        <div
+          className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400"
+          role="alert"
+        >
           {receiveError}
         </div>
       )}
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Cuentas por Pagar</p>
-          <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-            <span className="text-xl font-bold text-rose-400">{formatUSD(totalPayablesUSD)}</span>
-            <span className="text-xs text-slate-400">
-              ≈ {formatVES(totalPayablesUSD * effectiveRate)}
-            </span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">
-            Pendiente de Recepción
-          </p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-amber-400">{pendingReceptionCount}</span>
-            <span className="text-xs text-slate-400">compra(s) sin recibir</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <p className="text-[11px] uppercase font-semibold text-slate-400">Pagos Registrados</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-xl font-bold text-white">{supplierPayments.length}</span>
-            <span className="text-xs text-slate-400">a proveedores</span>
-          </div>
-        </div>
+        <KpiCard
+          title="Cuentas por Pagar"
+          valueUSD={totalPayablesUSD}
+          valueVES={totalPayablesUSD * effectiveRate}
+          icon={HandCoins}
+          tone="destructive"
+        />
+        <KpiCard
+          title="Pendiente de Recepción"
+          valueUSD={String(pendingReceptionCount)}
+          icon={Timer}
+          tone="warning"
+          description="Compra(s) sin recibir"
+        />
+        <KpiCard
+          title="Pagos Registrados"
+          valueUSD={String(supplierPayments.length)}
+          icon={ReceiptText}
+          description="A proveedores"
+        />
       </div>
 
       {/* Facturas de compra */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Truck className="h-4 w-4 text-indigo-400" />
-            <h2 className="text-sm font-semibold text-white">Facturas de Compra</h2>
+            <Truck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Facturas de Compra</h2>
           </div>
-          <span className="text-xs text-slate-400">{purchaseInvoices.length} registro(s)</span>
+          <span className="text-xs text-muted-foreground">{purchaseInvoices.length} registro(s)</span>
         </div>
 
         {purchaseInvoices.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-10">
+          <p className="text-xs text-muted-foreground text-center py-10">
             No hay compras registradas todavía.
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Nro.</th>
-                  <th className="p-3">Proveedor</th>
-                  <th className="p-3">Vence</th>
-                  <th className="p-3 text-right">Total USD</th>
-                  <th className="p-3 text-right">Saldo USD</th>
-                  <th className="p-3 text-center">Recepción</th>
-                  <th className="p-3 text-center">Estado</th>
-                  <th className="p-3 text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Nro.</TableHead>
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>Vence</TableHead>
+                  <TableHead className="text-right">Total USD</TableHead>
+                  <TableHead className="text-right">Saldo USD</TableHead>
+                  <TableHead className="text-center">Recepción</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {purchaseInvoices.map((inv) => {
                   const balance = Number(inv.balanceUSD) || 0;
                   const canReceive =
@@ -241,25 +228,26 @@ export function PurchasesView({
                     balance > 0 &&
                     (inv.status === 'received' || inv.status === 'partially_paid');
                   return (
-                    <tr key={inv.id} className="hover:bg-slate-800/30">
-                      <td className="p-3 font-mono font-bold text-white">{inv.invoiceNumber}</td>
-                      <td className="p-3 text-slate-200">{supplierName(inv)}</td>
-                      <td className="p-3 text-slate-400 text-[11px]">
+                    <TableRow key={inv.id}>
+                      <TableCell className="font-mono font-bold">{inv.invoiceNumber}</TableCell>
+                      <TableCell>{supplierName(inv)}</TableCell>
+                      <TableCell className="text-muted-foreground text-[11px]">
                         {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('es-VE') : '—'}
-                      </td>
-                      <td className="p-3 text-right font-mono text-white">
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
                         {formatUSD(Number(inv.totalUSD) || 0)}
-                      </td>
-                      <td className="p-3 text-right font-mono text-amber-400">{formatUSD(balance)}</td>
-                      <td className="p-3 text-center">
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{formatUSD(balance)}</TableCell>
+                      <TableCell className="text-center">
                         <Badge
                           variant={inv.receptionStatus === 'received' ? 'emerald' : 'amber'}
                           size="sm"
+                          dot={inv.receptionStatus === 'received'}
                         >
                           {inv.receptionStatus === 'received' ? 'Recibida' : 'Pendiente'}
                         </Badge>
-                      </td>
-                      <td className="p-3 text-center">
+                      </TableCell>
+                      <TableCell className="text-center">
                         <Badge
                           variant={
                             inv.status === 'paid'
@@ -282,87 +270,90 @@ export function PurchasesView({
                                   ? 'Recibida'
                                   : 'Borrador'}
                         </Badge>
-                      </td>
-                      <td className="p-3 text-center">
+                      </TableCell>
+                      <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           {canReceive && (
-                            <button
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-[11px]"
                               onClick={() => handleReceive(inv)}
                               disabled={receivingId === inv.id}
                               title="Recepcionar mercancía (ingresa al Kardex)"
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-600/10 text-amber-300 border border-amber-500/30 hover:bg-amber-600 hover:text-white text-[11px] font-semibold disabled:opacity-50"
                             >
                               {receivingId === inv.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                               ) : (
-                                <PackageCheck className="h-3 w-3" />
+                                <PackageCheck className="h-3 w-3" aria-hidden="true" />
                               )}
                               <span>Recibir</span>
-                            </button>
+                            </Button>
                           )}
                           {canPay && (
-                            <button
+                            <Button
+                              size="sm"
+                              className="h-7 px-2 text-[11px]"
                               onClick={() => handleOpenPayment(inv)}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold"
                             >
-                              <Wallet className="h-3 w-3" />
+                              <Wallet className="h-3 w-3" aria-hidden="true" />
                               <span>Pagar</span>
-                            </button>
+                            </Button>
                           )}
-                          {!canReceive && !canPay && <span className="text-slate-500">—</span>}
+                          {!canReceive && !canPay && <span className="text-muted-foreground">—</span>}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
 
       {/* Pagos a proveedores */}
       {supplierPayments.length > 0 && (
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-          <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-white">Pagos a Proveedores</h2>
-            <span className="text-xs text-slate-400">{supplierPayments.length} pago(s)</span>
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Pagos a Proveedores</h2>
+            <span className="text-xs text-muted-foreground">{supplierPayments.length} pago(s)</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Recibo</th>
-                  <th className="p-3">Proveedor</th>
-                  <th className="p-3">Fecha</th>
-                  <th className="p-3 text-right">Monto USD</th>
-                  <th className="p-3 text-center">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Recibo</TableHead>
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead className="text-right">Monto USD</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {supplierPayments.map((p) => {
                   const supName =
                     typeof p.supplier === 'object' && p.supplier !== null ? p.supplier.name : '—';
                   return (
-                    <tr key={p.id} className="hover:bg-slate-800/30">
-                      <td className="p-3 font-mono font-bold text-white">{p.paymentNumber}</td>
-                      <td className="p-3 text-slate-200">{supName}</td>
-                      <td className="p-3 text-slate-400 text-[11px]">
+                    <TableRow key={p.id}>
+                      <TableCell className="font-mono font-bold">{p.paymentNumber}</TableCell>
+                      <TableCell>{supName}</TableCell>
+                      <TableCell className="text-muted-foreground text-[11px]">
                         {new Date(p.paymentDate).toLocaleDateString('es-VE')}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-emerald-400">
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                         {formatUSD(Number(p.totalUSD) || 0)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant="emerald" size="sm">
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="emerald" size="sm" dot>
                           {p.status === 'confirmed' ? 'Confirmado' : p.status}
                         </Badge>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}

@@ -577,18 +577,51 @@ Cada sprint concluye con:
 - [x] **Ola 1 de vistas migradas (el modelo replicable):** CRM `CustomersView` (con barra de utilización de crédito por cliente), `AccountsReceivableView` (barra apilada de composición de cartera por bucket), `InvoicesView` y `InventoryView` (barra de cobertura de stock contra mínimo) + detalle `customers/[id]` (salud de crédito: utilización + porción vencida).
 - [x] **Criterio de cierre:** `tsc --noEmit`, `eslint .` y `next build` en verde local.
 
-### 📊 Ola 2 (propuesta): componentes únicos por dominio — análisis
+### 📊 Ola 2 (Sprint 36 — PR `feat/ui-views-wave2-s36`): componentes únicos por dominio
 
-El objetivo es que cada módulo tenga UNA pieza visual distintiva bajo el mismo sistema (no más monotemático). Candidaturas priorizadas:
+Cada módulo tiene ahora UNA pieza visual distintiva bajo el mismo sistema, más la migración mecánica del ciclo completo:
 
-1. **POS** — vista de mostrador: targets de tacto XL, ticket lateral fijo, teclado numérico; densidad distinta a todo el ERP.
-2. **Kardex** — timeline vertical de movimientos (feed con iconos por tipo) en vez de tabla plana.
-3. **Cajas** — donut de mix de métodos de pago (zelle/pago móvil/efectivo) por cierre + guard turnos.
-4. **Tasas** — línea de tendencia BCV/Binance/paralelo (recharts) con la fuente efectiva resaltada.
-5. **Auditoría** — feed de actividad con avatar-inicial del actor y diff colapsable (Dialog).
-6. **Alertas** — feed por severidad con `Badge dot` y contador vivo en el sidebar.
-7. **Cotizaciones** — mini-funnel cotización→factura (Progress) en el header de la vista.
-8. **Resto de vistas** (Suppliers, Purchases, Orders, DeliveryNotes, Quotes, Counts, Import, Rates, CashRegisters, Vendors, Settings, Audit, Alerts, UsersPanel): replicar el patrón Ola 1 (ErpPageHeader + KpiCard + Table shadcn) — mecánico, sin diseño nuevo.
+1. **Cotizaciones — Embudo Comercial** (`QuoteFunnel`): composición por estado + tasa de conversión (aceptadas+convertidas/total), server-compatible.
+2. **Kardex — Timeline vertical** (`KardexTimeline`): feed legible con rail por dirección (entrada/salida/transferencia), badge de tipo, montajes firmados y enlace a factura; reemplaza la tabla plana de 8 columnas (Sprint 21).
+3. **Cajas — Mix de Métodos** (`MethodMixCard`): recaudación real agregada desde los pagos recibidos (efectivo USD/VES, POS, pago móvil, transferencia, Zelle/Binance), homogeneizada a USD con la tasa snapshot de cada método — no con la vigente (fix Devin #49).
+4. **Tasas — Spread entre Fuentes** (`RateSpreadCard`): desviación BCV/Binance/Paralelo contra la tasa efectiva, con la fuente vigente resaltada (server-compatible).
+5. **Auditoría — Feed de actividad**: avatar-inicial del actor + "quién hizo qué a cuál documento" en lenguaje natural, en vez de tabla plana (Sprint 22).
+6. **Alertas — Feed por severidad**: tarjetas con acento por severidad (crítica/advertencia/info) y acciones inline.
+7. **Vistas migradas al patrón Ola 1** (ErpPageHeader + KpiCard + Table shadcn): Quotes, Orders, DeliveryNotes, Suppliers, Vendors (Select shadcn para filtro), Purchases, CashRegisters, Counts, Rates, Alerts, Audit, Kardex (página RSC).
+
+### 🖥️ Sprint 37 — Ola 3 (PR `feat/ui-views-wave3-s37`): POS de mostrador + cierre de la migración
+
+- [x] **POS rediseñado como terminal de mostrador:** targets táctiles XL (selects/inputs `h-11`, botón de cobro `h-14`), cantidades rápidas de un toque (1/2/3/5/10/12), steppers ± por línea del ticket, ticket como lista (no tabla densa), panel de cobro sticky en desktop, visor bimonetario siempre visible, badge del tier activo del cliente. Lógica de venta intacta (tiers, walk-in, turnos de caja, kardex).
+- [x] **SettingsView**: Card + Input + Badge para la fuente de tasa; misma acción y contrato.
+- [x] **PricingReportCard**: Card/Table shadcn; "Generar" abre el reporte automáticamente.
+- [x] **UsersPanel**: Card/Table shadcn + modal de invitación con primitivas.
+- [x] **InventoryImportView**: pasos con Card, preview y resultados con Table shadcn, estados error/parse con tokens.
+- [x] **QuickQuoteBuilder**: Card/Input/Button; badge de tier activo en totales.
+- **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde.
+
+### 🔧 Ronda de reparación Devin (PRs #49/#50) — `fix/devin-round-49-50`
+
+Hallazgos de Devin Review reparados (agrupados, una sola ronda por protocolo):
+
+**POS (PR #50):**
+- [x] 🔴 **Precio editado ignorado**: `handleAddLine` ahora factura el precio del input (ajuste manual del cajero prevalece; el tier queda como valor por defecto del input, resincronizado al cambiar producto/cliente vía `useSyncOnKeyChange`).
+- [x] 🔴 **Precios huérdicos al cambiar cliente**: cambio de cliente/tier re-precia las líneas automáticas (criterio QuickQuoteBuilder: sólo si el precio sigue siendo el efectivo del tier anterior); los overrides manuales se conservan.
+
+**Cajas (PR #49):**
+- [x] 🟡 **Arqueo ≠ recaudación**: el Mix de Métodos ahora agrega los `CustomerPayments` (lo cobrado), no los conteos físicos del arqueo (que incluyen fondo de apertura).
+- [x] 🟡 **Transferencias excluidas**: `transfer_ves` tiene su bucket en el mix.
+- [x] 🟡 **Totales históricos mutables**: cada método usa su `amountUSD` persistido o se deriva con SU tasa snapshot (`methods[].exchangeRate`), nunca la tasa vigente.
+- Nueva pieza de datos: `getCustomerPaymentsList` en `erpData`; `customer-payments` añadido al union de colecciones.
+
+### 📄 Sprint 38 — Ola 4 (PR `feat/ui-docs-detail-s38`): detalles de documento, templates, home y wrappers
+
+- [x] **Detalles de documento (RSC, imprimibles):** factura (`invoices/[id]` — cabecera, líneas, cuotas, cobros, kardex, auditoría), pedido (`orders/[id]` — líneas con despachado, totales, remisiones) y remisión (`delivery-notes/[id]` — líneas, notas). Todos con `ErpPageHeader` + `Card`/`Table` shadcn y el `print-area` intacto.
+- [x] **Templates:** galería de Cards con tokens; stats del template (almacenes/catálogo/BOM) en caja `bg-muted/40`.
+- [x] **Home público:** hero con tokens (sin gradiente decorativo), feature pills como `Card`, CTA con `Button` shadcn, ticker BCV monocromo; `HomeTenantList` migrado (chips de empresa con hover a `bg-primary`).
+- [x] **Headers wrapper unificados:** 11 páginas RSC que envolvían vistas con su propio `ErpPageHeader` ya no duplican el header artesanal; `pos` y `quotes/quick` (vistas sin header propio) usan `ErpPageHeader` desde el wrapper. `ErpPageHeader` gana prop `badge` (chip de tasa del POS).
+- [x] **Skeleton de factura** (`loading.tsx`) con tokens.
+- **Resultado:** **0 headers/contenedores artesanales** en el grupo `(app)` — la migración visual es nativa de punta a punta. Queda como pulido continuo el interior de los 22 modales (bimodales vía puente slate).
+- **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde.
 
 ---
 

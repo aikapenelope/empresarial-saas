@@ -8,12 +8,16 @@ import { createQuoteAction } from '@/actions/erpActions';
 import { ensureShareUrlAction, sendDocumentEmailAction } from '@/actions/shareActions';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
 import { formatUSD, formatVES } from './format';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Badge } from './Badge';
 
 /**
- * Sprint 28: armado veloz de cotizaciones. Producto por SKU/nombre (datalist
- * nativo), Enter agrega la línea al precio efectivo del tier del cliente,
- * totales USD/VES en vivo, y al guardar se ofrece el envío directo por email
- * (Resend) y el compartido por WhatsApp con el enlace público.
+ * Sprint 28 (reskin 37): armado veloz de cotizaciones. Producto por SKU/nombre
+ * (datalist nativo), Enter agrega la línea al precio efectivo del tier del
+ * cliente, totales USD/VES en vivo, y al guardar se ofrece el envío directo
+ * por email (Resend) y el compartido por WhatsApp con el enlace público.
  */
 interface QuickQuoteBuilderProps {
   tenantId: number;
@@ -227,59 +231,59 @@ export function QuickQuoteBuilder({ tenantId, tenantSlug, customers, products, e
   return (
     <div className="space-y-5">
       {/* Cliente + validez */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-        <div>
-          <label htmlFor="quick-customer" className="block text-xs font-semibold text-slate-400 mb-1">
-            Cliente
-          </label>
-          <select
-            id="quick-customer"
-            value={customerId}
-            onChange={(e) => setCustomerId(Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-          >
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({tierFor(c.priceTier)})
-              </option>
-            ))}
-          </select>
+      <Card className="rounded-xl p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label htmlFor="quick-customer" className="block text-xs font-semibold text-muted-foreground mb-1">
+              Cliente
+            </label>
+            <select
+              id="quick-customer"
+              value={customerId}
+              onChange={(e) => setCustomerId(Number(e.target.value))}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
+            >
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({tierFor(c.priceTier)})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="quick-valid" className="block text-xs font-semibold text-muted-foreground mb-1">
+              Válida hasta
+            </label>
+            <Input
+              id="quick-valid"
+              type="date"
+              value={validUntil}
+              onChange={(e) => setValidUntil(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="quick-notes" className="block text-xs font-semibold text-muted-foreground mb-1">
+              Notas (opcional)
+            </label>
+            <Input
+              id="quick-notes"
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Condiciones, alcance…"
+            />
+          </div>
         </div>
-        <div>
-          <label htmlFor="quick-valid" className="block text-xs font-semibold text-slate-400 mb-1">
-            Válida hasta
-          </label>
-          <input
-            id="quick-valid"
-            type="date"
-            value={validUntil}
-            onChange={(e) => setValidUntil(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label htmlFor="quick-notes" className="block text-xs font-semibold text-slate-400 mb-1">
-            Notas (opcional)
-          </label>
-          <input
-            id="quick-notes"
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Condiciones, alcance…"
-            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
-          />
-        </div>
-      </div>
+      </Card>
 
       {/* Agregar producto (Enter agrega) */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
+      <Card className="rounded-xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_auto] gap-3">
           <div>
-            <label htmlFor="quick-product" className="block text-xs font-semibold text-slate-400 mb-1">
+            <label htmlFor="quick-product" className="block text-xs font-semibold text-muted-foreground mb-1">
               Producto (SKU o nombre) — Enter agrega
             </label>
-            <input
+            <Input
               id="quick-product"
               list="quick-product-options"
               value={query}
@@ -291,7 +295,6 @@ export function QuickQuoteBuilder({ tenantId, tenantSlug, customers, products, e
                 }
               }}
               placeholder="Ej: SKU-001 o Tornillo…"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
             />
             <datalist id="quick-product-options">
               {products.map((p) => (
@@ -302,37 +305,32 @@ export function QuickQuoteBuilder({ tenantId, tenantSlug, customers, products, e
             </datalist>
           </div>
           <div>
-            <label htmlFor="quick-qty" className="block text-xs font-semibold text-slate-400 mb-1">
+            <label htmlFor="quick-qty" className="block text-xs font-semibold text-muted-foreground mb-1">
               Cantidad
             </label>
-            <input
+            <Input
               id="quick-qty"
               type="number"
               min={1}
               value={quantity}
               onChange={(e) => setQuantity(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div className="flex items-end">
-            <button
-              type="button"
-              onClick={addLine}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
+            <Button type="button" onClick={addLine}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
               Agregar
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Líneas */}
       {lines.length > 0 ? (
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-x-auto">
+        <div className="rounded-xl border border-border bg-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-800 text-[11px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="p-3 text-left font-semibold">Descripción</th>
                 <th className="p-3 text-right font-semibold w-24">Cant.</th>
                 <th className="p-3 text-right font-semibold w-32">Precio USD</th>
@@ -340,44 +338,46 @@ export function QuickQuoteBuilder({ tenantId, tenantSlug, customers, products, e
                 <th className="p-3 w-12"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-border">
               {lines.map((line) => (
                 <tr key={line.key}>
-                  <td className="p-3 text-slate-200">
+                  <td className="p-3 text-foreground">
                     {line.description}
-                    <span className="ml-2 font-mono text-[11px] text-slate-500">{line.sku}</span>
+                    <span className="ml-2 font-mono text-[11px] text-muted-foreground">{line.sku}</span>
                   </td>
                   <td className="p-3">
-                    <input
+                    <Input
                       type="number"
                       min={1}
                       value={line.quantity}
                       onChange={(e) => updateLine(line.key, { quantity: Number(e.target.value) })}
-                      className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-right text-white focus:border-indigo-500 focus:outline-none"
+                      className="h-8 text-right"
                     />
                   </td>
                   <td className="p-3">
-                    <input
+                    <Input
                       type="number"
                       min={0}
                       step={0.01}
                       value={line.unitPriceUSD}
                       onChange={(e) => updateLine(line.key, { unitPriceUSD: Number(e.target.value) })}
-                      className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-right text-white focus:border-indigo-500 focus:outline-none"
+                      className="h-8 text-right font-mono"
                     />
                   </td>
-                  <td className="p-3 text-right font-mono font-semibold text-white tabular-nums">
+                  <td className="p-3 text-right font-mono font-semibold tabular-nums">
                     {formatUSD(line.quantity * line.unitPriceUSD)}
                   </td>
                   <td className="p-3 text-right">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => removeLine(line.key)}
                       title="Quitar línea"
-                      className="text-rose-400 hover:text-rose-300"
+                      className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -385,88 +385,91 @@ export function QuickQuoteBuilder({ tenantId, tenantSlug, customers, products, e
           </table>
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/30 p-8 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
           Agrega productos con el buscador de arriba. El precio se toma del tier del cliente y puedes ajustarlo por línea.
         </div>
       )}
 
       {/* Totales + guardar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="text-right">
-          <div className="text-2xl font-bold text-white tabular-nums">{formatUSD(totalUSD)}</div>
-          <div className="text-xs text-slate-400 tabular-nums">
+        <div className="text-right space-y-0.5">
+          <div className="text-2xl font-bold tabular-nums text-foreground">{formatUSD(totalUSD)}</div>
+          <div className="text-xs text-muted-foreground tabular-nums">
             ≈ {formatVES(totalUSD * effectiveRate)} (tasa {effectiveRate.toFixed(4)})
           </div>
+          {selectedTier !== 'retail' && (
+            <Badge variant="indigo" size="sm">
+              Precios tier {selectedTier}
+            </Badge>
+          )}
         </div>
-        <button
+        <Button
           type="button"
+          size="lg"
           onClick={handleSave}
           disabled={saving || lines.length === 0}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
         >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Zap className="h-4 w-4" aria-hidden="true" />}
           Guardar cotización
-        </button>
+        </Button>
       </div>
 
       {/* Panel de envío tras guardar */}
       {saved && (
-        <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/10 p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
-            <Check className="h-4 w-4" />
+        <div className="rounded-xl border border-emerald-600/40 bg-emerald-500/10 p-5 space-y-4 dark:bg-emerald-500/5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            <Check className="h-4 w-4" aria-hidden="true" />
             {saved.quoteNumber} guardada. ¿La enviamos ahora?
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
             <div>
-              <label htmlFor="quick-send-email" className="block text-xs font-semibold text-slate-400 mb-1">
+              <label htmlFor="quick-send-email" className="block text-xs font-semibold text-muted-foreground mb-1">
                 Correo del cliente
               </label>
-              <input
+              <Input
                 id="quick-send-email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="cliente@correo.com"
-                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
               />
             </div>
-            <button
+            <Button
               type="button"
               onClick={handleSendEmail}
               disabled={sending || !email}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
             >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Mail className="h-4 w-4" aria-hidden="true" />}
               Enviar email
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleWhatsApp}
               disabled={sending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+              className="text-emerald-600 dark:text-emerald-400"
             >
-              <MessageCircle className="h-4 w-4" />
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
               WhatsApp
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
               onClick={handleCopy}
               disabled={sending}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50"
             >
-              {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+              {copied ? <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
               Copiar enlace
-            </button>
+            </Button>
           </div>
           <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               El email sale por Resend con un enlace público para ver/descargar el documento.
             </p>
             <Link
               href={`/${tenantSlug}/erp/quotes`}
               onClick={resetForNew}
-              className="text-xs font-semibold text-indigo-400 hover:text-indigo-300"
+              className="text-xs font-semibold text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
             >
               Ir al listado de cotizaciones
             </Link>

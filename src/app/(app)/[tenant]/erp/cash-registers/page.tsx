@@ -5,6 +5,7 @@ import {
   getCashRegistersWithDetails,
   getWarehousesList,
   getCashClosuresList,
+  getCustomerPaymentsList,
 } from '@/utilities/erpData';
 import { CashRegistersView } from '@/components/erp/CashRegistersView';
 import { ErpAccessError } from '@/utilities/erpAuth';
@@ -30,12 +31,13 @@ export default async function CashRegistersPage({ params }: PageProps) {
     notFound();
   }
 
-  let registers, warehouses, closures;
+  let registers, warehouses, closures, payments;
   try {
-    [registers, warehouses, closures] = await Promise.all([
+    [registers, warehouses, closures, payments] = await Promise.all([
       getCashRegistersWithDetails(tenant.id),
       getWarehousesList(tenant.id),
       getCashClosuresList(tenant.id),
+      getCustomerPaymentsList(tenant.id),
     ]);
   } catch (error: unknown) {
     if (error instanceof ErpAccessError) {
@@ -54,6 +56,7 @@ export default async function CashRegistersPage({ params }: PageProps) {
       warehouses={warehouses}
       closures={closures}
       openCount={openCount}
+      payments={payments}
     />
   );
 }

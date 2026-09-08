@@ -12,6 +12,8 @@ interface ErpPageHeaderProps {
   breadcrumbLabel?: string;
   /** Sección actual del breadcrumb (junto al enlace). */
   section?: string;
+  /** Chip informativo junto al título (p. ej. la tasa vigente en el POS). */
+  badge?: React.ReactNode;
   /** Acciones a la derecha (botones, selects, etc.). */
   actions?: React.ReactNode;
   className?: string;
@@ -28,6 +30,7 @@ export function ErpPageHeader({
   breadcrumbHref,
   breadcrumbLabel = 'Dashboard',
   section,
+  badge,
   actions,
   className,
 }: ErpPageHeaderProps) {
@@ -56,7 +59,10 @@ export function ErpPageHeader({
             )}
           </div>
         )}
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+          {title}
+          {badge}
+        </h1>
         {description && (
           <p className="text-xs text-muted-foreground mt-1">{description}</p>
         )}

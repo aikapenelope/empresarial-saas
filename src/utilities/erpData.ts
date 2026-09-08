@@ -145,7 +145,8 @@ type ErpDataCollection =
   | 'cash-registers'
   | 'bill-of-materials'
   | 'warehouses'
-  | 'cash-closures';
+  | 'cash-closures'
+  | 'customer-payments';
 
 async function findAllDocs<T>(args: {
   collection: ErpDataCollection;
@@ -455,6 +456,27 @@ export async function getCashClosuresList(tenantId: number): Promise<CashClosure
     collection: 'cash-closures',
     where: { tenant: { equals: tenantId } },
     depth: 1,
+    sort: '-createdAt',
+    user,
+  });
+}
+
+/**
+ * Pagos CONFIRMADOS del inquilino (recaudación real con métodos y tasa
+ * snapshot). Base del mix de métodos de pago (fix Devin #49): agrega lo
+ * COBRADO — pending/rejected no son recaudación y no cuentan.
+ */
+export async function getCustomerPaymentsList(tenantId: number): Promise<CustomerPayment[]> {
+  const user = await requireErpTenantAccess(tenantId);
+  return findAllDocs<CustomerPayment>({
+    collection: 'customer-payments',
+    where: {
+      and: [
+        { tenant: { equals: tenantId } },
+        { status: { equals: 'confirmed' } },
+      ],
+    },
+    depth: 0,
     sort: '-createdAt',
     user,
   });

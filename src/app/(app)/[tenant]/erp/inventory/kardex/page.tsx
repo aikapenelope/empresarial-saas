@@ -10,8 +10,10 @@ import {
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { kardexFiltersSchema } from '@/utilities/erpValidation';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
-import { formatUSD } from '@/components/erp/format';
-import { Badge } from '@/components/erp/Badge';
+import { ErpPageHeader } from '@/components/erp/ErpPageHeader';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { KardexTimeline } from '@/components/erp/charts/KardexTimeline';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
@@ -25,16 +27,16 @@ interface PageProps {
   }>;
 }
 
-const TYPE_LABELS: Record<string, { label: string; variant: 'slate' | 'emerald' | 'rose' | 'amber' | 'indigo' }> = {
-  purchase_in: { label: 'Entrada por Compra', variant: 'emerald' },
-  sale_out: { label: 'Salida por Venta', variant: 'rose' },
-  sale_return: { label: 'Devolución de Venta', variant: 'emerald' },
-  production_consume: { label: 'Consumo Producción', variant: 'amber' },
-  production_output: { label: 'Producto Fabricado', variant: 'emerald' },
-  transfer: { label: 'Transferencia', variant: 'indigo' },
-  adjustment_positive: { label: 'Ajuste (+)', variant: 'emerald' },
-  adjustment_negative: { label: 'Ajuste (−)', variant: 'rose' },
-  scrap: { label: 'Merma', variant: 'rose' },
+const TYPE_LABELS: Record<string, string> = {
+  purchase_in: 'Entrada por Compra',
+  sale_out: 'Salida por Venta',
+  sale_return: 'Devolución de Venta',
+  production_consume: 'Consumo Producción',
+  production_output: 'Producto Fabricado',
+  transfer: 'Transferencia',
+  adjustment_positive: 'Ajuste (+)',
+  adjustment_negative: 'Ajuste (−)',
+  scrap: 'Merma',
 };
 
 export default async function KardexPage({ params, searchParams }: PageProps) {
@@ -99,39 +101,33 @@ export default async function KardexPage({ params, searchParams }: PageProps) {
     return qs ? `?${qs}` : '';
   };
 
+  const filterSelectClass =
+    'w-full rounded-lg border border-input bg-background px-2 py-2 text-foreground text-xs';
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp/inventory`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              ← Inventario
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Kardex</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Kardex de Inventario</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Ledger inmutable de movimientos: ventas, compras, producción, ajustes, transferencias y conteos.
-          </p>
-        </div>
-      </div>
+      <ErpPageHeader
+        title="Kardex de Inventario"
+        description="Ledger inmutable de movimientos: ventas, compras, producción, ajustes, transferencias y conteos."
+        breadcrumbHref={`/${tenantSlug}/erp/inventory`}
+        breadcrumbLabel="Inventario"
+        section="Kardex"
+      />
 
       {/* Filtros (GET — server-side) */}
       <form
         method="get"
-        className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4 grid grid-cols-1 sm:grid-cols-6 gap-3 text-xs"
+        className="rounded-xl border border-border bg-card p-4 grid grid-cols-1 sm:grid-cols-6 gap-3 text-xs"
       >
         <div className="sm:col-span-2">
-          <label className="block font-semibold text-slate-300 mb-1">Producto</label>
+          <label className="block font-semibold text-foreground mb-1" htmlFor="kardex-product">
+            Producto
+          </label>
           <select
+            id="kardex-product"
             name="product"
             defaultValue={sp.product || ''}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-2 text-white"
+            className={filterSelectClass}
           >
             <option value="">Todos</option>
             {products.map((p) => (
@@ -142,11 +138,14 @@ export default async function KardexPage({ params, searchParams }: PageProps) {
           </select>
         </div>
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Almacén</label>
+          <label className="block font-semibold text-foreground mb-1" htmlFor="kardex-warehouse">
+            Almacén
+          </label>
           <select
+            id="kardex-warehouse"
             name="warehouse"
             defaultValue={sp.warehouse || ''}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-2 text-white"
+            className={filterSelectClass}
           >
             <option value="">Todos</option>
             {warehouses.map((w) => (
@@ -157,14 +156,17 @@ export default async function KardexPage({ params, searchParams }: PageProps) {
           </select>
         </div>
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Tipo</label>
+          <label className="block font-semibold text-foreground mb-1" htmlFor="kardex-type">
+            Tipo
+          </label>
           <select
+            id="kardex-type"
             name="type"
             defaultValue={sp.type || ''}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-2 text-white"
+            className={filterSelectClass}
           >
             <option value="">Todos</option>
-            {Object.entries(TYPE_LABELS).map(([value, { label }]) => (
+            {Object.entries(TYPE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -172,133 +174,55 @@ export default async function KardexPage({ params, searchParams }: PageProps) {
           </select>
         </div>
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Desde</label>
-          <input
-            type="date"
-            name="from"
-            defaultValue={sp.from || ''}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-2 text-white"
-          />
+          <label className="block font-semibold text-foreground mb-1" htmlFor="kardex-from">
+            Desde
+          </label>
+          <Input type="date" id="kardex-from" name="from" defaultValue={sp.from || ''} />
         </div>
         <div className="flex items-end gap-2">
           <div className="flex-1">
-            <label className="block font-semibold text-slate-300 mb-1">Hasta</label>
-            <input
-              type="date"
-              name="to"
-              defaultValue={sp.to || ''}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-2 text-white"
-            />
+            <label className="block font-semibold text-foreground mb-1" htmlFor="kardex-to">
+              Hasta
+            </label>
+            <Input type="date" id="kardex-to" name="to" defaultValue={sp.to || ''} />
           </div>
-          <button
-            type="submit"
-            className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
-          >
+          <Button type="submit" size="sm">
             Filtrar
-          </button>
+          </Button>
         </div>
       </form>
 
-      {/* Ledger */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Movimientos</h2>
-          <span className="text-xs text-slate-400">
+      {/* Ledger como timeline */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Movimientos</h2>
+          <span className="text-xs text-muted-foreground">
             {entries.totalDocs} movimiento(s) · página {entries.page} de {entries.totalPages}
           </span>
         </div>
 
-        {entries.docs.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-10">
-            No hay movimientos con esos filtros.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Fecha</th>
-                  <th className="p-3">Referencia</th>
-                  <th className="p-3">Tipo</th>
-                  <th className="p-3">Producto</th>
-                  <th className="p-3">Origen</th>
-                  <th className="p-3">Destino</th>
-                  <th className="p-3 text-right">Cant.</th>
-                  <th className="p-3 text-right">Costo (USD)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {entries.docs.map((m) => {
-                  const typeInfo = TYPE_LABELS[m.movementType] || { label: m.movementType, variant: 'slate' as const };
-                  const productName =
-                    typeof m.product === 'object' && m.product !== null ? m.product.name : `#${m.product}`;
-                  const sourceName =
-                    typeof m.sourceWarehouse === 'object' && m.sourceWarehouse !== null
-                      ? m.sourceWarehouse.name
-                      : '—';
-                  const targetName =
-                    typeof m.targetWarehouse === 'object' && m.targetWarehouse !== null
-                      ? m.targetWarehouse.name
-                      : '—';
-                  const invoiceId =
-                    typeof m.invoice === 'object' && m.invoice !== null ? m.invoice.id : m.invoice;
-                  return (
-                    <tr key={m.id} className="hover:bg-slate-800/30">
-                      <td className="p-3 text-slate-400 text-[11px]">
-                        {new Date(m.createdAt).toLocaleDateString('es-VE')}
-                      </td>
-                      <td className="p-3 font-mono text-[11px]">
-                        {invoiceId ? (
-                          <Link
-                            href={`/${tenantSlug}/erp/invoices/${invoiceId}`}
-                            className="text-indigo-400 hover:text-indigo-300 underline decoration-slate-700 underline-offset-2"
-                          >
-                            {m.reference}
-                          </Link>
-                        ) : (
-                          <span className="text-slate-300">{m.reference}</span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={typeInfo.variant} size="sm">
-                          {typeInfo.label}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-white">{productName}</td>
-                      <td className="p-3 text-slate-400">{sourceName}</td>
-                      <td className="p-3 text-slate-400">{targetName}</td>
-                      <td className="p-3 text-right font-mono font-bold text-slate-200">{m.quantity}</td>
-                      <td className="p-3 text-right font-mono text-slate-400">
-                        {formatUSD(Number(m.totalCostUSD) || 0)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="p-4">
+          <KardexTimeline entries={entries.docs} tenantSlug={tenantSlug} />
+        </div>
 
         {/* Paginación */}
         {entries.totalPages > 1 && (
-          <div className="p-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <div className="p-3 border-t border-border flex items-center justify-between text-xs">
             {entries.page > 1 ? (
-              <Link
-                href={`/${tenantSlug}/erp/inventory/kardex${buildQuery({ page: entries.page - 1 })}`}
-                className="text-indigo-400 hover:text-indigo-300 font-semibold"
-              >
-                ← Anterior
-              </Link>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/${tenantSlug}/erp/inventory/kardex${buildQuery({ page: entries.page - 1 })}`}>
+                  ← Anterior
+                </Link>
+              </Button>
             ) : (
               <span />
             )}
             {entries.page < entries.totalPages ? (
-              <Link
-                href={`/${tenantSlug}/erp/inventory/kardex${buildQuery({ page: entries.page + 1 })}`}
-                className="text-indigo-400 hover:text-indigo-300 font-semibold"
-              >
-                Siguiente →
-              </Link>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/${tenantSlug}/erp/inventory/kardex${buildQuery({ page: entries.page + 1 })}`}>
+                  Siguiente →
+                </Link>
+              </Button>
             ) : (
               <span />
             )}

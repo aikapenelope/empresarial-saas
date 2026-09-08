@@ -1,9 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
-  ArrowLeft,
   ClipboardList,
   Loader2,
   CheckCircle2,
@@ -17,6 +15,17 @@ import {
 } from '@/actions/erpActions';
 import { Badge } from './Badge';
 import { formatUSD } from './format';
+import { ErpPageHeader } from './ErpPageHeader';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import type { InventoryCount } from '@/payload-types';
 
 interface CountsViewProps {
@@ -117,46 +126,36 @@ export function CountsView({ tenantId, tenantSlug, counts, warehouses }: CountsV
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              href={`/${tenantSlug}/erp/inventory`}
-              className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Inventario
-            </Link>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-semibold text-indigo-400">Conteos Cíclicos</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Conteos Cíclicos de Inventario</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Crea el conteo (snapshot del sistema) → cuenta el físico → completa: los ajustes entran por el Kardex.
-          </p>
-        </div>
-      </div>
+      <ErpPageHeader
+        title="Conteos Cíclicos de Inventario"
+        description="Crea el conteo (snapshot del sistema) → cuenta el físico → completa: los ajustes entran por el Kardex."
+        breadcrumbHref={`/${tenantSlug}/erp/inventory`}
+        breadcrumbLabel="Inventario"
+        section="Conteos Cíclicos"
+      />
 
       {error && (
-        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-300">
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400" role="alert">
           {error}
         </div>
       )}
 
       {/* Paso 1: Crear */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 space-y-3 text-xs">
+      <div className="rounded-xl border border-border bg-card p-5 space-y-3 text-xs">
         <div className="flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-indigo-400" />
-          <h2 className="text-sm font-semibold text-white">1. Nuevo Conteo</h2>
+          <ClipboardList className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <h2 className="text-sm font-semibold text-foreground">1. Nuevo Conteo</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Almacén a Contar *</label>
+            <label className="block font-semibold text-foreground mb-1" htmlFor="count-warehouse">
+              Almacén a Contar *
+            </label>
             <select
+              id="count-warehouse"
               value={warehouseId ?? ''}
               onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : undefined)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground"
             >
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -166,24 +165,21 @@ export function CountsView({ tenantId, tenantSlug, counts, warehouses }: CountsV
             </select>
           </div>
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Notas</label>
-            <input
+            <label className="block font-semibold text-foreground mb-1" htmlFor="count-notes">
+              Notas
+            </label>
+            <Input
+              id="count-notes"
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ej. Corte mensual bodega principal"
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
             />
           </div>
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={loading || !warehouseId}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold disabled:opacity-50"
-          >
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button type="button" onClick={handleCreate} disabled={loading || !warehouseId}>
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
             <span>Crear Conteo</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -192,8 +188,8 @@ export function CountsView({ tenantId, tenantSlug, counts, warehouses }: CountsV
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-3 text-xs">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-400" />
-              <h2 className="text-sm font-semibold text-white">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-foreground">
                 2. Conteo #{activeCount.id} en progreso
               </h2>
             </div>
@@ -213,16 +209,16 @@ export function CountsView({ tenantId, tenantSlug, counts, warehouses }: CountsV
           </div>
 
           <div className="max-h-80 overflow-y-auto">
-            <table className="w-full text-left text-[11px]">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
-                  <th className="py-1.5">Producto</th>
-                  <th className="py-1.5 text-right">Sistema</th>
-                  <th className="py-1.5 text-right">Contado</th>
-                  <th className="py-1.5 text-right">Diferencia</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Producto</TableHead>
+                  <TableHead className="text-right">Sistema</TableHead>
+                  <TableHead className="text-right">Contado</TableHead>
+                  <TableHead className="text-right">Diferencia</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {(Array.isArray(activeCount.items) ? activeCount.items : []).map((it) => {
                   const productId =
                     typeof it.product === 'object' && it.product !== null ? it.product.id : it.product;
@@ -236,13 +232,13 @@ export function CountsView({ tenantId, tenantSlug, counts, warehouses }: CountsV
                       ? counted - (Number(it.systemQty) || 0)
                       : null;
                   return (
-                    <tr key={`${productId}-${it.id}`}>
-                      <td className="py-1.5 text-white">{productName}</td>
-                      <td className="py-1.5 text-right font-mono text-slate-300">
+                    <TableRow key={`${productId}-${it.id}`}>
+                      <TableCell>{productName}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
                         {Number(it.systemQty) || 0}
-                      </td>
-                      <td className="py-1.5 text-right">
-                        <input
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Input
                           type="number"
                           min="0"
                           step="1"
@@ -253,74 +249,73 @@ export function CountsView({ tenantId, tenantSlug, counts, warehouses }: CountsV
                               [productId]: Number(e.target.value),
                             }))
                           }
-                          className="w-24 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-right font-mono text-white"
+                          className="ml-auto w-24 text-right font-mono h-7"
                         />
-                      </td>
-                      <td className="py-1.5 text-right font-mono">
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
                         {diff === null ? (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-muted-foreground">—</span>
                         ) : diff === 0 ? (
-                          <span className="text-slate-400">0</span>
+                          <span className="text-muted-foreground">0</span>
                         ) : diff < 0 ? (
-                          <span className="text-rose-400">{diff}</span>
+                          <span className="text-rose-600 dark:text-rose-400">{diff}</span>
                         ) : (
-                          <span className="text-emerald-400">+{diff}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400">+{diff}</span>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           <div className="flex items-center justify-end gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={handleSave}
               disabled={loading || Object.keys(countedQty).length === 0}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 font-semibold hover:bg-slate-700 disabled:opacity-50"
             >
-              <Save className="h-3.5 w-3.5" />
+              <Save className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Guardar Conteo</span>
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleComplete}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold disabled:opacity-50"
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Completar & Ajustar Kardex</span>
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Paso 3: Historial */}
-      <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 overflow-hidden backdrop-blur">
-        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Historial de Conteos</h2>
-          <span className="text-xs text-slate-400">{counts.length} registro(s)</span>
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Historial de Conteos</h2>
+          <span className="text-xs text-muted-foreground">{counts.length} registro(s)</span>
         </div>
 
         {counts.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-8">No hay conteos registrados.</p>
+          <p className="text-xs text-muted-foreground text-center py-8">No hay conteos registrados.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-semibold uppercase text-[10px] bg-slate-950/40">
-                  <th className="p-3">Conteo</th>
-                  <th className="p-3">Almacén</th>
-                  <th className="p-3">Creado</th>
-                  <th className="p-3 text-right">Líneas</th>
-                  <th className="p-3 text-right">Costo Ajustes (USD)</th>
-                  <th className="p-3 text-center">Estado</th>
-                  <th className="p-3 text-center">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Conteo</TableHead>
+                  <TableHead>Almacén</TableHead>
+                  <TableHead>Creado</TableHead>
+                  <TableHead className="text-right">Líneas</TableHead>
+                  <TableHead className="text-right">Costo Ajustes (USD)</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                  <TableHead className="text-center">Acción</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {counts.map((c) => {
                   const whName =
                     typeof c.warehouse === 'object' && c.warehouse !== null
@@ -339,38 +334,40 @@ export function CountsView({ tenantId, tenantSlug, counts, warehouses }: CountsV
                     0,
                   );
                   return (
-                    <tr key={c.id} className="hover:bg-slate-800/30">
-                      <td className="p-3 font-mono text-white">#{c.id}</td>
-                      <td className="p-3 text-slate-200">{whName}</td>
-                      <td className="p-3 text-slate-400 text-[11px]">
+                    <TableRow key={c.id}>
+                      <TableCell className="font-mono">#{c.id}</TableCell>
+                      <TableCell>{whName}</TableCell>
+                      <TableCell className="text-muted-foreground text-[11px]">
                         {new Date(c.createdAt).toLocaleString('es-VE')}
-                      </td>
-                      <td className="p-3 text-right font-mono text-slate-300">
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
                         {(Array.isArray(c.items) ? c.items : []).length}
-                      </td>
-                      <td className="p-3 text-right font-mono text-slate-300">
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
                         {formatUSD(adjustmentsCost)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant={c.status === 'completed' ? 'emerald' : 'amber'} size="sm">
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={c.status === 'completed' ? 'emerald' : 'amber'} size="sm" dot={c.status === 'in_progress'}>
                           {c.status === 'completed' ? 'Completado' : 'En progreso'}
                         </Badge>
-                      </td>
-                      <td className="p-3 text-center">
+                      </TableCell>
+                      <TableCell className="text-center">
                         {c.status === 'in_progress' && (
-                          <button
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
                             onClick={() => setSelectedCountId(c.id)}
-                            className="text-indigo-400 hover:text-indigo-300 font-semibold"
                           >
                             Continuar
-                          </button>
+                          </Button>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useSyncOnKeyChange } from './hooks/useSyncOnKeyChange';
 import Link from 'next/link';
 import {
   ShoppingCart,
@@ -11,11 +12,19 @@ import {
   AlertTriangle,
   CheckCircle2,
   Wallet,
+  Minus,
+  ReceiptText,
+  UserRound,
 } from 'lucide-react';
 import { createInvoiceAction, ensureWalkInCustomerAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from './format';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
 import { Badge } from './Badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/utilities/cn';
 
 interface POSViewProps {
   tenantId: number;
@@ -58,6 +67,16 @@ const PAYMENT_METHODS: Array<{ value: string; label: string }> = [
   { value: 'binance', label: 'Binance Pay (USDT)' },
 ];
 
+const QUICK_QTYS = [1, 2, 3, 5, 10, 12] as const;
+
+const posSelectClass = 'w-full rounded-lg border border-input bg-background px-3 py-2.5 text-foreground text-sm h-11';
+
+/**
+ * POS de mostrador (Sprint 37): diseño táctil de alta densidad operativa con
+ * el design system — targets XL (h-11+), cantidades rápidas de un toque,
+ * ticket lateral fijo y visor bimonetario siempre visible. La lógica de
+ * venta (tiers, walk-in, turnos de caja, kardex) queda intacta.
+ */
 export function POSView({
   tenantId,
   tenantSlug,
@@ -95,11 +114,41 @@ export function POSView({
   const priceFor = (product: { priceUSD: number; priceTiers?: Array<{ tier: string; priceUSD: number }> | null }) =>
     effectivePriceForTier(product, activeTier);
 
+  const prevTierRef = useRef<string>(activeTier);
+
+  // Cambio de cliente/tier: re-precia sólo las líneas "automáticas" — aquéllas
+  // cuyo precio sigue siendo el efectivo del tier ANTERIOR (mismo criterio que
+  // QuickQuoteBuilder). Las editadas manualmente por el cajero se conservan.
+  useSyncOnKeyChange(activeTier, () => {
+    setCart((prev) =>
+      prev.map((line) => {
+        const product = products.find((p) => p.id === line.productId);
+        if (!product) return line;
+        const prevPrice = effectivePriceForTier(product, prevTierRef.current);
+        const nextPrice = effectivePriceForTier(product, activeTier);
+        // Sólo re-precia si el precio actual sigue siendo el efectivo previo.
+        if (Math.abs(line.unitPriceUSD - prevPrice) < 0.005) {
+          return { ...line, unitPriceUSD: nextPrice };
+        }
+        return line;
+      }),
+    );
+    prevTierRef.current = activeTier;
+  });
+
+  // Al cambiar el producto seleccionado o el tier activo, el input refleja el
+  // precio efectivo del catálogo (punto de partida editable del cajero).
+  useSyncOnKeyChange(`${selectedSku}::${activeTier}`, () => {
+    const prod = products.find((p) => p.sku === selectedSku);
+    if (prod) setUnitPriceUSD(effectivePriceForTier(prod, activeTier));
+  });
+
   const totalUSD = useMemo(
     () => cart.reduce((acc, it) => acc + it.quantity * it.unitPriceUSD, 0),
     [cart],
   );
   const totalVES = totalUSD * rate;
+  const totalItems = cart.reduce((acc, it) => acc + it.quantity, 0);
 
   const handleAddLine = () => {
     const prod = products.find((p) => p.sku === selectedSku);
@@ -108,10 +157,14 @@ export function POSView({
       return;
     }
     setError(null);
+    // El precio facturado es el del input: tier efectivo por defecto o el
+    // ajuste manual del cajero (incluye 0, p. ej. regalos/cortesías — éste
+    // prevalece sobre el tier).
     const tieredUnitPrice = priceFor(prod);
+    const linePrice = Number.isFinite(unitPriceUSD) && unitPriceUSD >= 0 ? unitPriceUSD : tieredUnitPrice;
     setCart((prev) => {
       const existing = prev.find(
-        (l) => l.productId === prod.id && l.unitPriceUSD === tieredUnitPrice,
+        (l) => l.productId === prod.id && l.unitPriceUSD === linePrice,
       );
       if (existing) {
         return prev.map((l) =>
@@ -125,11 +178,17 @@ export function POSView({
           sku: prod.sku,
           description: prod.name,
           quantity,
-          unitPriceUSD: tieredUnitPrice,
+          unitPriceUSD: linePrice,
         },
       ];
     });
     setQuantity(1);
+  };
+
+  const handleAdjustQty = (index: number, delta: number) => {
+    setCart((prev) =>
+      prev.map((l, i) => (i === index ? { ...l, quantity: l.quantity + delta } : l)),
+    );
   };
 
   const handleRemoveLine = (index: number) => {
@@ -198,68 +257,73 @@ export function POSView({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Banner de venta exitosa */}
       {lastInvoiceNumber && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+          <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden="true" />
           <div className="flex-1">
-            <p className="text-sm font-bold text-emerald-300">
+            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
               Venta registrada: {lastInvoiceNumber}
             </p>
-            <p className="text-xs text-emerald-400/70">
+            <p className="text-xs text-emerald-600/80 dark:text-emerald-400/70">
               El recibo entró al turno de la caja seleccionada y el inventario fue descargado del almacén.
             </p>
           </div>
-          <button
-            onClick={() => setLastInvoiceNumber(null)}
-            className="text-xs text-slate-400 hover:text-white"
-          >
+          <Button variant="outline" size="sm" onClick={() => setLastInvoiceNumber(null)}>
             Nueva venta
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Aviso sin turno abierto */}
       {openRegisters.length === 0 && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-400" />
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
           <div className="flex-1">
-            <p className="text-sm font-bold text-amber-300">No hay turnos de caja abiertos</p>
-            <p className="text-xs text-amber-400/70">
+            <p className="text-sm font-bold text-amber-600 dark:text-amber-400">No hay turnos de caja abiertos</p>
+            <p className="text-xs text-amber-600/80 dark:text-amber-400/70">
               Abre el turno de una caja (con su fondo de apertura) para vender en el POS.
             </p>
           </div>
-          <Link
-            href={`/${tenantSlug}/erp/cash-registers`}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white"
-          >
-            <Wallet className="h-3.5 w-3.5" />
-            <span>Ir a Cajas & Arqueos</span>
-          </Link>
+          <Button size="sm" asChild>
+            <Link href={`/${tenantSlug}/erp/cash-registers`}>
+              <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
+              Ir a Cajas & Arqueos
+            </Link>
+          </Button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Panel izquierdo: catálogo y carrito */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 space-y-4">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+        {/* Panel izquierdo: catálogo y ticket */}
+        <div className="xl:col-span-3 space-y-4">
+          {/* Agregar artículos — targets XL de mostrador */}
+          <Card className="p-5 space-y-4">
             <div className="flex items-center gap-2">
-              <Store className="h-4 w-4 text-indigo-400" />
-              <h2 className="text-sm font-semibold text-white">Agregar Artículos</h2>
+              <Store className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-foreground">Agregar Artículos</h2>
+              {activeTier !== 'retail' && (
+                <Badge variant="indigo" size="sm">
+                  Tier {activeTier}
+                </Badge>
+              )}
             </div>
 
-            <div className="grid grid-cols-12 gap-2 items-end">
-              <div className="col-span-6">
-                <label className="block font-medium text-slate-400 mb-1 text-[11px]">Producto</label>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-6">
+                <label className="block font-medium text-muted-foreground mb-1 text-[11px]" htmlFor="pos-product">
+                  Producto
+                </label>
                 <select
+                  id="pos-product"
                   value={selectedSku}
                   onChange={(e) => {
                     setSelectedSku(e.target.value);
                     const prod = products.find((p) => p.sku === e.target.value);
-                    if (prod) setUnitPriceUSD(prod.priceUSD);
+                    if (prod) setUnitPriceUSD(effectivePriceForTier(prod, activeTier));
                   }}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white text-xs focus:border-indigo-500 focus:outline-none"
+                  className={posSelectClass}
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.sku}>
@@ -269,144 +333,177 @@ export function POSView({
                 </select>
               </div>
 
-              <div className="col-span-2">
-                <label className="block font-medium text-slate-400 mb-1 text-[11px]">Cant.</label>
-                <input
-                  type="number"
-                  min="0.001"
-                  step="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white text-xs text-right font-mono"
-                />
-              </div>
-
-              <div className="col-span-2">
-                <label className="block font-medium text-slate-400 mb-1 text-[11px]">Precio $</label>
-                <input
+              <div className="sm:col-span-3">
+                <label className="block font-medium text-muted-foreground mb-1 text-[11px]" htmlFor="pos-price">
+                  Precio $ (editable)
+                </label>
+                <Input
+                  id="pos-price"
                   type="number"
                   min="0"
                   step="0.01"
                   value={unitPriceUSD}
                   onChange={(e) => setUnitPriceUSD(Number(e.target.value))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white text-xs text-right font-mono"
+                  className="h-11 text-right font-mono text-sm"
                 />
               </div>
 
-              <div className="col-span-2">
-                <button
-                  type="button"
-                  onClick={handleAddLine}
-                  className="w-full inline-flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Agregar</span>
-                </button>
+              <div className="sm:col-span-3">
+                <Button type="button" className="h-11 w-full text-sm" onClick={handleAddLine}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Agregar
+                </Button>
               </div>
             </div>
-          </div>
 
-          {/* Carrito */}
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 space-y-3 min-h-[180px]">
+            {/* Cantidades rápidas de un toque */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Cantidades rápidas:
+              </span>
+              {QUICK_QTYS.map((q) => (
+                <Button
+                  key={q}
+                  type="button"
+                  variant={quantity === q ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-9 min-w-10 px-3 text-sm font-mono"
+                  onClick={() => setQuantity(q)}
+                >
+                  {q}
+                </Button>
+              ))}
+              <Input
+                type="number"
+                min="0.001"
+                step="1"
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+                className="ml-auto w-24 h-9 text-right font-mono text-sm"
+                aria-label="Cantidad manual"
+              />
+            </div>
+          </Card>
+
+          {/* Ticket de venta */}
+          <Card className="p-5 space-y-3 min-h-[220px]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4 text-emerald-400" />
-                <h2 className="text-sm font-semibold text-white">Carrito de Venta</h2>
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <h2 className="text-sm font-semibold text-foreground">Ticket</h2>
               </div>
-              <Badge variant="slate" size="sm">
-                {cart.length} línea(s)
+              <Badge variant={cart.length > 0 ? 'emerald' : 'slate'} size="sm">
+                {cart.length} línea(s) · {totalItems} ítem(s)
               </Badge>
             </div>
 
             {cart.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-8">
+              <p className="text-sm text-muted-foreground text-center py-10">
                 Agrega artículos desde el panel superior para comenzar la venta.
               </p>
             ) : (
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
-                    <th className="pb-2">Producto</th>
-                    <th className="pb-2 text-right">Cant.</th>
-                    <th className="pb-2 text-right">Precio $</th>
-                    <th className="pb-2 text-right">Total $</th>
-                    <th className="pb-2" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {cart.map((l, idx) => (
-                    <tr key={`${l.productId}-${idx}`}>
-                      <td className="py-2 text-white">{l.description}</td>
-                      <td className="py-2 text-right font-mono text-slate-300">{l.quantity}</td>
-                      <td className="py-2 text-right font-mono text-slate-300">
-                        {formatUSD(l.unitPriceUSD)}
-                      </td>
-                      <td className="py-2 text-right font-mono font-bold text-emerald-400">
-                        {formatUSD(l.quantity * l.unitPriceUSD)}
-                      </td>
-                      <td className="py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLine(idx)}
-                          className="text-slate-500 hover:text-rose-400 p-1"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ul className="divide-y divide-border">
+                {cart.map((l, idx) => (
+                  <li key={`${l.productId}-${idx}`} className="py-2.5 flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{l.description}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground">
+                        {l.sku} · {formatUSD(l.unitPriceUSD)} c/u
+                      </p>
+                    </div>
+                    {/* Stepper táctil: ± 1 */}
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-9 w-9"
+                        onClick={() => handleAdjustQty(idx, -1)}
+                        disabled={l.quantity <= 1}
+                        aria-label={`Restar una unidad de ${l.description}`}
+                      >
+                        <Minus className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                      <span className="w-10 text-center font-mono text-sm font-bold tabular-nums">
+                        {l.quantity}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon-sm"
+                        className="h-9 w-9"
+                        onClick={() => handleAdjustQty(idx, 1)}
+                        aria-label={`Sumar una unidad de ${l.description}`}
+                      >
+                        <Plus className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </div>
+                    <span className="w-24 text-right font-mono text-sm font-bold tabular-nums text-foreground">
+                      {formatUSD(l.quantity * l.unitPriceUSD)}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-9 w-9 text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400"
+                      onClick={() => handleRemoveLine(idx)}
+                      aria-label={`Quitar ${l.description} del ticket`}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Panel derecho: cobro */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-5 space-y-4 text-xs">
-            <h2 className="text-sm font-semibold text-white">Cliente & Cobro</h2>
+        {/* Panel derecho: cobro — ticket fijo en desktop */}
+        <div className="xl:col-span-2">
+          <Card className="p-5 space-y-4 text-sm xl:sticky xl:top-20">
+            <div className="flex items-center gap-2">
+              <ReceiptText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-foreground">Cliente & Cobro</h2>
+            </div>
 
             {error && (
-              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-xs text-rose-600 dark:text-rose-400" role="alert">
                 {error}
               </div>
             )}
 
             {/* Cliente */}
             <div className="space-y-2">
-              <div className="flex gap-2">
-                <button
+              <div className="grid grid-cols-2 gap-2">
+                <Button
                   type="button"
+                  variant={customerMode === 'walkin' ? 'default' : 'outline'}
+                  className="h-11"
                   onClick={() => {
                     setCustomerMode('walkin');
                     setPaymentTerms('cash');
                   }}
-                  className={`flex-1 px-2 py-1.5 rounded-lg font-medium transition-colors ${
-                    customerMode === 'walkin'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-900 text-slate-400 border border-slate-800'
-                  }`}
                 >
+                  <UserRound className="h-4 w-4" aria-hidden="true" />
                   Mostrador
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant={customerMode === 'registered' ? 'default' : 'outline'}
+                  className="h-11"
                   onClick={() => setCustomerMode('registered')}
-                  className={`flex-1 px-2 py-1.5 rounded-lg font-medium transition-colors ${
-                    customerMode === 'registered'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-900 text-slate-400 border border-slate-800'
-                  }`}
                 >
-                  Cliente registrado
-                </button>
+                  <UserRound className="h-4 w-4" aria-hidden="true" />
+                  Registrado
+                </Button>
               </div>
 
               {customerMode === 'registered' && (
                 <select
                   value={customerId}
                   onChange={(e) => setCustomerId(Number(e.target.value))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                  className={posSelectClass}
+                  aria-label="Cliente registrado"
                 >
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -419,11 +516,14 @@ export function POSView({
 
             {/* Caja con turno abierto */}
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Caja (Turno Abierto) *</label>
+              <label className="block font-semibold text-muted-foreground mb-1 text-xs" htmlFor="pos-register">
+                Caja (Turno Abierto) *
+              </label>
               <select
+                id="pos-register"
                 value={registerId ?? ''}
                 onChange={(e) => setRegisterId(e.target.value ? Number(e.target.value) : undefined)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className={posSelectClass}
               >
                 {openRegisters.length === 0 && <option value="">-- Sin turnos abiertos --</option>}
                 {openRegisters.map((r) => (
@@ -437,11 +537,14 @@ export function POSView({
             {/* Condición y método */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Condición</label>
+                <label className="block font-semibold text-muted-foreground mb-1 text-xs" htmlFor="pos-terms">
+                  Condición
+                </label>
                 <select
+                  id="pos-terms"
                   value={paymentTerms}
                   onChange={(e) => setPaymentTerms(e.target.value as 'cash' | 'credit')}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none font-semibold"
+                  className={cn(posSelectClass, 'font-semibold')}
                 >
                   <option value="cash">Contado</option>
                   {customerMode === 'registered' && <option value="credit">Crédito</option>}
@@ -450,11 +553,14 @@ export function POSView({
 
               {paymentTerms === 'cash' && (
                 <div>
-                  <label className="block font-semibold text-slate-300 mb-1">Método</label>
+                  <label className="block font-semibold text-muted-foreground mb-1 text-xs" htmlFor="pos-method">
+                    Método
+                  </label>
                   <select
+                    id="pos-method"
                     value={cashMethod}
                     onChange={(e) => setCashMethod(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                    className={posSelectClass}
                   >
                     {PAYMENT_METHODS.map((m) => (
                       <option key={m.value} value={m.value}>
@@ -469,11 +575,14 @@ export function POSView({
             {/* Almacén */}
             {warehouses.length > 0 && (
               <div>
-                <label className="block font-semibold text-slate-300 mb-1">Almacén de Despacho</label>
+                <label className="block font-semibold text-muted-foreground mb-1 text-xs" htmlFor="pos-warehouse">
+                  Almacén de Despacho
+                </label>
                 <select
+                  id="pos-warehouse"
                   value={warehouseId ?? ''}
                   onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : undefined)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                  className={posSelectClass}
                 >
                   <option value="">-- Por defecto del inquilino --</option>
                   {warehouses.map((w) => (
@@ -485,33 +594,35 @@ export function POSView({
               </div>
             )}
 
-            {/* Totales */}
-            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-2">
-              <div className="flex items-center justify-between text-base font-bold text-white border-t border-slate-800/80 pt-2">
-                <span>Total (USD):</span>
-                <span className="font-mono text-indigo-400">{formatUSD(totalUSD)}</span>
+            {/* Visor bimonetario */}
+            <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-2">
+              <div className="flex items-center justify-between text-lg font-bold text-foreground">
+                <span>Total USD</span>
+                <span className="font-mono tabular-nums">{formatUSD(totalUSD)}</span>
               </div>
-              <div className="flex items-center justify-between text-xs font-semibold text-emerald-400">
-                <span>Equivalente Bs.:</span>
-                <span className="font-mono">{formatVES(totalVES)}</span>
+              <Separator />
+              <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                <span>Equivalente Bs.</span>
+                <span className="font-mono tabular-nums">{formatVES(totalVES)}</span>
               </div>
             </div>
 
-            <button
+            <Button
               type="button"
+              size="lg"
+              className="h-14 w-full text-base font-bold"
               onClick={handleSubmit}
               disabled={loading || cart.length === 0}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-5 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all disabled:opacity-50"
             >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              <span>Cobrar y Facturar</span>
-            </button>
+              {loading && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
+              Cobrar y Facturar
+            </Button>
 
-            <p className="text-[10px] text-slate-500 text-center">
+            <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
               La venta de contado genera el recibo automático en el turno de la caja y
               descarga el inventario del almacén de despacho (Kardex).
             </p>
-          </div>
+          </Card>
         </div>
       </div>
     </div>
