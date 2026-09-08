@@ -5,8 +5,8 @@ import {
   getCashRegistersWithDetails,
   getWarehousesList,
   getCashClosuresList,
+  getCustomerPaymentsList,
 } from '@/utilities/erpData';
-import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { CashRegistersView } from '@/components/erp/CashRegistersView';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
@@ -31,20 +31,13 @@ export default async function CashRegistersPage({ params }: PageProps) {
     notFound();
   }
 
-  let registers, warehouses, closures, effectiveRate: number;
+  let registers, warehouses, closures, payments;
   try {
-    [registers, warehouses, closures, effectiveRate] = await Promise.all([
+    [registers, warehouses, closures, payments] = await Promise.all([
       getCashRegistersWithDetails(tenant.id),
       getWarehousesList(tenant.id),
       getCashClosuresList(tenant.id),
-      resolveEffectiveRate(
-        tenant.currencyConfig
-          ? {
-              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
-              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
-            }
-          : undefined,
-      ).then((r) => r.rate),
+      getCustomerPaymentsList(tenant.id),
     ]);
   } catch (error: unknown) {
     if (error instanceof ErpAccessError) {
@@ -63,7 +56,7 @@ export default async function CashRegistersPage({ params }: PageProps) {
       warehouses={warehouses}
       closures={closures}
       openCount={openCount}
-      effectiveRate={effectiveRate}
+      payments={payments}
     />
   );
 }

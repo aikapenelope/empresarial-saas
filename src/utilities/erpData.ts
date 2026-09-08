@@ -145,7 +145,8 @@ type ErpDataCollection =
   | 'cash-registers'
   | 'bill-of-materials'
   | 'warehouses'
-  | 'cash-closures';
+  | 'cash-closures'
+  | 'customer-payments';
 
 async function findAllDocs<T>(args: {
   collection: ErpDataCollection;
@@ -455,6 +456,22 @@ export async function getCashClosuresList(tenantId: number): Promise<CashClosure
     collection: 'cash-closures',
     where: { tenant: { equals: tenantId } },
     depth: 1,
+    sort: '-createdAt',
+    user,
+  });
+}
+
+/**
+ * Pagos recibidos del inquilino (recaudación real con métodos y tasa snapshot).
+ * Base del mix de métodos de pago (fix Devin #49): agrega lo COBRADO, no los
+ * conteos físicos del arqueo (que incluyen fondo de apertura).
+ */
+export async function getCustomerPaymentsList(tenantId: number): Promise<CustomerPayment[]> {
+  const user = await requireErpTenantAccess(tenantId);
+  return findAllDocs<CustomerPayment>({
+    collection: 'customer-payments',
+    where: { tenant: { equals: tenantId } },
+    depth: 0,
     sort: '-createdAt',
     user,
   });
