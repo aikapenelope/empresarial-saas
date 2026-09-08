@@ -658,6 +658,11 @@ async function createInvoiceCore(
   // automático quien la liquida vía su allocation (el hook de CustomerPayments
   // aplica el pago y flipea el estado a paid). Crearla ya pagada y con saldo
   // cero haría que applyPaymentAllocations rechazara la imputación y revirtiera todo.
+  //
+  // EXCEPCIÓN (Devin #52): venta de CORTESÍA TOTAL (totalUSD === 0) — el recibo
+  // automático es imposible (CustomerPayments exige montos positivos), así que
+  // la factura nace directamente pagada con saldo cero y sin recibo.
+  const isFullCourtesy = totalUSD === 0;
   const invoiceNumber = await nextDocumentNumber(
     payload,
     'invoices',
@@ -675,14 +680,14 @@ async function createInvoiceCore(
       issueDate: issueDate.toISOString(),
       dueDate: dueDate.toISOString(),
       paymentTerms: parsed.paymentTerms,
-      status: 'issued',
+      status: isFullCourtesy ? 'paid' : 'issued',
       warehouse: parsed.warehouseId || undefined,
       exchangeRateSnapshot: rate,
       items: formattedItems,
       totalUSD,
       totalVES,
-      balanceUSD: totalUSD,
-      balanceVES: totalVES,
+      balanceUSD: isFullCourtesy ? 0 : totalUSD,
+      balanceVES: isFullCourtesy ? 0 : totalVES,
       notes: parsed.notes || undefined,
     },
     req,
@@ -690,7 +695,8 @@ async function createInvoiceCore(
 
   // Plan de cuotas para ventas a crédito: N cuotas iguales, la primera vence a
   // creditDays y las siguientes cada 30 días (el ajuste de redondeo va a la última).
-  if (!isCash) {
+  // Cortesía total: sin cuotas (serían todas de $0).
+  if (!isCash && !isFullCourtesy) {
     const count = parsed.installmentsCount ?? 1;
     const creditDays = customer.creditDays || 0;
     const baseAmount = Math.floor((totalUSD / count) * 100) / 100;
@@ -717,7 +723,9 @@ async function createInvoiceCore(
     });
   }
 
-  if (!isCash || !parsed.cashMethod) {
+  if (!isCash || !parsed.cashMethod || isFullCourtesy) {
+    // Cortesía total: sin recibo automático — CustomerPayments exige montos
+    // positivos y la factura ya nació pagada con saldo cero (Devin #52).
     return invDoc;
   }
 
