@@ -35,6 +35,8 @@ import {
 import type { Order } from '@/payload-types';
 
 interface OrdersViewProps {
+  /** Documento de venta por defecto del inquilino (Sprint 41). */
+  salesDocumentDefault?: 'nota_entrega' | 'factura';
   tenantId: number;
   tenantSlug: string;
   orders: Order[];
@@ -59,6 +61,7 @@ const STATUS_BADGE: Record<string, { variant: 'slate' | 'amber' | 'emerald' | 'r
 };
 
 export function OrdersView({
+  salesDocumentDefault = 'factura',
   tenantId,
   tenantSlug,
   orders,
@@ -229,18 +232,37 @@ export function OrdersView({
                           )}
                           {o.status === 'confirmed' && (
                             <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2 text-[11px]"
-                                onClick={() => setInvoicingOrder(o)}
-                              >
-                                <FileText className="h-3 w-3" aria-hidden="true" />
-                                <span>Facturar</span>
-                              </Button>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" asChild>
-                                <Link href={`/${tenantSlug}/erp/orders/${o.id}`}>Remisión</Link>
-                              </Button>
+                              {salesDocumentDefault === 'nota_entrega' ? (
+                                <>
+                                  <Button size="sm" className="h-7 px-2 text-[11px]" asChild>
+                                    <Link href={`/${tenantSlug}/erp/orders/${o.id}`}>Entregar (Nota)</Link>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-[11px]"
+                                    onClick={() => setInvoicingOrder(o)}
+                                  >
+                                    <FileText className="h-3 w-3" aria-hidden="true" />
+                                    <span>Facturar</span>
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 text-[11px]"
+                                    onClick={() => setInvoicingOrder(o)}
+                                  >
+                                    <FileText className="h-3 w-3" aria-hidden="true" />
+                                    <span>Facturar</span>
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" asChild>
+                                    <Link href={`/${tenantSlug}/erp/orders/${o.id}`}>Remisión</Link>
+                                  </Button>
+                                </>
+                              )}
                               <Button
                                 size="sm"
                                 variant="outline"

@@ -1324,7 +1324,7 @@ export async function issueInvoiceFromOrderAction(input: {
   tenantId: number;
   tenantSlug: string;
   orderId: number;
-  paymentTerms: 'cash' | 'credit';
+  paymentTerms?: 'cash' | 'credit';
   cashMethod?: 'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance';
   cashRegisterId?: number;
   warehouseId?: number;
@@ -1357,13 +1357,16 @@ export async function issueInvoiceFromOrderAction(input: {
       if (order.status !== 'confirmed') {
         throw new Error(`Confirma el pedido antes de facturar (estado actual: "${order.status}").`);
       }
+      // Sin término explícito se respeta contado: facturar una entrega no
+      // crea crédito implícito (Devin #57).
+      const effectivePaymentTerms = parsed.paymentTerms || 'cash';
 
       const invoiceParsed = createInvoiceSchema.parse({
         tenantId: parsed.tenantId,
         tenantSlug: parsed.tenantSlug,
         customerId: order.customer,
-        paymentTerms: parsed.paymentTerms,
-        cashMethod: parsed.paymentTerms === 'cash' ? parsed.cashMethod : undefined,
+        paymentTerms: effectivePaymentTerms,
+        cashMethod: effectivePaymentTerms === 'cash' ? parsed.cashMethod : undefined,
         cashRegisterId: parsed.cashRegisterId,
         warehouseId: parsed.warehouseId,
         items: (order.items || []).map((item) => {
@@ -3291,6 +3294,7 @@ export interface UpdateTenantSettingsInput {
   baseCurrency: 'USD' | 'VES';
   manualExchangeRate?: number;
   autoSyncRate: boolean;
+  salesDocumentDefault?: 'nota_entrega' | 'factura';
 }
 
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
@@ -3311,6 +3315,10 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
           manualExchangeRate: parsed.manualExchangeRate ?? 0,
           autoSyncRate: parsed.autoSyncRate,
         },
+        // Solo se persiste cuando viene explícito: no se pisa lo ya guardado
+        ...(parsed.salesDocumentDefault
+          ? { salesConfig: { salesDocumentDefault: parsed.salesDocumentDefault } }
+          : {}),
       },
     });
 
@@ -3354,6 +3362,9 @@ export async function createTenantAction(input: CreateTenantInput) {
           manualExchangeRate: 0,
           autoSyncRate: true,
         },
+        // Escenario regulatorio venezolano 2026: los nuevos inquilinos entregan
+        // con Nota de Entrega; la factura pasa a ser opcional.
+        salesConfig: { salesDocumentDefault: 'nota_entrega' },
       },
     });
 

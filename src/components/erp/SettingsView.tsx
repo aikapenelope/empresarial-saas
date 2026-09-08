@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { updateTenantSettingsAction } from '@/actions/erpActions';
 import { formatVES } from './format';
-import { Building2, Coins, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { Building2, Coins, CheckCircle2, FileText, Loader2, RefreshCw } from 'lucide-react';
 import { ErpPageHeader } from './ErpPageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,9 @@ interface SettingsViewProps {
       baseCurrency?: ('USD' | 'VES') | null;
       manualExchangeRate?: number | null;
       autoSyncRate?: boolean | null;
+    } | null;
+    salesConfig?: {
+      salesDocumentDefault?: ('nota_entrega' | 'factura') | null;
     } | null;
   };
   effectiveRate: number;
@@ -48,6 +51,9 @@ export function SettingsView({
   const [autoSyncRate, setAutoSyncRate] = useState<boolean>(
     tenant.currencyConfig?.autoSyncRate ?? true,
   );
+  const [salesDocumentDefault, setSalesDocumentDefault] = useState<'nota_entrega' | 'factura'>(
+    tenant.salesConfig?.salesDocumentDefault ?? 'factura',
+  );
   const [manualExchangeRate, setManualExchangeRate] = useState<number>(
     tenant.currencyConfig?.manualExchangeRate || 0,
   );
@@ -67,6 +73,7 @@ export function SettingsView({
       baseCurrency,
       manualExchangeRate,
       autoSyncRate,
+      salesDocumentDefault,
     });
 
     setLoading(false);
@@ -102,6 +109,34 @@ export function SettingsView({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6 text-xs">
+        {/* Sección 0: Documento de Venta por Defecto (Sprint 41) */}
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-2 border-b border-border pb-3">
+            <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Documento de Venta por Defecto</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+            <div>
+              <label htmlFor="sales-doc-default" className="block font-semibold text-foreground mb-1">
+                Documento de Entrega al Cliente
+              </label>
+              <select
+                id="sales-doc-default"
+                value={salesDocumentDefault}
+                onChange={(e) => setSalesDocumentDefault(e.target.value as 'nota_entrega' | 'factura')}
+                className="w-full h-9 rounded-md border border-border bg-card px-2 text-xs"
+              >
+                <option value="nota_entrega">Nota de Entrega (factura opcional)</option>
+                <option value="factura">Factura inmediata</option>
+              </select>
+              <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                En modo Nota de Entrega, las entregas se documentan sin factura (escenario regulatorio 2026);
+                la factura se emite después desde la remisión o el pedido, sólo cuando el cliente la pida.
+              </p>
+            </div>
+          </div>
+        </Card>
+
         {/* Sección 1: Datos Fiscales y de Contacto */}
         <Card className="p-5 space-y-4">
           <div className="flex items-center gap-2 border-b border-border pb-3">

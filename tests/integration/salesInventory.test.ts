@@ -38,7 +38,11 @@ beforeAll(async () => {
 
   const tenant = await payload.create({
     collection: 'tenants',
-    data: { name: `QA Kardex ${RUN}`, slug: `qa-kardex-${RUN}` },
+    data: {
+      name: `QA Kardex ${RUN}`,
+      slug: `qa-kardex-${RUN}`,
+      salesConfig: { salesDocumentDefault: 'factura' },
+    },
     overrideAccess: true,
   });
   tenantId = tenant.id;

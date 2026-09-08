@@ -15,6 +15,7 @@ import * as migration_20260906_061500_add_delivery_notes from './20260906_061500
 import * as migration_20260906_070000_add_alerts from './20260906_070000_add_alerts';
 import * as migration_20260906_080000_drop_users_password_column from './20260906_080000_drop_users_password_column';
 import * as migration_20260906_090000_add_share_tokens from './20260906_090000_add_share_tokens';
+import * as migration_20260908_221653_add_sales_config from './20260908_221653_add_sales_config';
 
 export const migrations = [
   {
@@ -70,36 +71,41 @@ export const migrations = [
   {
     up: migration_20260906_032741_add_governance.up,
     down: migration_20260906_032741_add_governance.down,
-    name: '20260906_032741_add_governance'
+    name: '20260906_032741_add_governance',
   },
   {
     up: migration_20260906_041000_cxp_number_uniques.up,
     down: migration_20260906_041000_cxp_number_uniques.down,
-    name: '20260906_041000_cxp_number_uniques'
+    name: '20260906_041000_cxp_number_uniques',
   },
   {
     up: migration_20260906_053000_add_orders.up,
     down: migration_20260906_053000_add_orders.down,
-    name: '20260906_053000_add_orders'
+    name: '20260906_053000_add_orders',
   },
   {
     up: migration_20260906_061500_add_delivery_notes.up,
     down: migration_20260906_061500_add_delivery_notes.down,
-    name: '20260906_061500_add_delivery_notes'
+    name: '20260906_061500_add_delivery_notes',
   },
   {
     up: migration_20260906_070000_add_alerts.up,
     down: migration_20260906_070000_add_alerts.down,
-    name: '20260906_070000_add_alerts'
+    name: '20260906_070000_add_alerts',
   },
   {
     up: migration_20260906_080000_drop_users_password_column.up,
     down: migration_20260906_080000_drop_users_password_column.down,
-    name: '20260906_080000_drop_users_password_column'
+    name: '20260906_080000_drop_users_password_column',
   },
   {
     up: migration_20260906_090000_add_share_tokens.up,
     down: migration_20260906_090000_add_share_tokens.down,
-    name: '20260906_090000_add_share_tokens'
+    name: '20260906_090000_add_share_tokens',
+  },
+  {
+    up: migration_20260908_221653_add_sales_config.up,
+    down: migration_20260908_221653_add_sales_config.down,
+    name: '20260908_221653_add_sales_config'
   },
 ];
