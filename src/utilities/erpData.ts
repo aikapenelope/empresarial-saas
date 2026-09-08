@@ -581,29 +581,36 @@ export async function getOrdersTotals(
   and.push(...buildBusinessDateRange(filters.from, filters.to, 'createdAt'));
   if (filters.status) and.push({ status: { equals: filters.status } });
 
-  const res = await payload.find({
-    collection: 'orders',
-    where: { and },
-    depth: 0,
-    limit: 5000,
-    pagination: false,
-    select: { status: true, totalUSD: true },
-    sort: '-createdAt',
-    user,
-    overrideAccess: false,
-  });
-
+  // Sin corte en 5000: loop paginado (Devin #60 — cortes silenciosos
+  // subestiman los KPIs en inquilinos grandes).
   let openCount = 0;
   let pendingCount = 0;
   let pendingUSD = 0;
   let closedCount = 0;
-  for (const o of res.docs as Array<Pick<Order, 'status' | 'totalUSD'>>) {
-    if (o.status === 'draft' || o.status === 'confirmed') openCount += 1;
-    if (o.status === 'confirmed') {
-      pendingCount += 1;
-      pendingUSD += Number(o.totalUSD) || 0;
+  let page = 1;
+  let hasNext = true;
+  while (hasNext) {
+    const res = await payload.find({
+      collection: 'orders',
+      where: { and },
+      depth: 0,
+      limit: 500,
+      page,
+      select: { status: true, totalUSD: true },
+      sort: '-createdAt',
+      user,
+      overrideAccess: false,
+    });
+    for (const o of res.docs as Array<Pick<Order, 'status' | 'totalUSD'>>) {
+      if (o.status === 'draft' || o.status === 'confirmed') openCount += 1;
+      if (o.status === 'confirmed') {
+        pendingCount += 1;
+        pendingUSD += Number(o.totalUSD) || 0;
+      }
+      if (o.status === 'invoiced' || o.status === 'canceled') closedCount += 1;
     }
-    if (o.status === 'invoiced' || o.status === 'canceled') closedCount += 1;
+    hasNext = Boolean(res.hasNextPage);
+    page += 1;
   }
 
   return { openCount, pendingCount, pendingUSD: Number(pendingUSD.toFixed(2)), closedCount };

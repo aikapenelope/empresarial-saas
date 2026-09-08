@@ -258,7 +258,7 @@ export const issueOrderInvoiceSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),
   orderId: idLike,
-  paymentTerms: z.enum(['cash', 'credit']),
+  paymentTerms: z.enum(['cash', 'credit']).optional(),
   cashMethod: z
     .enum(['cash_usd', 'cash_ves', 'pos_ves', 'pago_movil', 'transfer_ves', 'zelle', 'binance'])
     .optional(),

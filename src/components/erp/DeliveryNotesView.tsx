@@ -56,11 +56,11 @@ export function DeliveryNotesView({ tenantId, tenantSlug, notes }: DeliveryNotes
       return;
     }
     setInvoicingNoteId(note.id);
+    // Sin paymentTerms: el action respeta el término del pedido (contado/credit).
     const res = await issueInvoiceFromOrderAction({
       tenantId,
       tenantSlug,
       orderId: Number(orderId),
-      paymentTerms: 'credit',
     });
     setInvoicingNoteId(undefined);
     if (res.success) {
