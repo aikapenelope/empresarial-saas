@@ -625,6 +625,27 @@ Hallazgos de Devin Review reparados (agrupados, una sola ronda por protocolo):
 
 ---
 
+# 📊 Fase 10: Reportes, Filtros de negocio y escala
+
+> **Objetivo:** Cerrar la deuda de escala (listados que traían el histórico completo del inquilino) y dar a la operación reportes con filtros de período y exports CSV — sin colecciones nuevas, reutilizando los datos existentes.
+
+### 📈 Sprint 39 — Filtros server-side + Libro de Ventas + Exports (PR `feat/reports-filters-s39`)
+
+- [x] **Contrato compartido URL→RSC:** `businessListFiltersSchema` (+ variantes por enum de estado de facturas/cotizaciones) y `buildBusinessDateRange` (calendario Venezuela UTC-4, borde exclusivo "hasta" — extraído del patrón del kardex para toda la plataforma).
+- [x] **Listados paginados server-side:** `getInvoicesPage`/`getQuotesPage` (page/limit 50, filtros from/to/status) — las vistas dejan de traer el histórico completo; `getInvoicesList` permanece para modales/POS.
+- [x] **KPIs agregados con `select`:** `getInvoicesTotals` suma sobre el conjunto filtrado completo con `select` de 4 campos + `pagination:false` (patrón de agregados de la Local API).
+- [x] **Facturas migrada al modelo:** `BusinessFiltersBar` compartida (form GET server-side, cero JS + paginación con filtros preservados); búsqueda de texto queda sobre la página visible; los KPIs respetan los filtros.
+- [x] **Reportes & Exports (`/erp/reports`):** Libro de Ventas del período (preview + KPIs USD/VES históricos por tasa snapshot) y exports CSV: libro de ventas, cartera por antigüedad (ledger vigente), kardex completo/filtrado — route handlers con `pagination:false`, Zod y guard de sesión.
+- [x] **Navegación:** entrada "Reportes & Exports" en el grupo Finanzas.
+- **Criterio de cierre:** `tsc --noEmit`, `eslint .` 0/0 y `next build` en verde.
+
+### Pendiente Fase 10 (siguientes)
+- Extender BusinessFiltersBar a Cotizaciones (getter ya existe), Pedidos, Compras y Pagos recibidos.
+- Reporte de IVA/libro de compras cuando el negocio lo defina.
+- Interiores de los 22 modales (pulido UI continuo).
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.

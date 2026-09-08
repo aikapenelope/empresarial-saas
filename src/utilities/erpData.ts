@@ -34,6 +34,7 @@ import {
 } from './arAging';
 import { getLiveExchangeRates, resolveEffectiveRate } from './exchangeRate';
 import { ErpAccessError, requireErpTenantAccess, getErpUser, requireErpUser } from './erpAuth';
+import { buildBusinessDateRange } from './erpValidation';
 
 export interface DashboardMetrics {
   tenant: Tenant;
@@ -437,6 +438,237 @@ export async function getInvoicesList(tenantId: number): Promise<Invoice[]> {
     sort: '-createdAt',
     user,
   });
+}
+
+// ==========================================
+// Listados paginados con filtros de negocio (Sprint 39) — misma forma que
+// getKardexEntries: server-side pagination + rango de fechas UTC-4.
+// ==========================================
+
+export interface BusinessListFilters {
+  page?: number;
+  from?: string;
+  to?: string;
+  status?: string;
+}
+
+/** Respuesta paginada estándar de un listado de negocio. */
+export interface PaginatedList<T> {
+  docs: T[];
+  totalDocs: number;
+  totalPages: number;
+  page: number;
+}
+
+/**
+ * Facturas paginadas por fecha de emisión y estado (Sprint 39). El listado
+ * completo (getInvoicesList) sigue para modales/POS; la VISTA usa esta vía
+ * para no traer el histórico completo del inquilino al RSC.
+ */
+export async function getInvoicesPage(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<PaginatedList<Invoice>> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const res = await payload.find({
+    collection: 'invoices',
+    where: { and },
+    depth: 1,
+    sort: '-createdAt',
+    page: filters.page || 1,
+    limit: 50,
+    user,
+    overrideAccess: false,
+  });
+
+  return {
+    docs: res.docs as Invoice[],
+    totalDocs: res.totalDocs,
+    totalPages: res.totalPages,
+    page: res.page || 1,
+  };
+}
+
+/**
+ * Cotizaciones paginadas por fecha y estado (Sprint 39).
+ */
+export async function getQuotesPage(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<PaginatedList<Quote>> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const res = await payload.find({
+    collection: 'quotes',
+    where: { and },
+    depth: 1,
+    sort: '-createdAt',
+    page: filters.page || 1,
+    limit: 50,
+    user,
+    overrideAccess: false,
+  });
+
+  return {
+    docs: res.docs as Quote[],
+    totalDocs: res.totalDocs,
+    totalPages: res.totalPages,
+    page: res.page || 1,
+  };
+}
+
+export interface SalesBookEntry {
+  date: string;
+  invoiceNumber: string;
+  customerName: string;
+  totalUSD: number;
+  totalVES: number;
+  rate: number;
+  paymentTerms: string;
+  status: string;
+}
+
+export interface SalesBookReport {
+  from?: string;
+  to?: string;
+  entries: SalesBookEntry[];
+  totals: { count: number; totalUSD: number; totalVES: number };
+}
+
+/**
+ * Libro de Ventas del período (Sprint 39): facturas emitidas/no-anuladas con
+ * su tasa snapshot, agregadas en USD y VES históricos (cada factura con SU
+ * tasa — el total VES es la suma de los contravalores reales del momento,
+ * no una conversión retroactiva con la tasa vigente).
+ */
+export async function getSalesBookReport(
+  tenantId: number,
+  filters: { from?: string; to?: string },
+): Promise<SalesBookReport> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [
+    { tenant: { equals: tenantId } },
+    { status: { not_equals: 'voided' } },
+  ];
+  and.push(...buildBusinessDateRange(filters.from, filters.to));
+
+  // pagination:false + límite explícito: reportes agregados SIN el costo de
+  // conteo de paginación (patrón documentado de la Local API).
+  const res = await payload.find({
+    collection: 'invoices',
+    where: { and },
+    depth: 1,
+    limit: 5000,
+    pagination: false,
+    sort: '-createdAt',
+    user,
+    overrideAccess: false,
+  });
+
+  const entries: SalesBookEntry[] = [];
+  let totalUSD = 0;
+  let totalVES = 0;
+
+  for (const inv of res.docs as Invoice[]) {
+    const usd = Number(inv.totalUSD) || 0;
+    const ves = Number(inv.totalVES) || 0;
+    totalUSD += usd;
+    totalVES += ves;
+    entries.push({
+      date: inv.issueDate,
+      invoiceNumber: inv.invoiceNumber,
+      customerName:
+        typeof inv.customer === 'object' && inv.customer !== null
+          ? (inv.customer as { name: string }).name
+          : 'Cliente',
+      totalUSD: usd,
+      totalVES: ves,
+      rate: Number(inv.exchangeRateSnapshot) || 0,
+      paymentTerms: inv.paymentTerms,
+      status: inv.status,
+    });
+  }
+
+  return {
+    from: filters.from,
+    to: filters.to,
+    entries,
+    totals: {
+      count: entries.length,
+      totalUSD: Number(totalUSD.toFixed(2)),
+      totalVES: Number(totalVES.toFixed(2)),
+    },
+  };
+}
+
+export interface InvoiceListTotals {
+  count: number;
+  invoicedUSD: number;
+  invoicedVES: number;
+  balanceUSD: number;
+  paidCount: number;
+}
+
+/**
+ * KPIs del listado de facturas sobre el conjunto FILTRADO completo (no la
+ * página visible). `select` limita el payload a los 3 campos usados y
+ * `pagination:false` evita el conteo — patrón de la Local API para agregados.
+ */
+export async function getInvoicesTotals(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<InvoiceListTotals> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const res = await payload.find({
+    collection: 'invoices',
+    where: { and },
+    depth: 0,
+    limit: 5000,
+    pagination: false,
+    sort: '-createdAt',
+    select: { totalUSD: true, totalVES: true, balanceUSD: true, status: true },
+    user,
+    overrideAccess: false,
+  });
+
+  let invoicedUSD = 0;
+  let invoicedVES = 0;
+  let balanceUSD = 0;
+  let paidCount = 0;
+
+  for (const inv of res.docs as Pick<Invoice, 'totalUSD' | 'totalVES' | 'balanceUSD' | 'status'>[]) {
+    invoicedUSD += Number(inv.totalUSD) || 0;
+    invoicedVES += Number(inv.totalVES) || 0;
+    balanceUSD += Number(inv.balanceUSD) || 0;
+    if (inv.status === 'paid') paidCount += 1;
+  }
+
+  return {
+    count: res.docs.length,
+    invoicedUSD: Number(invoicedUSD.toFixed(2)),
+    invoicedVES: Number(invoicedVES.toFixed(2)),
+    balanceUSD: Number(balanceUSD.toFixed(2)),
+    paidCount,
+  };
 }
 
 export async function getWarehousesList(tenantId: number): Promise<Warehouse[]> {

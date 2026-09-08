@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Where } from 'payload';
 
 // ==========================================
 // Contratos de entrada validados en runtime (Server Actions)
@@ -544,3 +545,53 @@ export const auditFiltersSchema = z.object({
   from: dateOnly.optional().catch(undefined),
   to: dateOnly.optional().catch(undefined),
 });
+
+// Filtros de negocio compartidos (Sprint 39): facturas, cotizaciones, pedidos,
+// remisiones, compras y pagos usan el MISMO contrato URL→RSC. `from`/`to` son
+// fechas de calendario en la zona horaria de negocio (UTC-4, ver
+// buildBusinessDateRange); `status` es el enum propio de cada documento y se
+// filtra por vista con un literal tuple tipado.
+export const businessListFiltersSchema = z.object({
+  page: z.coerce.number().int().positive().catch(1),
+  from: dateOnly.optional().catch(undefined),
+  to: dateOnly.optional().catch(undefined),
+});
+
+/** Listado de facturas: agrega su enum de estado al contrato compartido. */
+export const invoicesListFiltersSchema = businessListFiltersSchema.extend({
+  status: z
+    .enum(['draft', 'issued', 'partially_paid', 'paid', 'voided'])
+    .optional()
+    .catch(undefined),
+});
+
+/** Listado de cotizaciones: agrega su enum de estado. */
+export const quotesListFiltersSchema = businessListFiltersSchema.extend({
+  status: z
+    .enum(['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted'])
+    .optional()
+    .catch(undefined),
+});
+
+/**
+ * Convierte el par {from,to} de fechas de calendario (YYYY-MM-DD) en un rango
+ * de timestamps ISO inclusivo-exclusivo en la zona horaria de negocio
+ * (Venezuela, UTC-4, sin DST): "hasta" usa el borde exclusivo del día
+ * siguiente para incluir la tarde/noche local que un corte 23:59:59 perdería.
+ * Devuelve condiciones `where` listas para spread en un AND:
+ * `and.push(...buildBusinessDateRange(q.from, q.to))`.
+ */
+export function buildBusinessDateRange(from?: string, to?: string): Where[] {
+  const conditions: Where[] = [];
+  if (from) {
+    conditions.push({
+      createdAt: { greater_than_equal: new Date(`${from}T00:00:00-04:00`).toISOString() },
+    });
+  }
+  if (to) {
+    const toEndExclusive = new Date(`${to}T00:00:00-04:00`);
+    toEndExclusive.setUTCDate(toEndExclusive.getUTCDate() + 1);
+    conditions.push({ createdAt: { less_than: toEndExclusive.toISOString() } });
+  }
+  return conditions;
+}
