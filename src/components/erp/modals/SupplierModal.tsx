@@ -77,95 +77,95 @@ export function SupplierModal({ isOpen, onClose, tenantId, tenantSlug }: Supplie
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Razón Social / Empresa *</label>
+            <label className="block font-semibold text-foreground mb-1">Razón Social / Empresa *</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej. Distribuidora Central, C.A."
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">RIF / Cédula Fiscal *</label>
+            <label className="block font-semibold text-foreground mb-1">RIF / Cédula Fiscal *</label>
             <input
               type="text"
               required
               value={taxId}
               onChange={(e) => setTaxId(e.target.value)}
               placeholder="Ej. J-98765432-1"
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Teléfono / WhatsApp</label>
+            <label className="block font-semibold text-foreground mb-1">Teléfono / WhatsApp</label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="Ej. +584141234567"
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Correo Electrónico</label>
+            <label className="block font-semibold text-foreground mb-1">Correo Electrónico</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="ventas@proveedor.com"
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
             />
           </div>
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Persona de Contacto / Asesor</label>
+          <label className="block font-semibold text-foreground mb-1">Persona de Contacto / Asesor</label>
           <input
             type="text"
             value={contactName}
             onChange={(e) => setContactName(e.target.value)}
             placeholder="Ej. Lic. Carlos Mendoza (Gerente de Cuentas)"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/60">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-border bg-muted/50">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Días de Crédito Otorgados</label>
+            <label className="block font-semibold text-foreground mb-1">Días de Crédito Otorgados</label>
             <input
               type="number"
               min="0"
               value={creditDays}
               onChange={(e) => setCreditDays(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Límite de Crédito (USD)</label>
+            <label className="block font-semibold text-foreground mb-1">Límite de Crédito (USD)</label>
             <input
               type="number"
               min="0"
               step="100"
               value={creditLimitUSD}
               onChange={(e) => setCreditLimitUSD(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>

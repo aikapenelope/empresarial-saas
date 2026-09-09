@@ -160,20 +160,20 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Nombre del Artículo *</label>
+            <label className="block font-semibold text-foreground mb-1">Nombre del Artículo *</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej. Harina de Trigo Panadera"
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="font-semibold text-slate-300">SKU / Código *</label>
+              <label className="font-semibold text-foreground">SKU / Código *</label>
               <button
                 type="button"
                 onClick={handleGenerateSku}
@@ -188,18 +188,18 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
               value={sku}
               onChange={(e) => setSku(e.target.value.toUpperCase())}
               placeholder="Ej. MP-HAR-01"
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Tipo de Producto</label>
+            <label className="block font-semibold text-foreground mb-1">Tipo de Producto</label>
             <select
               value={productType}
               onChange={(e) => setProductType(e.target.value as 'standard')}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               <option value="standard">Estándar (Compra / Venta directa)</option>
               <option value="raw_material">Materia Prima / Insumo BOM</option>
@@ -209,11 +209,11 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Unidad de Medida</label>
+            <label className="block font-semibold text-foreground mb-1">Unidad de Medida</label>
             <select
               value={unitOfMeasure}
               onChange={(e) => setUnitOfMeasure(e.target.value as 'unit')}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               <option value="unit">Unidad (ud)</option>
               <option value="kg">Kilogramo (kg)</option>
@@ -227,36 +227,36 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Costo Unitario Base (USD)</label>
+            <label className="block font-semibold text-foreground mb-1">Costo Unitario Base (USD)</label>
             <input
               type="number"
               step="0.01"
               min="0"
               value={costUSD}
               onChange={(e) => setCostUSD(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Precio de Venta al Público (USD)</label>
+            <label className="block font-semibold text-foreground mb-1">Precio de Venta al Público (USD)</label>
             <input
               type="number"
               step="0.01"
               min="0"
               value={priceUSD}
               onChange={(e) => setPriceUSD(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono font-bold text-emerald-400"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono font-bold text-emerald-600 dark:text-emerald-400"
             />
           </div>
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Tratamiento Fiscal (IVA)</label>
+          <label className="block font-semibold text-foreground mb-1">Tratamiento Fiscal (IVA)</label>
           <select
             value={taxRate}
             onChange={(e) => setTaxRate(e.target.value as 'exempt')}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
           >
             <option value="exempt">Exento</option>
             <option value="general">Alícuota General (16%)</option>
@@ -265,9 +265,9 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
         </div>
 
         {/* Tiers de precio alternativos (el retail es el precio base) */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+        <div className="rounded-xl border border-border bg-muted/50 p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-300 uppercase tracking-wider text-[10px]">
+            <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">
               Precios por Segmento (mayorista / vendedor / promo)
             </span>
             <button
@@ -295,7 +295,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
                     newTiers[idx] = { ...t, tier: e.target.value as (typeof TIER_OPTIONS)[number] };
                     setTiers(newTiers);
                   }}
-                  className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-white"
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground"
                 >
                   {TIER_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
@@ -315,7 +315,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
                     newTiers[idx] = { ...t, priceUSD: Number(e.target.value) };
                     setTiers(newTiers);
                   }}
-                  className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-white text-right font-mono"
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs text-foreground text-right font-mono"
                   placeholder="Precio USD"
                 />
               </div>
@@ -323,7 +323,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
                 <button
                   type="button"
                   onClick={() => setTiers(tiers.filter((_, i) => i !== idx))}
-                  className="text-slate-500 hover:text-rose-400 p-1"
+                  className="text-muted-foreground hover:text-destructive p-1"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -331,28 +331,28 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
             </div>
           ))}
           {tiers.length === 0 && (
-            <p className="text-slate-500 text-[11px]">Sin tiers alternativos: todos los clientes usan el precio base.</p>
+            <p className="text-muted-foreground text-[11px]">Sin tiers alternativos: todos los clientes usan el precio base.</p>
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/60">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl border border-border bg-muted/50">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Alerta de Stock Mínimo</label>
+            <label className="block font-semibold text-foreground mb-1">Alerta de Stock Mínimo</label>
             <input
               type="number"
               min="0"
               value={minStockAlert}
               onChange={(e) => setMinStockAlert(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
