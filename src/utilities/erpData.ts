@@ -616,6 +616,87 @@ export async function getOrdersTotals(
   return { openCount, pendingCount, pendingUSD: Number(pendingUSD.toFixed(2)), closedCount };
 }
 
+export interface QuotesTotals {
+  byStatus: Record<string, number>;
+  total: number;
+  totalUSD: number;
+}
+
+/** KPIs de cotizaciones sobre el conjunto FILTRADO completo (Sprint 44): alimenta el embudo sin depender de la página visible. */
+export async function getQuotesTotals(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<QuotesTotals> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  let totalUSD = 0;
+  let page = 1;
+  let hasNext = true;
+  while (hasNext) {
+    const res = await payload.find({
+      collection: 'quotes',
+      where: { and },
+      depth: 0,
+      limit: 500,
+      page,
+      select: { status: true, totalUSD: true },
+      sort: '-createdAt',
+      user,
+      overrideAccess: false,
+    });
+    for (const q of res.docs as Array<Pick<Quote, 'status' | 'totalUSD'>>) {
+      byStatus[q.status] = (byStatus[q.status] ?? 0) + 1;
+      total += 1;
+      totalUSD += Number(q.totalUSD) || 0;
+    }
+    hasNext = Boolean(res.hasNextPage);
+    page += 1;
+  }
+
+  return { byStatus, total, totalUSD: Number(totalUSD.toFixed(2)) };
+}
+
+/**
+ * Compras paginadas por fecha de emisión y estado (Sprint 44): la tabla de
+ * facturas de compra de la vista deja de traer el histórico completo.
+ */
+export async function getPurchasesPage(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<PaginatedList<PurchaseInvoice>> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const res = await payload.find({
+    collection: 'purchase-invoices',
+    where: { and },
+    depth: 1,
+    sort: '-createdAt',
+    page: filters.page || 1,
+    limit: 50,
+    user,
+    overrideAccess: false,
+  });
+
+  return {
+    docs: res.docs as PurchaseInvoice[],
+    totalDocs: res.totalDocs,
+    totalPages: res.totalPages,
+    page: res.page || 1,
+  };
+}
+
 export interface SalesBookEntry {
   date: string;
   invoiceNumber: string;
