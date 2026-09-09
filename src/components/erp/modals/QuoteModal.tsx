@@ -275,12 +275,12 @@ export function QuoteModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Cliente *</label>
+            <label className="block font-semibold text-foreground mb-1">Cliente *</label>
             <select
               required
               value={customerId}
               onChange={(e) => setCustomerId(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -291,20 +291,20 @@ export function QuoteModal({
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Válida Hasta</label>
+            <label className="block font-semibold text-foreground mb-1">Válida Hasta</label>
             <input
               type="date"
               value={validUntil}
               onChange={(e) => setValidUntil(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             />
           </div>
         </div>
 
         {/* Líneas */}
-        <div className="space-y-2 border-t border-slate-800/80 pt-3">
+        <div className="space-y-2 border-t border-border pt-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-300 uppercase tracking-wider text-[10px]">
+            <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">
               Líneas Cotizadas
             </span>
             <button
@@ -321,13 +321,13 @@ export function QuoteModal({
             {items.map((it, idx) => (
               <div
                 key={idx}
-                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-slate-950/50 border border-slate-800"
+                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-muted/50 border border-border"
               >
                 <div className="col-span-4">
                   <select
                     value={it.sku}
                     onChange={(e) => handleSelectProduct(idx, e.target.value)}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground"
                   >
                     {products.map((p) => (
                       <option key={p.id} value={p.sku}>
@@ -343,7 +343,7 @@ export function QuoteModal({
                     min="1"
                     value={it.quantity}
                     onChange={(e) => handleItemChange(idx, 'quantity', Number(e.target.value))}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white text-right font-mono"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground text-right font-mono"
                     placeholder="Cant."
                   />
                 </div>
@@ -355,12 +355,12 @@ export function QuoteModal({
                     min="0"
                     value={it.unitPriceUSD}
                     onChange={(e) => handleItemChange(idx, 'unitPriceUSD', Number(e.target.value))}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white text-right font-mono text-emerald-400 font-bold"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground text-right font-mono text-emerald-600 dark:text-emerald-400 font-bold"
                     placeholder="Precio $"
                   />
                 </div>
 
-                <div className="col-span-2 text-right font-mono font-bold text-white text-xs">
+                <div className="col-span-2 text-right font-mono font-bold text-foreground text-xs">
                   {formatUSD(it.quantity * it.unitPriceUSD)}
                 </div>
 
@@ -369,7 +369,7 @@ export function QuoteModal({
                     type="button"
                     onClick={() => handleRemoveItem(idx)}
                     disabled={items.length <= 1}
-                    className="text-slate-500 hover:text-rose-400 disabled:opacity-30 p-1"
+                    className="text-muted-foreground hover:text-destructive disabled:opacity-30 p-1"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -380,44 +380,44 @@ export function QuoteModal({
         </div>
 
         {/* Totales */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-2">
-          <div className="flex items-center justify-between text-slate-300">
+        <div className="rounded-xl border border-border bg-muted/50 p-4 space-y-2">
+          <div className="flex items-center justify-between text-foreground">
             <span>Tasa Aplicada:</span>
             <span className="font-mono text-xs">{formatVES(rate)} / USD</span>
           </div>
-          <div className="flex items-center justify-between text-base font-bold text-white border-t border-slate-800/80 pt-2">
+          <div className="flex items-center justify-between text-base font-bold text-foreground border-t border-border pt-2">
             <span>Total Cotizado (USD):</span>
             <span className="font-mono text-indigo-400">{formatUSD(totalUSD)}</span>
           </div>
-          <div className="flex items-center justify-between text-xs font-semibold text-emerald-400">
+          <div className="flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
             <span>Equivalente en Bolívares:</span>
             <span className="font-mono">{formatVES(totalVES)}</span>
           </div>
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Notas / Alcance Ofrecido</label>
+          <label className="block font-semibold text-foreground mb-1">Notas / Alcance Ofrecido</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Ej. Incluye instalación y 6 meses de garantía"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>{isEdit ? 'Guardar Cambios' : 'Crear Cotización'}</span>

@@ -714,6 +714,24 @@ Equivalencias UOM (comprar por caja / vender por unidad) · módulo de aprobacio
 
 ---
 
+# 🎨 Fase 12: Pulido de Modales (design system de punta a punta)
+
+> **Objetivo:** eliminar el "puente slate" — los interiores de los modales conservaban estilos artesanales (`bg-slate-*`) que herían el modo claro y duplicaban CSS. La fuente de verdad es el design system ya implementado en las vistas (tokens `bg-card`/`border-border`/`text-foreground`/`text-muted-foreground`).
+
+### 🧹 S41.2 — POS y nota de entrega: decisión cerrada (Opción A)
+
+**El POS de mostrador siempre factura.** La venta de contado exige kardex inmediato, caja que cuadre y documento fiscal — crear notas directas sin factura rompería las tres invariantes. El modo `nota_entrega` del inquilino gobierna el ciclo de **pedidos → despacho → facturación diferida** (ya operativo: confirmar → Entregar con nota → Facturar desde remisión). La opción "imprimir formato nota en POS" queda como feature futura condicionada a demanda real de mostrador.
+
+### 🎨 S45 — Pulido de modales por lotes
+
+- [x] **Lote 1 (PR `feat/s45-modals-lote1`):** InvoiceModal (57), OrderModal (48), QuoteModal (43) — 148 clases artesanales migradas a tokens (`bg-card`/`bg-background`/`bg-muted`/`border-border`/`text-foreground`/`text-muted-foreground`, focus `border-ring`, semánticos bimodales `amber`/`emerald`). Cero `slate` restante en los tres. Placeholder unificado (`placeholder:text-muted-foreground`).
+- [ ] **Lote 2:** CashClosure (26) · Payment (21) · SupplierPayment (14) · OpenShift (12) · CashRegister (8).
+- [ ] **Lote 3:** Product (25) · Customer (23) · Supplier (17) · StockMovement (16) · Production (14).
+- [ ] **Lote 4:** PurchaseInvoice (23) · OrderInvoice (11) · IssueDelivery (11) · ConvertQuote (10) · Return (10) · TenantCreate (11) · ReceiveWarehouse (4) · ManualRate (4).
+- **Criterio de cierre Fase 12:** cero clases `slate` en `src/components/erp/modals/` (verificado por grep por lote) + revisión visual de preview en claro/oscuro.
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.

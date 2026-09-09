@@ -253,11 +253,11 @@ export function OrderModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Cliente *</label>
+            <label className="block font-semibold text-foreground mb-1">Cliente *</label>
             <select
               value={customerId || ''}
               onChange={(e) => setCustomerId(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -267,17 +267,17 @@ export function OrderModal({
             </select>
           </div>
           <div className="flex items-end">
-            <div className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 flex items-center justify-between">
-              <span className="text-slate-400">Tasa aplicada:</span>
-              <span className="font-mono text-slate-200">{formatUSD(rate)} / USD</span>
+            <div className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2 flex items-center justify-between">
+              <span className="text-muted-foreground">Tasa aplicada:</span>
+              <span className="font-mono text-foreground">{formatUSD(rate)} / USD</span>
             </div>
           </div>
         </div>
 
         {/* Líneas */}
-        <div className="space-y-2 border-t border-slate-800/80 pt-3">
+        <div className="space-y-2 border-t border-border pt-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-300 uppercase tracking-wider text-[10px]">
+            <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">
               Líneas del Pedido
             </span>
             <button
@@ -294,13 +294,13 @@ export function OrderModal({
             {items.map((it, idx) => (
               <div
                 key={idx}
-                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-slate-950/50 border border-slate-800"
+                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-muted/50 border border-border"
               >
                 <div className="col-span-4">
                   <select
                     value={it.sku}
                     onChange={(e) => handleSelectProduct(idx, e.target.value)}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground"
                   >
                     {products.map((p) => (
                       <option key={p.id} value={p.sku}>
@@ -313,7 +313,7 @@ export function OrderModal({
                     value={it.description}
                     onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
                     placeholder="Descripción de la línea"
-                    className="w-full mt-1 rounded border border-slate-700 bg-slate-900 p-1.5 text-[11px] text-white"
+                    className="w-full mt-1 rounded border border-border bg-background p-1.5 text-[11px] text-foreground"
                   />
                 </div>
 
@@ -324,7 +324,7 @@ export function OrderModal({
                     step="0.001"
                     value={it.quantity}
                     onChange={(e) => handleItemChange(idx, 'quantity', Number(e.target.value))}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white text-right font-mono"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground text-right font-mono"
                     placeholder="Cant."
                   />
                 </div>
@@ -336,7 +336,7 @@ export function OrderModal({
                     min="0"
                     value={it.unitPriceUSD}
                     onChange={(e) => handleItemChange(idx, 'unitPriceUSD', Number(e.target.value))}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white text-right font-mono text-amber-400 font-bold"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground text-right font-mono text-amber-600 dark:text-amber-400 font-bold"
                     placeholder="Precio $"
                   />
                 </div>
@@ -349,13 +349,13 @@ export function OrderModal({
                     max="100"
                     value={it.discountPct}
                     onChange={(e) => handleItemChange(idx, 'discountPct', Number(e.target.value))}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white text-right font-mono"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground text-right font-mono"
                     placeholder="%"
                     title="Descuento %"
                   />
                 </div>
 
-                <div className="col-span-2 text-right font-mono font-bold text-white text-xs">
+                <div className="col-span-2 text-right font-mono font-bold text-foreground text-xs">
                   {formatUSD(lineTotal(it))}
                 </div>
 
@@ -364,7 +364,7 @@ export function OrderModal({
                     type="button"
                     onClick={() => handleRemoveItem(idx)}
                     disabled={items.length <= 1}
-                    className="text-slate-500 hover:text-rose-400 disabled:opacity-30 p-1"
+                    className="text-muted-foreground hover:text-destructive disabled:opacity-30 p-1"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -375,40 +375,40 @@ export function OrderModal({
         </div>
 
         {/* Totales */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-2">
-          <div className="flex items-center justify-between text-base font-bold text-white border-t border-slate-800/80 pt-2">
+        <div className="rounded-xl border border-border bg-muted/50 p-4 space-y-2">
+          <div className="flex items-center justify-between text-base font-bold text-foreground border-t border-border pt-2">
             <span>Total Pedido (USD):</span>
-            <span className="font-mono text-amber-400">{formatUSD(totalUSD)}</span>
+            <span className="font-mono text-amber-600 dark:text-amber-400">{formatUSD(totalUSD)}</span>
           </div>
-          <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Equivalente (VES):</span>
             <span className="font-mono">{formatVES(totalUSD * rate)}</span>
           </div>
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Notas / Instrucciones de Entrega</label>
+          <label className="block font-semibold text-foreground mb-1">Notas / Instrucciones de Entrega</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Ej. Entregar en almacén del cliente, contacto de recepción..."
             rows={2}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>{isEdit ? 'Guardar Cambios' : 'Crear Pedido'}</span>
