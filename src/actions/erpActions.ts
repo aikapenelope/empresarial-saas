@@ -850,6 +850,31 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
       createInvoiceCore(payload, user, parsed, req),
     );
 
+    // Auto-envío de factura (Sprint 43.3): enlace público por email al
+    // emitirla, si el inquilino lo tiene activo y el cliente tiene email.
+    // Resuelve token/HTML DENTRO del request; el envío corre en after().
+    // Borradores y cortesías totales no se envían (no son documento final).
+    if (doc?.id && doc.status !== 'draft' && Number(doc.totalUSD) > 0) {
+      const [tenantDoc, customerDoc] = await Promise.all([
+        payload.findByID({ collection: 'tenants', id: parsed.tenantId, depth: 0 }),
+        payload.findByID({ collection: 'customers', id: parsed.customerId, depth: 0 }),
+      ]);
+      const customerEmail = customerDoc?.email || '';
+      if ((tenantDoc?.emailConfig?.autoSendInvoiceEmail ?? false) && customerEmail) {
+        try {
+          const prepared = await prepareDocumentEmail(
+            'invoices',
+            parsed.tenantId,
+            doc.id,
+            customerEmail,
+          );
+          await after(prepared.send);
+        } catch {
+          // La factura YA fue emitida: el fallo del email no revierte nada.
+        }
+      }
+    }
+
     revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
     revalidatePath(`/${parsed.tenantSlug}/erp/customers`);
     revalidatePath(`/${parsed.tenantSlug}/erp`);
@@ -3375,6 +3400,7 @@ export interface UpdateTenantSettingsInput {
   autoSyncRate: boolean;
   salesDocumentDefault?: 'nota_entrega' | 'factura';
   autoSendQuoteEmail?: boolean;
+  autoSendInvoiceEmail?: boolean;
 }
 
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
@@ -3399,8 +3425,18 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
         ...(parsed.salesDocumentDefault
           ? { salesConfig: { salesDocumentDefault: parsed.salesDocumentDefault } }
           : {}),
-        ...(parsed.autoSendQuoteEmail !== undefined
-          ? { emailConfig: { autoSendQuoteEmail: parsed.autoSendQuoteEmail } }
+        ...(parsed.autoSendQuoteEmail !== undefined ||
+        parsed.autoSendInvoiceEmail !== undefined
+          ? {
+              emailConfig: {
+                ...(parsed.autoSendQuoteEmail !== undefined
+                  ? { autoSendQuoteEmail: parsed.autoSendQuoteEmail }
+                  : {}),
+                ...(parsed.autoSendInvoiceEmail !== undefined
+                  ? { autoSendInvoiceEmail: parsed.autoSendInvoiceEmail }
+                  : {}),
+              },
+            }
           : {}),
       },
     });

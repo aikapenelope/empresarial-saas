@@ -698,7 +698,8 @@ Hallazgos de la segunda revisión de Devin, reparados agrupados:
 - [x] **Refactor de seguridad del envío:** `prepareDocumentEmail` (shareActions) resuelve acceso/token/HTML DENTRO del request y devuelve el envío diferible — llamar al action dentro de `after()` rompería (`headers()` no existe en la fase after). Compartido por el envío manual y el automático.
 - [x] **CRM ya existe** (`Customers` con email/segmento/tier/vendedor): `customer.email` es el destinatario por defecto.
 - [x] **S43.2 (PR `feat/sprint43b-invoice-sharing`):** facturas compartibles — `shareToken` en Invoices (migración idempotente + índice único), mapper `invoiceToSharedDoc` con banners de ciclo de vida (anulada=rojo, pagada=info), rama invoices en shareActions (email/WhatsApp/copiar), ruta pública `/share/invoice/[token]` (vencimiento como metadata) y ShareDocButtons en el listado de facturas (email del cliente por defecto).
-- [ ] **S43.3 (diferido):** auto-envío de facturas/notas al emitir (hoy: presupuestos).
+- [x] **S43.3 (PR `feat/sprint43c-auto-invoice-email`):** auto-envío de **facturas** al emitirlas — `emailConfig.autoSendInvoiceEmail` (**desactivado por defecto**: la factura es documento fiscal, el inquilino decide), toggle en Settings, envío en `after()` vía `prepareDocumentEmail` (S43.2). Excluye borradores y cortesías totales. El fallo del email jamás revierte la factura (try/catch). Migración `024148` idempotente.
+- [ ] **S43.4 (diferido):** auto-envío de notas de entrega (requiere decisión S41.2 del POS).
 
 ### 🔎 Sprint 44 — Filtros de negocio en los listados (PR `feat/sprint44-filters`)
 

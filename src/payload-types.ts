@@ -223,6 +223,10 @@ export interface Tenant {
      * Requiere RESEND_API_KEY configurada. El cliente recibe un enlace público del presupuesto vía Resend; sin email del cliente no hay envío.
      */
     autoSendQuoteEmail?: boolean | null;
+    /**
+     * Requiere RESEND_API_KEY. La factura viaja como enlace público al emitirla; sin email del cliente no hay envío.
+     */
+    autoSendInvoiceEmail?: boolean | null;
   };
   updatedAt: string;
   createdAt: string;
@@ -1427,6 +1431,7 @@ export interface TenantsSelect<T extends boolean = true> {
     | T
     | {
         autoSendQuoteEmail?: T;
+        autoSendInvoiceEmail?: T;
       };
   updatedAt?: T;
   createdAt?: T;
