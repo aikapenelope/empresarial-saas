@@ -190,10 +190,10 @@ export function PurchasesView({
           description="Compra(s) sin recibir"
         />
         <KpiCard
-          title="Pagos Registrados"
+          title="Pagos Recientes"
           valueUSD={String(supplierPayments.length)}
           icon={ReceiptText}
-          description="A proveedores"
+          description="Últimos 50 pagos a proveedores"
         />
       </div>
 
