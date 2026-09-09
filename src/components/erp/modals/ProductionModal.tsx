@@ -112,11 +112,11 @@ export function ProductionModal({
 
         {/* Receta */}
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Receta / Fórmula BOM *</label>
+          <label className="block font-semibold text-foreground mb-1">Receta / Fórmula BOM *</label>
           <select
             value={bomId}
             onChange={(e) => setBomId(Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
           >
             {boms.map((b) => (
               <option key={b.id} value={b.id}>
@@ -128,7 +128,7 @@ export function ProductionModal({
 
         {/* Cantidad a fabricar */}
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">
+          <label className="block font-semibold text-foreground mb-1">
             Unidades a Fabricar de {productName} *
           </label>
           <input
@@ -137,20 +137,20 @@ export function ProductionModal({
             required
             value={unitsToProduce}
             onChange={(e) => setUnitsToProduce(Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono focus:border-ring focus:outline-none"
           />
         </div>
 
         {/* Almacenes Origen y Destino */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">
+            <label className="block font-semibold text-foreground mb-1">
               Almacén Origen (Consumo de Insumos) *
             </label>
             <select
               value={sourceWarehouseId}
               onChange={(e) => setSourceWarehouseId(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -161,13 +161,13 @@ export function ProductionModal({
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">
+            <label className="block font-semibold text-foreground mb-1">
               Almacén Destino (Recepción Prod. Terminado) *
             </label>
             <select
               value={targetWarehouseId}
               onChange={(e) => setTargetWarehouseId(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -180,13 +180,13 @@ export function ProductionModal({
 
         {/* Desglose de Insumos a Descontar */}
         {selectedBom?.items && selectedBom.items.length > 0 && (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 space-y-2">
-            <div className="flex items-center gap-1.5 text-slate-300 font-semibold uppercase text-[10px] tracking-wider">
+          <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-foreground font-semibold uppercase text-[10px] tracking-wider">
               <FlaskConical className="h-3.5 w-3.5 text-indigo-400" />
               <span>Insumos calculados a descontar del almacén origen:</span>
             </div>
 
-            <ul className="divide-y divide-slate-800/60">
+            <ul className="divide-y divide-border">
               {selectedBom.items.map((item, idx) => {
                 const rawName =
                   typeof item.rawMaterial === 'object' && item.rawMaterial !== null
@@ -199,9 +199,9 @@ export function ProductionModal({
                 const totalReq = (item.quantity * multiplier).toFixed(2);
 
                 return (
-                  <li key={idx} className="py-1 flex items-center justify-between text-slate-400">
+                  <li key={idx} className="py-1 flex items-center justify-between text-muted-foreground">
                     <span>{rawName}</span>
-                    <span className="font-mono text-white font-medium">
+                    <span className="font-mono text-foreground font-medium">
                       {totalReq} {uom}
                     </span>
                   </li>
@@ -211,18 +211,18 @@ export function ProductionModal({
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Ejecutar Fabricación</span>

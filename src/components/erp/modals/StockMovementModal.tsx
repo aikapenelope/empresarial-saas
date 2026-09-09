@@ -114,7 +114,7 @@ export function StockMovementModal({
         )}
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Tipo de Movimiento *</label>
+          <label className="block font-semibold text-foreground mb-1">Tipo de Movimiento *</label>
           <div className="grid grid-cols-3 gap-2">
             {(
               [
@@ -130,7 +130,7 @@ export function StockMovementModal({
                 className={`px-2 py-1.5 rounded-lg font-medium transition-colors ${
                   kind === opt.value
                     ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-900 text-slate-400 border border-slate-800'
+                    : 'bg-background text-muted-foreground border border-border'
                 }`}
               >
                 {opt.label}
@@ -140,11 +140,11 @@ export function StockMovementModal({
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Producto *</label>
+          <label className="block font-semibold text-foreground mb-1">Producto *</label>
           <select
             value={productId}
             onChange={(e) => setProductId(Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
           >
             {products.map((p) => (
               <option key={p.id} value={p.id}>
@@ -157,11 +157,11 @@ export function StockMovementModal({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {kind === 'transferencia' && (
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Origen *</label>
+              <label className="block font-semibold text-foreground mb-1">Origen *</label>
               <select
                 value={sourceWarehouseId ?? ''}
                 onChange={(e) => setSourceWarehouseId(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
               >
                 {warehouses.map((w) => (
                   <option key={w.id} value={w.id}>
@@ -173,11 +173,11 @@ export function StockMovementModal({
           )}
           {kind === 'salida' && (
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Almacén de Salida *</label>
+              <label className="block font-semibold text-foreground mb-1">Almacén de Salida *</label>
               <select
                 value={sourceWarehouseId ?? ''}
                 onChange={(e) => setSourceWarehouseId(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
               >
                 {warehouses.map((w) => (
                   <option key={w.id} value={w.id}>
@@ -189,13 +189,13 @@ export function StockMovementModal({
           )}
           {kind !== 'salida' && (
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">
+              <label className="block font-semibold text-foreground mb-1">
                 {kind === 'transferencia' ? 'Destino *' : 'Almacén de Entrada *'}
               </label>
               <select
                 value={targetWarehouseId ?? ''}
                 onChange={(e) => setTargetWarehouseId(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
               >
                 <option value="">-- Selecciona --</option>
                 {warehouses.map((w) => (
@@ -207,35 +207,35 @@ export function StockMovementModal({
             </div>
           )}
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Cantidad *</label>
+            <label className="block font-semibold text-foreground mb-1">Cantidad *</label>
             <input
               type="number"
               min="0.001"
               step="1"
               value={quantity}
               onChange={(e) => setQuantity(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white text-right font-mono focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground text-right font-mono focus:border-ring focus:outline-none"
             />
           </div>
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Motivo *</label>
+          <label className="block font-semibold text-foreground mb-1">Motivo *</label>
           <input
             type="text"
             required
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Ej. Producto dañado detectado en estante 3"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
