@@ -505,6 +505,18 @@ export const Invoices: CollectionConfig = {
       label: 'Observaciones / Términos de Entrega',
       type: 'textarea',
     },
+    {
+      name: 'shareToken',
+      type: 'text',
+      index: true,
+      unique: true,
+      admin: {
+        readOnly: true,
+        hidden: true,
+        description:
+          'Token de capacidad para el enlace público de la factura (compartir/email). Server-generated; no editar.',
+      },
+    },
   ],
   timestamps: true,
 };

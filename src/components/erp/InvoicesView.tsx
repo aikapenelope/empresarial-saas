@@ -20,6 +20,7 @@ import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
 import { ErpPageHeader } from './ErpPageHeader';
 import { BusinessFiltersBar } from './BusinessFiltersBar';
+import { ShareDocButtons } from './ShareDocButtons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -56,7 +57,7 @@ interface InvoicesViewProps {
     outstandingCount: number;
   };
   filters: { from?: string; to?: string; status?: string };
-  customers: Array<{ id: number; name: string; taxId: string; currentDebtUSD?: number | null }>;
+  customers: Array<{ id: number; name: string; taxId: string; email?: string | null; currentDebtUSD?: number | null }>;
   products: Array<{ id: number; name: string; sku: string; priceUSD: number; unitOfMeasure: string }>;
   effectiveRate: number;
   cashRegisters: Array<{ id: number; name: string; code: string; currentStatus: string }>;
@@ -328,6 +329,23 @@ export function InvoicesView({
                               <DollarSign className="h-3 w-3" aria-hidden="true" />
                               Cobrar
                             </Button>
+                          )}
+                          {inv.status !== 'voided' && inv.status !== 'draft' && (
+                            <ShareDocButtons
+                              collection="invoices"
+                              tenantId={tenantId}
+                              documentId={inv.id}
+                              docLabel={inv.invoiceNumber || `FAC-${inv.id}`}
+                              defaultEmail={
+                                customers.find(
+                                  (c) =>
+                                    c.id ===
+                                    (typeof inv.customer === 'object' && inv.customer !== null
+                                      ? inv.customer.id
+                                      : Number(inv.customer)),
+                                )?.email || ''
+                              }
+                            />
                           )}
                           {isPaid && (
                             <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">

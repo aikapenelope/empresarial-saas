@@ -485,6 +485,10 @@ export interface Invoice {
     | null;
   notes?: string | null;
   /**
+   * Token de capacidad para el enlace público de la factura (compartir/email). Server-generated; no editar.
+   */
+  shareToken?: string | null;
+  /**
    * De dónde sale el inventario de esta factura. Si se omite, se usa el almacén por defecto del inquilino. Solo se aplica al publicar la descarga (Kardex inmutable).
    */
   warehouse?: (number | null) | Warehouse;
@@ -1547,6 +1551,7 @@ export interface InvoicesSelect<T extends boolean = true> {
         id?: T;
       };
   notes?: T;
+  shareToken?: T;
   warehouse?: T;
   updatedAt?: T;
   createdAt?: T;

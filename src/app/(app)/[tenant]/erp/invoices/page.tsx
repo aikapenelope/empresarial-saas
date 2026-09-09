@@ -82,6 +82,7 @@ export default async function InvoicesPage({ params, searchParams }: PageProps) 
     id: c.id,
     name: c.name,
     taxId: c.taxId,
+    email: c.email,
     currentDebtUSD: c.currentDebtUSD,
     priceTier: c.priceTier,
   }));

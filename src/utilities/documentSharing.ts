@@ -1,13 +1,14 @@
 import crypto from 'crypto';
 import { getPayload } from 'payload';
 import config from '@payload-config';
-import type { DeliveryNote, Quote } from '@/payload-types';
+import type { DeliveryNote, Invoice, Quote } from '@/payload-types';
 
-export type ShareableCollection = 'quotes' | 'delivery-notes';
+export type ShareableCollection = 'quotes' | 'delivery-notes' | 'invoices';
 
 const SHARE_PATH: Record<ShareableCollection, string> = {
   quotes: '/share/quote',
   'delivery-notes': '/share/delivery-note',
+  invoices: '/share/invoice',
 };
 
 /** Token de capacidad: 24 bytes del CSPRND en base64url (~192 bits). */
@@ -28,7 +29,7 @@ export interface SharedLineItem {
 }
 
 export interface SharedDoc {
-  kind: 'quote' | 'delivery-note';
+  kind: 'quote' | 'delivery-note' | 'invoice';
   collection: ShareableCollection;
   docTitle: string;
   number: string;
@@ -57,7 +58,15 @@ export function sharedDocStatusBanner(doc: SharedDoc): { label: string; tone: 'd
     if (doc.status === 'converted') return { label: 'Cotización convertida en factura', tone: 'info' };
     return null;
   }
-  if (doc.status === 'voided') return { label: 'Remisión anulada', tone: 'danger' };
+  if (doc.kind === 'delivery-note') {
+    if (doc.status === 'voided') return { label: 'Remisión anulada', tone: 'danger' };
+    return null;
+  }
+  if (doc.kind === 'invoice') {
+    if (doc.status === 'voided') return { label: 'Factura anulada', tone: 'danger' };
+    if (doc.status === 'paid') return { label: 'Factura pagada', tone: 'info' };
+    return null;
+  }
   return null;
 }
 
@@ -129,6 +138,31 @@ export function deliveryNoteToSharedDoc(note: DeliveryNote): SharedDoc {
   };
 }
 
+export function invoiceToSharedDoc(invoice: Invoice): SharedDoc {
+  return {
+    kind: 'invoice',
+    collection: 'invoices',
+    docTitle: 'Factura',
+    number: invoice.invoiceNumber || `FAC-${invoice.id}`,
+    customerName: docCustomerName(invoice.customer),
+    issueDate: invoice.issueDate || null,
+    validUntil: invoice.dueDate || null,
+    status: invoice.status ?? null,
+    totalUSD: Number(invoice.totalUSD) || 0,
+    totalVES: invoice.totalVES == null ? null : Number(invoice.totalVES),
+    exchangeRate:
+      invoice.exchangeRateSnapshot == null ? null : Number(invoice.exchangeRateSnapshot),
+    notes: invoice.notes || null,
+    tenantName: docTenantName(invoice.tenant),
+    lines: (invoice.items || []).map((item) => ({
+      description: item.description || item.sku || 'Concepto',
+      quantity: Number(item.quantity) || 0,
+      unitPriceUSD: Number(item.unitPriceUSD) || 0,
+      totalUSD: Number(item.totalUSD) || 0,
+    })),
+  };
+}
+
 /**
  * Resuelve el documento compartido por token. Capacidad sin sesión: el token
  * (192 bits del CSPRND) ES el secreto; la búsqueda corre con overrideAccess
@@ -152,6 +186,21 @@ export async function resolveSharedDocument(
     return {
       doc: quoteToSharedDoc(quote),
       shareUrl: `${base}/share/quote/${token}`,
+    };
+  }
+
+  const invoiceRes = await payload.find({
+    collection: 'invoices',
+    where: { shareToken: { equals: token } },
+    depth: 1,
+    limit: 1,
+    overrideAccess: true,
+  });
+  const invoice = invoiceRes.docs[0];
+  if (invoice) {
+    return {
+      doc: invoiceToSharedDoc(invoice),
+      shareUrl: `${base}/share/invoice/${token}`,
     };
   }
 
