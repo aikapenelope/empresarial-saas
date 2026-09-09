@@ -78,59 +78,59 @@ export function TenantCreateModal({ isOpen, onClose }: TenantCreateModalProps) {
         )}
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Nombre de la Empresa *</label>
+          <label className="block font-semibold text-foreground mb-1">Nombre de la Empresa *</label>
           <input
             type="text"
             required
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
             placeholder="Ej. Comercializadora Los Andes, C.A."
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Identificador URL (Slug) *</label>
+          <label className="block font-semibold text-foreground mb-1">Identificador URL (Slug) *</label>
           <input
             type="text"
             required
             value={slug}
             onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
             placeholder="ej. los-andes"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
           />
-          <p className="text-[10px] text-slate-500 mt-1">
+          <p className="text-[10px] text-muted-foreground mt-1">
             Se accederá al ERP en: <span className="text-indigo-400 font-mono">/{slug || 'tu-empresa'}/erp</span>
           </p>
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">RIF / Cédula Fiscal</label>
+          <label className="block font-semibold text-foreground mb-1">RIF / Cédula Fiscal</label>
           <input
             type="text"
             value={rifFiscal}
             onChange={(e) => setRifFiscal(e.target.value)}
             placeholder="Ej. J-12345678-0"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
           />
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Teléfono / WhatsApp Corporativo</label>
+          <label className="block font-semibold text-foreground mb-1">Teléfono / WhatsApp Corporativo</label>
           <input
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Ej. +584121234567"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
