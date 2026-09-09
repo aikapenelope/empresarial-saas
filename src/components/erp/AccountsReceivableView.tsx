@@ -31,6 +31,7 @@ interface PaymentRow {
   paymentDate: string;
   customerName: string;
   method: string;
+  methods: Array<{ method: string; amountUSD: number }>;
   amountUSD: number;
   igtfUSD: number;
 }
@@ -339,7 +340,19 @@ export function AccountsReceivableView({
                       {new Date(pay.paymentDate).toLocaleDateString('es-VE')}
                     </TableCell>
                     <TableCell>{pay.customerName}</TableCell>
-                    <TableCell>{PAYMENT_METHOD_LABELS[pay.method] || pay.method}</TableCell>
+                    <TableCell>
+                      {pay.method === 'multi' ? (
+                        <span
+                          title={pay.methods
+                            .map((m) => `${PAYMENT_METHOD_LABELS[m.method] || m.method}: ${formatUSD(m.amountUSD)}`)
+                            .join(' · ')}
+                        >
+                          Multi ({pay.methods.length} métodos)
+                        </span>
+                      ) : (
+                        PAYMENT_METHOD_LABELS[pay.method] || pay.method
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-mono">{formatUSD(pay.amountUSD)}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
                       {formatUSD(pay.igtfUSD)}
