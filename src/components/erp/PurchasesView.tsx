@@ -15,6 +15,7 @@ import { formatUSD } from './format';
 import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
 import { ErpPageHeader } from './ErpPageHeader';
+import { BusinessFiltersBar } from './BusinessFiltersBar';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -35,6 +36,9 @@ interface PurchasesViewProps {
   tenantId: number;
   tenantSlug: string;
   data: PurchasesPageData;
+  invoicePage: { docs: PurchaseInvoice[]; page: number; totalPages: number; totalDocs: number };
+  filters: { from?: string; to?: string; status?: string };
+  pagination: { page: number; totalPages: number; totalDocs: number };
   effectiveRate: number;
   products: Array<{ id: number; name: string; sku: string; costUSD: number; productType: string | null }>;
   warehouses: Array<{
@@ -57,6 +61,9 @@ export function PurchasesView({
   tenantId,
   tenantSlug,
   data,
+  invoicePage,
+  filters,
+  pagination,
   effectiveRate,
   products,
   warehouses,
@@ -183,24 +190,38 @@ export function PurchasesView({
           description="Compra(s) sin recibir"
         />
         <KpiCard
-          title="Pagos Registrados"
+          title="Pagos Recientes"
           valueUSD={String(supplierPayments.length)}
           icon={ReceiptText}
-          description="A proveedores"
+          description="Últimos 50 pagos a proveedores"
         />
       </div>
 
       {/* Facturas de compra */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <BusinessFiltersBar
+        basePath={`/${tenantSlug}/erp/purchases`}
+        current={filters}
+        statusOptions={[
+          { value: 'draft', label: 'Borrador' },
+          { value: 'received', label: 'Recibida' },
+          { value: 'partially_paid', label: 'Parcial' },
+          { value: 'paid', label: 'Pagada' },
+          { value: 'voided', label: 'Anulada' },
+        ]}
+        statusLabel="Estado"
+        pagination={pagination}
+      />
+
+<div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Truck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <h2 className="text-sm font-semibold text-foreground">Facturas de Compra</h2>
           </div>
-          <span className="text-xs text-muted-foreground">{purchaseInvoices.length} registro(s)</span>
+          <span className="text-xs text-muted-foreground">{invoicePage.totalDocs} registro(s)</span>
         </div>
 
-        {purchaseInvoices.length === 0 ? (
+        {invoicePage.docs.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-10">
             No hay compras registradas todavía.
           </p>
@@ -220,7 +241,7 @@ export function PurchasesView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {purchaseInvoices.map((inv) => {
+                {invoicePage.docs.map((inv) => {
                   const balance = Number(inv.balanceUSD) || 0;
                   const canReceive =
                     inv.receptionStatus === 'pending' && inv.status !== 'voided';

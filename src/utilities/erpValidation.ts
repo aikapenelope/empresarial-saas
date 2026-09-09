@@ -573,6 +573,14 @@ export const invoicesListFiltersSchema = businessListFiltersSchema.extend({
     .catch(undefined),
 });
 
+/** Listado de compras: agrega su enum de estado. */
+export const purchasesListFiltersSchema = businessListFiltersSchema.extend({
+  status: z
+    .enum(['draft', 'received', 'partially_paid', 'paid', 'voided'])
+    .optional()
+    .catch(undefined),
+});
+
 /** Listado de pedidos: agrega su enum de estado. */
 export const ordersListFiltersSchema = businessListFiltersSchema.extend({
   status: z

@@ -616,6 +616,87 @@ export async function getOrdersTotals(
   return { openCount, pendingCount, pendingUSD: Number(pendingUSD.toFixed(2)), closedCount };
 }
 
+export interface QuotesTotals {
+  byStatus: Record<string, number>;
+  total: number;
+  totalUSD: number;
+}
+
+/** KPIs de cotizaciones sobre el conjunto FILTRADO completo (Sprint 44): alimenta el embudo sin depender de la página visible. */
+export async function getQuotesTotals(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<QuotesTotals> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const byStatus: Record<string, number> = {};
+  let total = 0;
+  let totalUSD = 0;
+  let page = 1;
+  let hasNext = true;
+  while (hasNext) {
+    const res = await payload.find({
+      collection: 'quotes',
+      where: { and },
+      depth: 0,
+      limit: 500,
+      page,
+      select: { status: true, totalUSD: true },
+      sort: '-createdAt',
+      user,
+      overrideAccess: false,
+    });
+    for (const q of res.docs as Array<Pick<Quote, 'status' | 'totalUSD'>>) {
+      byStatus[q.status] = (byStatus[q.status] ?? 0) + 1;
+      total += 1;
+      totalUSD += Number(q.totalUSD) || 0;
+    }
+    hasNext = Boolean(res.hasNextPage);
+    page += 1;
+  }
+
+  return { byStatus, total, totalUSD: Number(totalUSD.toFixed(2)) };
+}
+
+/**
+ * Compras paginadas por fecha de emisión y estado (Sprint 44): la tabla de
+ * facturas de compra de la vista deja de traer el histórico completo.
+ */
+export async function getPurchasesPage(
+  tenantId: number,
+  filters: BusinessListFilters,
+): Promise<PaginatedList<PurchaseInvoice>> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [{ tenant: { equals: tenantId } }];
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
+  if (filters.status) and.push({ status: { equals: filters.status } });
+
+  const res = await payload.find({
+    collection: 'purchase-invoices',
+    where: { and },
+    depth: 1,
+    sort: '-createdAt',
+    page: filters.page || 1,
+    limit: 50,
+    user,
+    overrideAccess: false,
+  });
+
+  return {
+    docs: res.docs as PurchaseInvoice[],
+    totalDocs: res.totalDocs,
+    totalPages: res.totalPages,
+    page: res.page || 1,
+  };
+}
+
 export interface SalesBookEntry {
   date: string;
   invoiceNumber: string;
@@ -1696,8 +1777,13 @@ export interface PurchasesPageData {
 
 export async function getPurchasesPageData(tenantId: number): Promise<PurchasesPageData> {
   const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
 
-  const [suppliers, purchaseInvoices, supplierPayments] = await Promise.all([
+  // Devin #63: el contrato cruza el límite RSC→cliente — nada de histórico
+  // completo. El modal de pagos consume SOLO facturas abiertas (con saldo y
+  // no anuladas); los pagos se muestran recientes (50); KPIs agregados con
+  // select mínimo y loop paginado.
+  const [suppliers, openInvoices, recentPayments, payablesAgg] = await Promise.all([
     findAllDocs<Supplier>({
       collection: 'suppliers',
       where: { tenant: { equals: tenantId } },
@@ -1707,34 +1793,65 @@ export async function getPurchasesPageData(tenantId: number): Promise<PurchasesP
     }),
     findAllDocs<PurchaseInvoice>({
       collection: 'purchase-invoices',
-      where: { tenant: { equals: tenantId } },
+      where: {
+        and: [
+          { tenant: { equals: tenantId } },
+          { status: { in: ['draft', 'received', 'partially_paid'] } },
+        ],
+      },
       depth: 1,
       sort: '-createdAt',
       user,
     }),
-    findAllDocs<SupplierPayment>({
+    payload.find({
       collection: 'supplier-payments',
       where: { tenant: { equals: tenantId } },
       depth: 1,
       sort: '-createdAt',
+      limit: 50,
       user,
+      overrideAccess: false,
     }),
+    (async () => {
+      let payablesUSD = 0;
+      let pendingReception = 0;
+      let page = 1;
+      let hasNext = true;
+      while (hasNext) {
+        const res = await payload.find({
+          collection: 'purchase-invoices',
+          where: { tenant: { equals: tenantId } },
+          depth: 0,
+          limit: 500,
+          page,
+          select: { status: true, balanceUSD: true, receptionStatus: true },
+          user,
+          overrideAccess: false,
+        });
+        for (const p of res.docs as Array<
+          Pick<PurchaseInvoice, 'status' | 'balanceUSD' | 'receptionStatus'>
+        >) {
+          if (p.status === 'received' || p.status === 'partially_paid') {
+            payablesUSD += Number(p.balanceUSD) || 0;
+          }
+          if (p.receptionStatus === 'pending' && p.status !== 'voided') {
+            pendingReception += 1;
+          }
+        }
+        hasNext = Boolean(res.hasNextPage);
+        page += 1;
+      }
+      return { payablesUSD: Number(payablesUSD.toFixed(2)), pendingReception };
+    })(),
   ]);
-
-  const totalPayablesUSD = purchaseInvoices
-    .filter((p) => p.status === 'received' || p.status === 'partially_paid')
-    .reduce((acc, p) => acc + (Number(p.balanceUSD) || 0), 0);
-
-  const pendingReceptionCount = purchaseInvoices.filter(
-    (p) => p.receptionStatus === 'pending' && p.status !== 'voided',
-  ).length;
 
   return {
     suppliers,
-    purchaseInvoices,
-    supplierPayments,
-    totalPayablesUSD: Number(totalPayablesUSD.toFixed(2)),
-    pendingReceptionCount,
+    // Facturas ABIERTAS para el modal de pago (el resto vive en la tabla paginada)
+    purchaseInvoices: openInvoices,
+    supplierPayments: recentPayments.docs as SupplierPayment[],
+    totalPayablesUSD: payablesAgg.payablesUSD,
+    pendingReceptionCount: payablesAgg.pendingReception,
   };
 }
 

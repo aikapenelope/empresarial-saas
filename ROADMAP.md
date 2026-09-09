@@ -703,8 +703,9 @@ Hallazgos de la segunda revisión de Devin, reparados agrupados:
 
 - [x] **Pedidos completo:** `getOrdersPage` (período = `createdAt`, 50/página) + `getOrdersTotals` (KPIs del conjunto filtrado con `select` mínimo, patrón Sprint 39) + `BusinessFiltersBar` en OrdersView (desde/hasta/estado/paginación con filtros preservados) + `ordersListFiltersSchema`.
 - [x] **Criterio parcial:** pedidos deja de traer el histórico completo del inquilino al RSC.
-- [ ] **S44.2 (diferido):** Cotizaciones (getter `getQuotesPage` ya existe — falta wire), Compras y Pagos recibidos (mismo patrón).
-- [ ] **Criterio de cierre Fase 11:** los cuatro listados migrados.
+- [x] **S44.2 (PR `feat/sprint44b-filters-rest`):** **Cotizaciones** (embudo comercial server-side vía `getQuotesTotals` — cuenta por estado sobre el conjunto filtrado, sin depender de la página visible + `BusinessFiltersBar`) y **Compras** (`getPurchasesPage` + barra sobre la tabla de facturas; proveedores/pagos/KPIs globales intactos).
+- [ ] **S44.3 (diferido):** Pagos recibidos en cartera (su modelo aging/vendedor merece pasada propia).
+- [ ] **Criterio de cierre Fase 11:** faltan solo los pagos de cartera.
 
 ### Backlog post-Fase 11 (exportable de Cendaro #70, evaluado 2026-09-08)
 Equivalencias UOM (comprar por caja / vender por unidad) · módulo de aprobaciones · marcas de producto · detalle de inventario por almacén · WhatsApp dedicado. **Cendaro NO tiene** IVA calculado (campo `tax` plano), email runtime ni filtros server-side — ahí vamos adelante.

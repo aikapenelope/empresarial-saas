@@ -2,7 +2,8 @@ import React from 'react';
 import { notFound } from 'next/navigation';
 import {
   getTenantBySlug,
-  getQuotesList,
+  getQuotesPage,
+  getQuotesTotals,
   getCustomersWithDebt,
   getProductsCatalog,
   getCashRegistersWithDetails,
@@ -12,13 +13,18 @@ import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { ErpAccessError } from '@/utilities/erpAuth';
 import { ErpAccessDenied } from '@/components/erp/ErpAccessDenied';
 import { QuotesView } from '@/components/erp/QuotesView';
+import { quotesListFiltersSchema } from '@/utilities/erpValidation';
+
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
+  searchParams: Promise<{ from?: string; to?: string; status?: string; page?: string }>;
 }
 
-export default async function QuotesPage({ params }: PageProps) {
+export default async function QuotesPage({ params, searchParams }: PageProps) {
   const { tenant: tenantSlug } = await params;
+  const sp = await searchParams;
+  const filters = quotesListFiltersSchema.parse(sp);
   let tenant: Awaited<ReturnType<typeof getTenantBySlug>> = null;
   try {
     tenant = await getTenantBySlug(tenantSlug);
@@ -33,10 +39,11 @@ export default async function QuotesPage({ params }: PageProps) {
     notFound();
   }
 
-  let quotes, customers, products, registers, warehouses, effectiveRateData;
+  let quotes, quotesTotals, customers, products, registers, warehouses, effectiveRateData;
   try {
-    [quotes, customers, products, registers, warehouses, effectiveRateData] = await Promise.all([
-      getQuotesList(tenant.id),
+    [quotes, quotesTotals, customers, products, registers, warehouses, effectiveRateData] = await Promise.all([
+      getQuotesPage(tenant.id, filters),
+      getQuotesTotals(tenant.id, filters),
       getCustomersWithDebt(tenant.id),
       getProductsCatalog(tenant.id),
       getCashRegistersWithDetails(tenant.id),
@@ -61,9 +68,12 @@ export default async function QuotesPage({ params }: PageProps) {
     <div className="space-y-6">
 
       <QuotesView
+        filters={{ from: filters.from, to: filters.to, status: filters.status }}
+        pagination={{ page: quotes.page, totalPages: quotes.totalPages, totalDocs: quotes.totalDocs }}
+        totals={quotesTotals}
         tenantId={tenant.id}
         tenantSlug={tenant.slug}
-        quotes={quotes}
+        quotes={quotes.docs}
         customers={customers.map((c) => ({
           id: c.id,
           name: c.name,

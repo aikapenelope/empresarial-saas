@@ -3,7 +3,8 @@ import { Zap, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/utilities/cn';
 
 interface QuoteFunnelProps {
-  quotes: Array<{ status: string; totalUSD?: number | string | null }>;
+  /** Conteo por estado (agregado server-side): acotado por estados, no por documentos. */
+  statusCounts: Record<string, number>;
   tenantSlug: string;
 }
 
@@ -28,13 +29,9 @@ const SEGMENTS: Segment[] = [
  * (aceptadas + convertidas sobre el total). Pieza distintiva del módulo
  * comercial bajo el mismo design system.
  */
-export function QuoteFunnel({ quotes, tenantSlug }: QuoteFunnelProps) {
-  const counts = new Map<string, number>();
-  for (const q of quotes) {
-    counts.set(q.status, (counts.get(q.status) ?? 0) + 1);
-  }
-
-  const total = quotes.length;
+export function QuoteFunnel({ statusCounts, tenantSlug }: QuoteFunnelProps) {
+  const counts = new Map(Object.entries(statusCounts));
+  const total = Object.values(statusCounts).reduce((acc, n) => acc + n, 0);
   const won = (counts.get('accepted') ?? 0) + (counts.get('converted') ?? 0);
   const conversionPct = total > 0 ? (won / total) * 100 : 0;
 

@@ -14,6 +14,7 @@ import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { ErpPageHeader } from './ErpPageHeader';
 import { QuoteFunnel } from './charts/QuoteFunnel';
+import { BusinessFiltersBar } from './BusinessFiltersBar';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -33,6 +34,9 @@ interface QuotesViewProps {
   tenantId: number;
   tenantSlug: string;
   quotes: Quote[];
+  filters: { from?: string; to?: string; status?: string };
+  pagination: { page: number; totalPages: number; totalDocs: number };
+  totals: { byStatus: Record<string, number>; total: number; totalUSD: number };
   customers: Array<{ id: number; name: string; taxId: string }>;
   products: Array<{ id: number; name: string; sku: string; priceUSD: number }>;
   cashRegisters: Array<{ id: number; name: string; code: string; currentStatus: string }>;
@@ -50,6 +54,9 @@ const STATUS_BADGE: Record<string, { variant: 'slate' | 'amber' | 'emerald' | 'r
 };
 
 export function QuotesView({
+  filters,
+  pagination,
+  totals,
   tenantId,
   tenantSlug,
   quotes,
@@ -111,8 +118,24 @@ export function QuotesView({
         }
       />
 
+      <BusinessFiltersBar
+        basePath={`/${tenantSlug}/erp/quotes`}
+        current={filters}
+        statusOptions={[
+          { value: 'draft', label: 'Borrador' },
+          { value: 'sent', label: 'Enviada' },
+          { value: 'accepted', label: 'Aceptada' },
+          { value: 'rejected', label: 'Rechazada' },
+          { value: 'expired', label: 'Expirada' },
+          { value: 'converted', label: 'Convertida' },
+        ]}
+        statusLabel="Estado"
+        pagination={pagination}
+      />
+
       {/* Embudo comercial (pieza distintiva del módulo) */}
-      <QuoteFunnel quotes={quotes.map((q) => ({ status: q.status, totalUSD: q.totalUSD }))} tenantSlug={tenantSlug} />
+      {/* Embudo desde KPIs server-side (conjunto filtrado completo) */}
+      <QuoteFunnel statusCounts={totals.byStatus} tenantSlug={tenantSlug} />
 
       {/* Listado */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -121,7 +144,7 @@ export function QuotesView({
             <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <h2 className="text-sm font-semibold text-foreground">Cotizaciones del Inquilino</h2>
           </div>
-          <span className="text-xs text-muted-foreground">{quotes.length} registro(s)</span>
+          <span className="text-xs text-muted-foreground">{pagination.totalDocs} registro(s)</span>
         </div>
 
         {quotes.length === 0 ? (
