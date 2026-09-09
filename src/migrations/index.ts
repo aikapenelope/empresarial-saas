@@ -17,6 +17,7 @@ import * as migration_20260906_080000_drop_users_password_column from './2026090
 import * as migration_20260906_090000_add_share_tokens from './20260906_090000_add_share_tokens';
 import * as migration_20260908_221653_add_sales_config from './20260908_221653_add_sales_config';
 import * as migration_20260908_223202_add_tax_config from './20260908_223202_add_tax_config';
+import * as migration_20260909_000000_add_email_config from './20260909_000000_add_email_config';
 
 export const migrations = [
   {
@@ -113,5 +114,10 @@ export const migrations = [
     up: migration_20260908_223202_add_tax_config.up,
     down: migration_20260908_223202_add_tax_config.down,
     name: '20260908_223202_add_tax_config'
+  },
+  {
+    up: migration_20260909_000000_add_email_config.up,
+    down: migration_20260909_000000_add_email_config.down,
+    name: '20260909_000000_add_email_config'
   },
 ];

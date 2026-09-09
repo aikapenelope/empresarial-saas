@@ -54,32 +54,6 @@ export function DeliveryNotesView({
   const issued = notes.filter((n) => n.status === 'issued');
   const issuedValue = issued.reduce((acc, n) => acc + (Number(n.totalUSD) || 0), 0);
 
-<<<<<<< HEAD
-  // Factura el pedido padre (Sprint 41): entrega documentada con nota, factura
-  // opcional a demanda. El action rechaza si el pedido ya fue facturado.
-  const handleInvoice = async (note: DeliveryNote) => {
-    const orderId = typeof note.order === 'object' && note.order !== null ? note.order.id : note.order;
-    if (!orderId) {
-      toast.error('La remisión no tiene pedido asociado.');
-      return;
-    }
-    setInvoicingNoteId(note.id);
-    // Sin paymentTerms: el action respeta el término del pedido (contado/credit).
-    const res = await issueInvoiceFromOrderAction({
-      tenantId,
-      tenantSlug,
-      orderId: Number(orderId),
-    });
-    setInvoicingNoteId(undefined);
-    if (res.success) {
-      toast.success('Factura emitida desde la remisión.');
-    } else {
-      toast.error(res.error || 'No se pudo facturar.');
-    }
-  };
-
-=======
->>>>>>> feat/sprint43-email-invoices
   const handleVoid = async (noteId: number) => {
     setBusyNoteId(noteId);
     const res = await voidDeliveryNoteAction({ tenantId, tenantSlug, deliveryNoteId: noteId });
