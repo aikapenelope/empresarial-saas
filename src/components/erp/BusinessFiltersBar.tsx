@@ -14,6 +14,8 @@ interface BusinessFiltersBarProps {
   };
   /** Opciones del filtro de estado con valor/label. */
   statusOptions: Array<{ value: string; label: string }>;
+  /** Nombre del parámetro URL del select (default 'status'; cobros usa 'method'). */
+  filterName?: string;
   /** Etiqueta del campo de estado (p. ej. "Estado"). */
   statusLabel?: string;
   /** Metadatos de paginación para el bloque de navegación. */
@@ -35,14 +37,16 @@ export function BusinessFiltersBar({
   current,
   statusOptions,
   statusLabel = 'Estado',
+  filterName = 'status',
   pagination,
 }: BusinessFiltersBarProps) {
   const buildQuery = (overrides: Record<string, string | number | undefined>) => {
     const params = new URLSearchParams();
+    const filterValue = (current as Record<string, unknown>)[filterName];
     const merged: Record<string, string | number | undefined> = {
       from: current.from,
       to: current.to,
-      status: current.status,
+      ...(filterName !== 'status' ? { [filterName]: filterValue as string | undefined } : { status: current.status }),
       ...overrides,
     };
     for (const [key, value] of Object.entries(merged)) {
@@ -73,24 +77,26 @@ export function BusinessFiltersBar({
           </label>
           <Input type="date" id="filter-to" name="to" defaultValue={current.to || ''} />
         </div>
-        <div>
-          <label className="block font-semibold text-foreground mb-1" htmlFor="filter-status">
-            {statusLabel}
-          </label>
-          <select
-            id="filter-status"
-            name="status"
-            defaultValue={current.status || ''}
-            className={filterSelectClass}
-          >
-            <option value="">Todos</option>
-            {statusOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {statusOptions.length > 0 && (
+          <div>
+            <label className="block font-semibold text-foreground mb-1" htmlFor={`filter-${filterName}`}>
+              {statusLabel}
+            </label>
+            <select
+              id={`filter-${filterName}`}
+              name={filterName}
+              defaultValue={(current as Record<string, unknown>)[filterName] as string || ''}
+              className={filterSelectClass}
+            >
+              <option value="">Todos</option>
+              {statusOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex items-end gap-2 sm:col-span-2">
           <Button type="submit" size="sm">
             Filtrar

@@ -6,6 +6,7 @@ import { Wallet, TriangleAlert, Users, FileText } from 'lucide-react';
 import { KpiCard } from './KpiCard';
 import { formatUSD } from './format';
 import { ErpPageHeader } from './ErpPageHeader';
+import { BusinessFiltersBar } from './BusinessFiltersBar';
 import {
   Select,
   SelectContent,
@@ -24,6 +25,17 @@ import {
 } from '@/components/ui/table';
 import type { AgingRow, AgingSummary, VendorAgingRow } from '@/utilities/arAging';
 
+interface PaymentRow {
+  id: number;
+  paymentNumber: string;
+  paymentDate: string;
+  customerName: string;
+  method: string;
+  methods: Array<{ method: string; amountUSD: number }>;
+  amountUSD: number;
+  igtfUSD: number;
+}
+
 interface AccountsReceivableViewProps {
   tenantId: number;
   tenantSlug: string;
@@ -33,6 +45,14 @@ interface AccountsReceivableViewProps {
   vendorRows: VendorAgingRow[];
   summary: AgingSummary;
   asOf: string;
+  payments: {
+    docs: PaymentRow[];
+    page: number;
+    totalPages: number;
+    totalDocs: number;
+    totals: { count: number; totalUSD: number; igtfUSD: number };
+  };
+  paymentFilters: { from?: string; to?: string; method?: string };
 }
 
 /** Buckets del kardex de cartera con su token de estado funcional. */
@@ -57,6 +77,16 @@ const AGING_BUCKETS: Array<{
  * para el canal; drilldown al detalle del cliente. Incluye la barra apilada
  * de composición de la cartera (distribución por bucket).
  */
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash_usd: 'Efectivo USD',
+  cash_ves: 'Efectivo Bs',
+  pos_ves: 'Punto de Venta',
+  pago_movil: 'Pago Móvil',
+  transfer_ves: 'Transferencia Bs',
+  zelle: 'Zelle',
+  binance: 'Binance',
+};
+
 export function AccountsReceivableView({
   tenantSlug,
   isVendor,
@@ -65,6 +95,8 @@ export function AccountsReceivableView({
   vendorRows,
   summary,
   asOf,
+  payments,
+  paymentFilters,
 }: AccountsReceivableViewProps) {
   const [vendorFilter, setVendorFilter] = useState<number | 'all' | 'none'>('all');
 
@@ -256,6 +288,78 @@ export function AccountsReceivableView({
                   <TableCell className="text-right font-mono font-bold">{formatUSD(filteredSummary.totalUSD)}</TableCell>
                 </TableRow>
               </TableFooter>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      {/* Cobros recibidos del período (Sprint 44): recaudación confirmada */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-sm font-semibold text-foreground">Cobros Recibidos del Período</h2>
+          </div>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {payments.totals.count} cobro(s) · {formatUSD(payments.totals.totalUSD)}
+            {payments.totals.igtfUSD > 0 && ` · IGTF ${formatUSD(payments.totals.igtfUSD)}`}
+          </span>
+        </div>
+
+        <BusinessFiltersBar
+          basePath={`/${tenantSlug}/erp/receivables`}
+          current={paymentFilters as { from?: string; to?: string; status?: string }}
+          filterName="method"
+          statusOptions={Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => ({ value, label }))}
+          statusLabel="Método"
+          pagination={{ page: payments.page, totalPages: payments.totalPages, totalDocs: payments.totalDocs }}
+        />
+
+        {payments.docs.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-10">
+            No hay cobros confirmados en el período seleccionado.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Recibo</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead className="text-right">Monto (USD)</TableHead>
+                  <TableHead className="text-right">IGTF (USD)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payments.docs.map((pay) => (
+                  <TableRow key={pay.id}>
+                    <TableCell className="font-mono font-bold">{pay.paymentNumber}</TableCell>
+                    <TableCell className="text-muted-foreground text-[11px]">
+                      {new Date(pay.paymentDate).toLocaleDateString('es-VE')}
+                    </TableCell>
+                    <TableCell>{pay.customerName}</TableCell>
+                    <TableCell>
+                      {pay.method === 'multi' ? (
+                        <span
+                          title={pay.methods
+                            .map((m) => `${PAYMENT_METHOD_LABELS[m.method] || m.method}: ${formatUSD(m.amountUSD)}`)
+                            .join(' · ')}
+                        >
+                          Multi ({pay.methods.length} métodos)
+                        </span>
+                      ) : (
+                        PAYMENT_METHOD_LABELS[pay.method] || pay.method
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">{formatUSD(pay.amountUSD)}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      {formatUSD(pay.igtfUSD)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
             </Table>
           </div>
         )}
