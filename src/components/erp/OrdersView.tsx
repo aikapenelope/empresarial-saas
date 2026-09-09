@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
+import { BusinessFiltersBar } from './BusinessFiltersBar';
 import { KpiCard } from './KpiCard';
 import { ErpPageHeader } from './ErpPageHeader';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,9 @@ interface OrdersViewProps {
   cashRegisters: Array<{ id: number; name: string; code: string; currentStatus: string }>;
   warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
   effectiveRate: number;
+  filters: { from?: string; to?: string; status?: string };
+  pagination: { page: number; totalPages: number; totalDocs: number };
+  totals: { openCount: number; pendingCount: number; pendingUSD: number; closedCount: number };
 }
 
 const STATUS_BADGE: Record<string, { variant: 'slate' | 'amber' | 'emerald' | 'rose' | 'indigo'; label: string }> = {
@@ -64,6 +68,9 @@ export function OrdersView({
   salesDocumentDefault = 'factura',
   tenantId,
   tenantSlug,
+  filters,
+  pagination,
+  totals,
   orders,
   customers,
   products,
@@ -75,10 +82,6 @@ export function OrdersView({
   const [editingOrder, setEditingOrder] = useState<Order | undefined>(undefined);
   const [invoicingOrder, setInvoicingOrder] = useState<Order | undefined>(undefined);
   const [busyOrderId, setBusyOrderId] = useState<number | undefined>(undefined);
-
-  const openOrders = orders.filter((o) => o.status === 'draft' || o.status === 'confirmed');
-  const pendingInvoicing = orders.filter((o) => o.status === 'confirmed');
-  const pendingTotal = pendingInvoicing.reduce((acc, o) => acc + (Number(o.totalUSD) || 0), 0);
 
   const handleConfirm = async (orderId: number) => {
     setBusyOrderId(orderId);
@@ -122,24 +125,37 @@ export function OrdersView({
         }
       />
 
+      <BusinessFiltersBar
+        basePath={`/${tenantSlug}/erp/orders`}
+        current={filters}
+        statusOptions={[
+          { value: 'draft', label: 'Borrador' },
+          { value: 'confirmed', label: 'Confirmado' },
+          { value: 'invoiced', label: 'Facturado' },
+          { value: 'canceled', label: 'Cancelado' },
+        ]}
+        statusLabel="Estado"
+        pagination={pagination}
+      />
+
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KpiCard
           title="Pedidos Abiertos"
-          valueUSD={String(openOrders.length)}
+          valueUSD={String(totals.openCount)}
           icon={FolderOpen}
           description="Borradores + confirmados"
         />
         <KpiCard
           title="Por Facturar"
-          valueUSD={formatUSD(pendingTotal)}
+          valueUSD={formatUSD(totals.pendingUSD)}
           icon={Timer}
           tone="warning"
-          description={`${pendingInvoicing.length} confirmado(s) pendiente(s) de factura`}
+          description={`${totals.pendingCount} confirmado(s) pendiente(s) de factura`}
         />
         <KpiCard
           title="Facturados / Cancelados"
-          valueUSD={String(orders.filter((o) => o.status === 'invoiced' || o.status === 'canceled').length)}
+          valueUSD={String(totals.closedCount)}
           icon={Archive}
           description="Histórico cerrado"
         />
