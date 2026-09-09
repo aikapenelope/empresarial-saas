@@ -1105,6 +1105,105 @@ export async function getDeliveryNoteDetail(
   return note;
 }
 
+export interface CustomerPaymentRow {
+  id: number;
+  paymentNumber: string;
+  paymentDate: string;
+  customerName: string;
+  method: string;
+  amountUSD: number;
+  igtfUSD: number;
+}
+
+export interface CustomerPaymentsPageData {
+  docs: CustomerPaymentRow[];
+  page: number;
+  totalPages: number;
+  totalDocs: number;
+  totals: { count: number; totalUSD: number; igtfUSD: number };
+}
+
+/**
+ * Cobros recibidos paginados (Sprint 44): período por `paymentDate` (la fecha
+ * de negocio del cobro) y filtro opcional por método. Sólo confirmados —
+ * pending/rejected no son recaudación. Alimenta la sección nueva de cartera.
+ */
+export async function getCustomerPaymentsPage(
+  tenantId: number,
+  filters: { from?: string; to?: string; method?: string },
+): Promise<CustomerPaymentsPageData> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const and: Where[] = [
+    { tenant: { equals: tenantId } },
+    { status: { equals: 'confirmed' } },
+  ];
+  and.push(...buildBusinessDateRange(filters.from, filters.to, 'paymentDate'));
+  if (filters.method) {
+    and.push({ 'methods.method': { equals: filters.method } } as Where);
+  }
+
+  const res = await payload.find({
+    collection: 'customer-payments',
+    where: { and },
+    depth: 1,
+    sort: '-paymentDate',
+    page: 1,
+    limit: 20,
+    user,
+    overrideAccess: false,
+  });
+
+  const docs: CustomerPaymentRow[] = (res.docs as CustomerPayment[]).map((pay) => {
+    const first = Array.isArray(pay.methods) ? pay.methods[0] : undefined;
+    return {
+      id: pay.id,
+      paymentNumber: pay.paymentNumber,
+      paymentDate: pay.paymentDate,
+      customerName:
+        typeof pay.customer === 'object' && pay.customer !== null ? pay.customer.name : '—',
+      method: first?.method || '—',
+      amountUSD: Number(pay.totalUSD) || 0,
+      igtfUSD: Number((pay as { igtfUSD?: number }).igtfUSD) || 0,
+    };
+  });
+
+  // Totales del período sobre el conjunto completo (loop paginado, select mínimo)
+  let count = 0;
+  let totalUSD = 0;
+  let igtfUSD = 0;
+  let page = 1;
+  let hasNext = true;
+  while (hasNext) {
+    const agg = await payload.find({
+      collection: 'customer-payments',
+      where: { and },
+      depth: 0,
+      limit: 500,
+      page,
+      select: { totalUSD: true, igtfUSD: true },
+      user,
+      overrideAccess: false,
+    });
+    for (const pay of agg.docs as Array<Pick<CustomerPayment, 'totalUSD' | 'igtfUSD'>>) {
+      count += 1;
+      totalUSD += Number(pay.totalUSD) || 0;
+      igtfUSD += Number((pay as { igtfUSD?: number }).igtfUSD) || 0;
+    }
+    hasNext = Boolean(agg.hasNextPage);
+    page += 1;
+  }
+
+  return {
+    docs,
+    page: res.page || 1,
+    totalPages: res.totalPages,
+    totalDocs: res.totalDocs,
+    totals: { count, totalUSD: Number(totalUSD.toFixed(2)), igtfUSD: Number(igtfUSD.toFixed(2)) },
+  };
+}
+
 export interface ReceivablesPageData {
   isVendor: boolean;
   vendors: Array<{ id: number; name: string }>;

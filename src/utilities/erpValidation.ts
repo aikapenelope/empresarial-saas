@@ -573,6 +573,14 @@ export const invoicesListFiltersSchema = businessListFiltersSchema.extend({
     .catch(undefined),
 });
 
+/** Listado de cobros: filtra por método de pago (el estado es siempre 'confirmed'). */
+export const paymentsListFiltersSchema = businessListFiltersSchema.extend({
+  method: z
+    .enum(['cash_usd', 'cash_ves', 'pos_ves', 'pago_movil', 'transfer_ves', 'zelle', 'binance'])
+    .optional()
+    .catch(undefined),
+});
+
 /** Listado de compras: agrega su enum de estado. */
 export const purchasesListFiltersSchema = businessListFiltersSchema.extend({
   status: z
@@ -604,7 +612,7 @@ export const quotesListFiltersSchema = businessListFiltersSchema.extend({
  * período de su emisión, no al del timestamp en que se insertó la fila. Las
  * bitácoras inmutables (kardex) sí se ordenan por `createdAt`.
  */
-export type BusinessDateField = 'issueDate' | 'createdAt';
+export type BusinessDateField = 'issueDate' | 'createdAt' | 'paymentDate';
 
 /**
  * Convierte el par {from,to} de fechas de calendario (YYYY-MM-DD) en un rango
@@ -635,6 +643,9 @@ export function buildBusinessDateRange(
   if (field === 'issueDate') {
     if (lowerInclusive) conditions.push({ issueDate: { greater_than_equal: lowerInclusive } });
     if (upperExclusive) conditions.push({ issueDate: { less_than: upperExclusive } });
+  } else if (field === 'paymentDate') {
+    if (lowerInclusive) conditions.push({ paymentDate: { greater_than_equal: lowerInclusive } });
+    if (upperExclusive) conditions.push({ paymentDate: { less_than: upperExclusive } });
   } else {
     if (lowerInclusive) conditions.push({ createdAt: { greater_than_equal: lowerInclusive } });
     if (upperExclusive) conditions.push({ createdAt: { less_than: upperExclusive } });
