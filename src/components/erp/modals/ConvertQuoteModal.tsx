@@ -81,22 +81,22 @@ export function ConvertQuoteModal({
         )}
 
         <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-slate-300">
+          <div className="flex items-center gap-2 text-foreground">
             <FileText className="h-4 w-4 text-indigo-400" />
             <span>
               {quote.quoteNumber} — {quote.customerName}
             </span>
           </div>
-          <span className="font-mono font-bold text-white">{formatUSD(quote.totalUSD)}</span>
+          <span className="font-mono font-bold text-foreground">{formatUSD(quote.totalUSD)}</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Condición Comercial *</label>
+            <label className="block font-semibold text-foreground mb-1">Condición Comercial *</label>
             <select
               value={paymentTerms}
               onChange={(e) => setPaymentTerms(e.target.value as 'cash' | 'credit')}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none font-semibold"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none font-semibold"
             >
               <option value="cash">Contado</option>
               <option value="credit">Crédito (valida límite)</option>
@@ -105,11 +105,11 @@ export function ConvertQuoteModal({
 
           {paymentTerms === 'cash' && (
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Método de Cobro *</label>
+              <label className="block font-semibold text-foreground mb-1">Método de Cobro *</label>
               <select
                 value={cashMethod}
                 onChange={(e) => setCashMethod(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
               >
                 <option value="cash_usd">Efectivo USD ($)</option>
                 <option value="cash_ves">Efectivo Bolívares (Bs.)</option>
@@ -126,11 +126,11 @@ export function ConvertQuoteModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {paymentTerms === 'cash' && openRegisters.length > 0 && (
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Caja (Turno Abierto)</label>
+              <label className="block font-semibold text-foreground mb-1">Caja (Turno Abierto)</label>
               <select
                 value={cashRegisterId ?? ''}
                 onChange={(e) => setCashRegisterId(e.target.value ? Number(e.target.value) : undefined)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
               >
                 <option value="">-- Sin turno --</option>
                 {openRegisters.map((r) => (
@@ -144,11 +144,11 @@ export function ConvertQuoteModal({
 
           {warehouses.length > 0 && (
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Almacén de Despacho</label>
+              <label className="block font-semibold text-foreground mb-1">Almacén de Despacho</label>
               <select
                 value={warehouseId ?? ''}
                 onChange={(e) => setWarehouseId(e.target.value ? Number(e.target.value) : undefined)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
               >
                 <option value="">-- Por defecto del inquilino --</option>
                 {warehouses.map((w) => (
@@ -161,11 +161,11 @@ export function ConvertQuoteModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>

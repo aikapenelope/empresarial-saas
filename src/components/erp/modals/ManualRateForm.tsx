@@ -53,19 +53,19 @@ export function ManualRateForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-      <label className="flex items-center gap-2 font-semibold text-slate-300">
+      <label className="flex items-center gap-2 font-semibold text-foreground">
         <input
           type="checkbox"
           checked={autoSync}
           onChange={(e) => setAutoSync(e.target.checked)}
-          className="rounded border-slate-600 bg-slate-800"
+          className="rounded border-border bg-background"
         />
         <span>Sincronizar tasa automáticamente (BCV → Binance → Paralelo)</span>
       </label>
 
       {!autoSync && (
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Tasa Manual (Bs. / USD)</label>
+          <label className="block font-semibold text-foreground mb-1">Tasa Manual (Bs. / USD)</label>
           <input
             type="number"
             step="0.0001"
@@ -73,7 +73,7 @@ export function ManualRateForm({
             value={rate}
             onChange={(e) => setRate(e.target.value)}
             placeholder="Ej. 190.50"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono focus:border-ring focus:outline-none"
           />
         </div>
       )}

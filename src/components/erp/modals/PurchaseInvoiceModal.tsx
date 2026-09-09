@@ -163,12 +163,12 @@ export function PurchaseInvoiceModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Proveedor *</label>
+            <label className="block font-semibold text-foreground mb-1">Proveedor *</label>
             <select
               required
               value={supplierId}
               onChange={(e) => setSupplierId(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -179,20 +179,20 @@ export function PurchaseInvoiceModal({
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Vencimiento</label>
+            <label className="block font-semibold text-foreground mb-1">Vencimiento</label>
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             />
           </div>
         </div>
 
         {/* Líneas */}
-        <div className="space-y-2 border-t border-slate-800/80 pt-3">
+        <div className="space-y-2 border-t border-border pt-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-300 uppercase tracking-wider text-[10px]">
+            <span className="font-semibold text-foreground uppercase tracking-wider text-[10px]">
               Líneas de Compra
             </span>
             <button
@@ -209,13 +209,13 @@ export function PurchaseInvoiceModal({
             {items.map((it, idx) => (
               <div
                 key={idx}
-                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-slate-950/50 border border-slate-800"
+                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-muted/50 border border-border"
               >
                 <div className="col-span-4">
                   <select
                     value={it.productId ?? ''}
                     onChange={(e) => handleSelectProduct(idx, Number(e.target.value))}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground"
                   >
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -232,7 +232,7 @@ export function PurchaseInvoiceModal({
                     min="1"
                     value={it.quantity}
                     onChange={(e) => handleItemChange(idx, 'quantity', Number(e.target.value))}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white text-right font-mono"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground text-right font-mono"
                     placeholder="Cant."
                   />
                 </div>
@@ -244,12 +244,12 @@ export function PurchaseInvoiceModal({
                     min="0"
                     value={it.unitCostUSD}
                     onChange={(e) => handleItemChange(idx, 'unitCostUSD', Number(e.target.value))}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white text-right font-mono text-amber-400 font-bold"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground text-right font-mono text-amber-600 dark:text-amber-400 font-bold"
                     placeholder="Costo $"
                   />
                 </div>
 
-                <div className="col-span-2 text-right font-mono font-bold text-white text-xs">
+                <div className="col-span-2 text-right font-mono font-bold text-foreground text-xs">
                   {formatUSD(it.quantity * it.unitCostUSD)}
                 </div>
 
@@ -258,7 +258,7 @@ export function PurchaseInvoiceModal({
                     type="button"
                     onClick={() => handleRemoveItem(idx)}
                     disabled={items.length <= 1}
-                    className="text-slate-500 hover:text-rose-400 disabled:opacity-30 p-1"
+                    className="text-muted-foreground hover:text-destructive disabled:opacity-30 p-1"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -269,26 +269,26 @@ export function PurchaseInvoiceModal({
         </div>
 
         {/* Recepción */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
-          <label className="flex items-center gap-2 font-semibold text-slate-300">
+        <div className="rounded-xl border border-border bg-muted/50 p-4 space-y-3">
+          <label className="flex items-center gap-2 font-semibold text-foreground">
             <input
               type="checkbox"
               checked={receiveNow}
               onChange={(e) => setReceiveNow(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-800"
+              className="rounded border-border bg-background"
             />
             <span>Recibir mercancía ahora (ingresa al Kardex y actualiza costo)</span>
           </label>
 
           {receiveNow && (
             <div>
-              <label className="block font-semibold text-slate-300 mb-1">Almacén de Recepción *</label>
+              <label className="block font-semibold text-foreground mb-1">Almacén de Recepción *</label>
               <select
                 value={receptionWarehouseId ?? ''}
                 onChange={(e) =>
                   setReceptionWarehouseId(e.target.value ? Number(e.target.value) : undefined)
                 }
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
               >
                 <option value="">-- Selecciona --</option>
                 {warehouses.map((w) => (
@@ -302,33 +302,33 @@ export function PurchaseInvoiceModal({
         </div>
 
         {/* Totales */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-2">
-          <div className="flex items-center justify-between text-slate-300">
+        <div className="rounded-xl border border-border bg-muted/50 p-4 space-y-2">
+          <div className="flex items-center justify-between text-foreground">
             <span>Tasa Aplicada:</span>
             <span className="font-mono text-xs">{formatUSD(rate)} / USD</span>
           </div>
-          <div className="flex items-center justify-between text-base font-bold text-white border-t border-slate-800/80 pt-2">
+          <div className="flex items-center justify-between text-base font-bold text-foreground border-t border-border pt-2">
             <span>Total Compra (USD):</span>
-            <span className="font-mono text-amber-400">{formatUSD(totalUSD)}</span>
+            <span className="font-mono text-amber-600 dark:text-amber-400">{formatUSD(totalUSD)}</span>
           </div>
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Notas</label>
+          <label className="block font-semibold text-foreground mb-1">Notas</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Ej. Orden de compra #123, flete incluido"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>

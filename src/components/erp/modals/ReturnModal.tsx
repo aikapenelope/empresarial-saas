@@ -80,31 +80,31 @@ export function ReturnModal({ isOpen, onClose, tenantId, tenantSlug, invoice }: 
         )}
 
         {returnableItems.length === 0 ? (
-          <p className="text-slate-400 text-center py-6">
+          <p className="text-muted-foreground text-center py-6">
             Esta factura no tiene líneas con productos de catálogo: no hay inventario que devolver.
           </p>
         ) : (
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-slate-300 font-semibold uppercase text-[10px] tracking-wider">
-              <Undo2 className="h-3.5 w-3.5 text-amber-400" />
+            <div className="flex items-center gap-1.5 text-foreground font-semibold uppercase text-[10px] tracking-wider">
+              <Undo2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
               <span>Cantidades a Devolver</span>
             </div>
 
             <table className="w-full text-left text-[11px]">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
+                <tr className="border-b border-border text-muted-foreground uppercase text-[10px]">
                   <th className="py-1.5">Producto</th>
                   <th className="py-1.5 text-right">Vendido</th>
                   <th className="py-1.5 text-right">A Devolver</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-border">
                 {returnableItems.map((it) => {
                   const pid = it.productId as number;
                   return (
                     <tr key={pid}>
-                      <td className="py-1.5 text-white">{it.description}</td>
-                      <td className="py-1.5 text-right font-mono text-slate-300">{it.quantity}</td>
+                      <td className="py-1.5 text-foreground">{it.description}</td>
+                      <td className="py-1.5 text-right font-mono text-foreground">{it.quantity}</td>
                       <td className="py-1.5 text-right">
                         <input
                           type="number"
@@ -118,7 +118,7 @@ export function ReturnModal({ isOpen, onClose, tenantId, tenantSlug, invoice }: 
                               [pid]: Math.min(Number(e.target.value) || 0, it.quantity),
                             }))
                           }
-                          className="w-20 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-right font-mono text-white"
+                          className="w-20 rounded border border-border bg-background px-2 py-1 text-right font-mono text-foreground"
                         />
                       </td>
                     </tr>
@@ -131,7 +131,7 @@ export function ReturnModal({ isOpen, onClose, tenantId, tenantSlug, invoice }: 
 
         {returnableItems.length > 0 && (
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">
+            <label className="block font-semibold text-foreground mb-1">
               Motivo de la Devolución
             </label>
             <input
@@ -139,16 +139,16 @@ export function ReturnModal({ isOpen, onClose, tenantId, tenantSlug, invoice }: 
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Ej. Producto defectuoso, devuelto sin abrir"
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
             />
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>

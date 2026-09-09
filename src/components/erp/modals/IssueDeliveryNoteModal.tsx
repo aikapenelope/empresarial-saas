@@ -90,13 +90,13 @@ export function IssueDeliveryNoteModal({
           </div>
         )}
 
-        <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 flex items-center gap-2 text-slate-300">
+        <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 flex items-center gap-2 text-foreground">
           <Truck className="h-4 w-4 text-indigo-400" />
           <span>{order.orderNumber}</span>
         </div>
 
         <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-          <div className="grid grid-cols-12 gap-2 text-[10px] uppercase font-semibold text-slate-400 px-2">
+          <div className="grid grid-cols-12 gap-2 text-[10px] uppercase font-semibold text-muted-foreground px-2">
             <span className="col-span-6">Línea</span>
             <span className="col-span-2 text-right">Pedida</span>
             <span className="col-span-2 text-right">Despachada</span>
@@ -107,14 +107,14 @@ export function IssueDeliveryNoteModal({
             return (
               <div
                 key={l.index}
-                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-slate-950/50 border border-slate-800"
+                className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg bg-muted/50 border border-border"
               >
                 <div className="col-span-6">
-                  <p className="text-white font-semibold">{l.description}</p>
-                  {l.sku && <p className="font-mono text-[10px] text-slate-500">{l.sku}</p>}
+                  <p className="text-foreground font-semibold">{l.description}</p>
+                  {l.sku && <p className="font-mono text-[10px] text-muted-foreground">{l.sku}</p>}
                 </div>
-                <div className="col-span-2 text-right font-mono text-slate-300">{l.ordered}</div>
-                <div className="col-span-2 text-right font-mono text-slate-400">{l.dispatched}</div>
+                <div className="col-span-2 text-right font-mono text-foreground">{l.ordered}</div>
+                <div className="col-span-2 text-right font-mono text-muted-foreground">{l.dispatched}</div>
                 <div className="col-span-2">
                   <input
                     type="number"
@@ -126,7 +126,7 @@ export function IssueDeliveryNoteModal({
                       setQuantities((q) => ({ ...q, [l.index]: e.target.value }))
                     }
                     disabled={remaining <= 0}
-                    className="w-full rounded border border-slate-700 bg-slate-800 p-1.5 text-xs text-white text-right font-mono disabled:opacity-40"
+                    className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground text-right font-mono disabled:opacity-40"
                     placeholder="0"
                   />
                 </div>
@@ -136,21 +136,21 @@ export function IssueDeliveryNoteModal({
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Notas de Entrega</label>
+          <label className="block font-semibold text-foreground mb-1">Notas de Entrega</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Ej. Entregado a chofer, guía #123"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
