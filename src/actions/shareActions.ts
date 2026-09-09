@@ -17,7 +17,9 @@ import {
   shareUrlFor,
   type ShareableCollection,
   type SharedDoc,
+  invoiceToSharedDoc,
 } from '@/utilities/documentSharing';
+import type { Invoice } from '@/payload-types';
 
 /**
  * Sprint 28: compartición de cotizaciones y remisiones por email (Resend,
@@ -33,7 +35,7 @@ import {
  * overrideAccess:false antes de cualquier escritura.
  */
 
-const collectionSchema = z.enum(['quotes', 'delivery-notes']);
+const collectionSchema = z.enum(['quotes', 'delivery-notes', 'invoices']);
 
 const ensureShareSchema = z.object({
   collection: collectionSchema,
@@ -53,6 +55,9 @@ const SHARE_ROLES = ['super-admin', 'tenant-admin', 'supervisor', 'vendor'] as c
 // y la página pública muestra el estado final de forma prominente.
 const QUOTE_FINAL_STATUSES = new Set(['converted', 'rejected']);
 const DELIVERY_NOTE_FINAL_STATUSES = new Set(['voided']);
+// Facturas: NINGUNA es final-bloqueante para compartir — anulada sigue siendo
+// visible (con banner) y pagada también: el cliente conserva su documento.
+const INVOICE_SHARE_BLOCKED = new Set<string>();
 
 /**
  * Base URL de los enlaces públicos. PUBLIC_BASE_URL manda: los headers
@@ -82,7 +87,8 @@ async function atomicEnsureShareToken(
   collection: ShareableCollection,
   documentId: number,
 ): Promise<string> {
-  const table = collection === 'quotes' ? 'quotes' : 'delivery_notes';
+  const table =
+    collection === 'quotes' ? 'quotes' : collection === 'invoices' ? 'invoices' : 'delivery_notes';
   const candidate = generateShareToken();
 
   const dbAdapter = payload.db as unknown as {
@@ -164,6 +170,35 @@ async function loadAndEnsureShare(
     });
     return {
       doc: quoteToSharedDoc((fresh ?? quote) as typeof quote),
+      shareUrl: shareUrlFor(baseUrl, collection, token),
+    };
+  }
+
+  if (collection === 'invoices') {
+    const res = await payload.find({
+      collection: 'invoices',
+      where,
+      depth: 1,
+      limit: 1,
+      user,
+      overrideAccess: false,
+    });
+    const invoice = res.docs[0];
+    if (!invoice) {
+      throw new Error('Factura no encontrada en este inquilino.');
+    }
+    let token = invoice.shareToken || '';
+    if (!token) {
+      token = await atomicEnsureShareToken(payload, 'invoices', invoice.id);
+    }
+    const fresh = token === invoice.shareToken ? invoice : await payload.findByID({
+      collection: 'invoices',
+      id: invoice.id,
+      depth: 1,
+      overrideAccess: true,
+    });
+    return {
+      doc: invoiceToSharedDoc((fresh ?? invoice) as Invoice),
       shareUrl: shareUrlFor(baseUrl, collection, token),
     };
   }

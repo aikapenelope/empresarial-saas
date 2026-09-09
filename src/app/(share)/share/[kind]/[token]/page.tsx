@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 // La lectura del documento toca la base de datos: render bajo demanda.
 export const dynamic = 'force-dynamic';
 
-const KINDS = ['quote', 'delivery-note'] as const;
+const KINDS = ['quote', 'delivery-note', 'invoice'] as const;
 
 interface PageProps {
   params: Promise<{ kind: string; token: string }>;
@@ -36,7 +36,7 @@ export default async function SharedDocumentPage({ params }: PageProps) {
   }
 
   const resolved = await resolveSharedDocument(token);
-  if (!resolved || resolved.doc.collection !== (kind === 'quote' ? 'quotes' : 'delivery-notes')) {
+  if (!resolved || resolved.doc.collection !== (kind === 'quote' ? 'quotes' : kind === 'invoice' ? 'invoices' : 'delivery-notes')) {
     notFound();
   }
 
@@ -81,9 +81,11 @@ export default async function SharedDocumentPage({ params }: PageProps) {
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fecha de emisión</div>
             <div className="font-semibold">{fmtDate(doc.issueDate)}</div>
           </div>
-          {doc.kind === 'quote' && (
+          {(doc.kind === 'quote' || doc.kind === 'invoice') && (
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Válida hasta</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {doc.kind === 'invoice' ? 'Vencimiento' : 'Válida hasta'}
+              </div>
               <div className="font-semibold">{fmtDate(doc.validUntil)}</div>
             </div>
           )}

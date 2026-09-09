@@ -15,7 +15,7 @@ import { ensureShareUrlAction, sendDocumentEmailAction } from '@/actions/shareAc
  * - Copiar: copia la URL pública /share/{kind}/{token}.
  */
 interface ShareDocButtonsProps {
-  collection: 'quotes' | 'delivery-notes';
+  collection: 'quotes' | 'delivery-notes' | 'invoices';
   tenantId: number;
   documentId: number;
   docLabel: string;

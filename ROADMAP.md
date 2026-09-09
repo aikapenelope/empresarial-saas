@@ -697,7 +697,8 @@ Hallazgos de la segunda revisión de Devin, reparados agrupados:
 - [x] **Auto-envío por inquilino:** `emailConfig.autoSendQuoteEmail` (default activo) — al crear un presupuesto, si el cliente tiene email, se envía por Resend el enlace público del documento, en `after()` (cero blocking). Toggle en `SettingsView`.
 - [x] **Refactor de seguridad del envío:** `prepareDocumentEmail` (shareActions) resuelve acceso/token/HTML DENTRO del request y devuelve el envío diferible — llamar al action dentro de `after()` rompería (`headers()` no existe en la fase after). Compartido por el envío manual y el automático.
 - [x] **CRM ya existe** (`Customers` con email/segmento/tier/vendedor): `customer.email` es el destinatario por defecto.
-- [ ] **S43.2 (diferido):** extender `ShareableCollection` a `invoices` (campo `shareToken` + migración + render público + botón en detalle) y auto-envío de notas/facturas.
+- [x] **S43.2 (PR `feat/sprint43b-invoice-sharing`):** facturas compartibles — `shareToken` en Invoices (migración idempotente + índice único), mapper `invoiceToSharedDoc` con banners de ciclo de vida (anulada=rojo, pagada=info), rama invoices en shareActions (email/WhatsApp/copiar), ruta pública `/share/invoice/[token]` (vencimiento como metadata) y ShareDocButtons en el listado de facturas (email del cliente por defecto).
+- [ ] **S43.3 (diferido):** auto-envío de facturas/notas al emitir (hoy: presupuestos).
 
 ### 🔎 Sprint 44 — Filtros de negocio en los listados (PR `feat/sprint44-filters`)
 
