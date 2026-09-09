@@ -288,7 +288,7 @@ export function PaymentModal({
             type="file"
             accept="image/*,.pdf"
             onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-indigo-600 file:text-foreground text-[11px]"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-indigo-600 file:text-white text-[11px]"
           />
           {receiptFile && (
             <p className="text-[10px] text-muted-foreground mt-1">Adjunto: {receiptFile.name}</p>
