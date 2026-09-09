@@ -15,6 +15,8 @@ import * as migration_20260906_061500_add_delivery_notes from './20260906_061500
 import * as migration_20260906_070000_add_alerts from './20260906_070000_add_alerts';
 import * as migration_20260906_080000_drop_users_password_column from './20260906_080000_drop_users_password_column';
 import * as migration_20260906_090000_add_share_tokens from './20260906_090000_add_share_tokens';
+import * as migration_20260908_223202_add_tax_config from './20260908_223202_add_tax_config';
+import * as migration_20260909_000000_add_email_config from './20260909_000000_add_email_config';
 
 export const migrations = [
   {
@@ -99,7 +101,11 @@ export const migrations = [
   },
   {
     up: migration_20260906_090000_add_share_tokens.up,
+    up: migration_20260908_223202_add_tax_config.up,
+    up: migration_20260909_000000_add_email_config.up,
     down: migration_20260906_090000_add_share_tokens.down,
+    down: migration_20260908_223202_add_tax_config.down,
+    down: migration_20260909_000000_add_email_config.down,
     name: '20260906_090000_add_share_tokens'
   },
 ];
