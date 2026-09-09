@@ -157,6 +157,16 @@ export const Tenants: CollectionConfig = {
               'Requiere RESEND_API_KEY configurada. El cliente recibe un enlace público del presupuesto vía Resend; sin email del cliente no hay envío.',
           },
         },
+        {
+          name: 'autoSendInvoiceEmail',
+          label: 'Enviar la factura automáticamente al email del cliente al emitirla',
+          type: 'checkbox',
+          defaultValue: false,
+          admin: {
+            description:
+              'Requiere RESEND_API_KEY. La factura viaja como enlace público al emitirla; sin email del cliente no hay envío.',
+          },
+        },
       ],
     },
   ],

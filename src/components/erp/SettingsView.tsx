@@ -28,6 +28,7 @@ interface SettingsViewProps {
     } | null;
     emailConfig?: {
       autoSendQuoteEmail?: boolean | null;
+      autoSendInvoiceEmail?: boolean | null;
     } | null;
   };
   effectiveRate: number;
@@ -60,6 +61,9 @@ export function SettingsView({
   const [autoSendQuoteEmail, setAutoSendQuoteEmail] = useState<boolean>(
     tenant.emailConfig?.autoSendQuoteEmail ?? true,
   );
+  const [autoSendInvoiceEmail, setAutoSendInvoiceEmail] = useState<boolean>(
+    tenant.emailConfig?.autoSendInvoiceEmail ?? false,
+  );
   const [manualExchangeRate, setManualExchangeRate] = useState<number>(
     tenant.currencyConfig?.manualExchangeRate || 0,
   );
@@ -81,6 +85,7 @@ export function SettingsView({
       autoSyncRate,
       salesDocumentDefault,
       autoSendQuoteEmail,
+      autoSendInvoiceEmail,
     });
 
     setLoading(false);
@@ -154,6 +159,15 @@ export function SettingsView({
                   className="h-3.5 w-3.5 accent-[var(--color-primary,currentColor)]"
                 />
                 Enviar el presupuesto por email al crearlo (Resend — requiere RESEND_API_KEY y email del cliente).
+              </label>
+              <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer mt-2">
+                <input
+                  type="checkbox"
+                  checked={autoSendInvoiceEmail}
+                  onChange={(e) => setAutoSendInvoiceEmail(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-[var(--color-primary,currentColor)]"
+                />
+                Enviar la factura por email al emitirla (desactivado por defecto).
               </label>
             </div>
           </div>

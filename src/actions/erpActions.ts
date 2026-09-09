@@ -840,6 +840,39 @@ async function createInvoiceCore(
   return invDoc;
 }
 
+/**
+ * Auto-envío de factura (Sprint 43.3): si el inquilino tiene activado el
+ * envío automático y el cliente tiene email, programa el envío del enlace
+ * público en after() de Next. Jamás revierte la emisión: cualquier fallo del
+ * correo queda registrado y la factura ya existe.
+ *
+ * Usado por TODOS los puntos de emisión (creación directa, conversión de
+ * cotización y facturación desde pedido) — hallazgo Devin #66.
+ */
+async function maybeAutoSendInvoice(
+  payload: Payload,
+  tenantId: number,
+  customerRef: number,
+  invoice: { id: number; status: string; totalUSD: number },
+): Promise<void> {
+  try {
+    // Borradores y cortesías totales no se envían (no son documento final).
+    if (invoice.status === 'draft' || Number(invoice.totalUSD) <= 0 || !invoice.id) return;
+
+    const [tenantDoc, customerDoc] = await Promise.all([
+      payload.findByID({ collection: 'tenants', id: tenantId, depth: 0 }),
+      payload.findByID({ collection: 'customers', id: customerRef, depth: 0 }),
+    ]);
+    const email = customerDoc?.email || '';
+    if (!(tenantDoc?.emailConfig?.autoSendInvoiceEmail ?? false) || !email) return;
+
+    const prepared = await prepareDocumentEmail('invoices', tenantId, invoice.id, email);
+    await after(prepared.send);
+  } catch {
+    // La factura YA fue emitida: un fallo del email no convierte el éxito en error.
+  }
+}
+
 export async function createInvoiceAction(input: CreateInvoiceInput) {
   try {
     const parsed = createInvoiceSchema.parse(input);
@@ -849,6 +882,16 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
     const doc = await withTransaction(payload, user, (req) =>
       createInvoiceCore(payload, user, parsed, req),
     );
+
+    // Auto-envío de factura (Sprint 43.3): enlace público por email al
+    // emitirla, si el inquilino lo tiene activo y el cliente tiene email.
+    // Resuelve token/HTML DENTRO del request; el envío corre en after().
+    // Borradores y cortesías totales no se envían (no son documento final).
+    await maybeAutoSendInvoice(payload, parsed.tenantId, parsed.customerId, {
+      id: doc.id,
+      status: doc.status,
+      totalUSD: Number(doc.totalUSD) || 0,
+    });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
     revalidatePath(`/${parsed.tenantSlug}/erp/customers`);
@@ -1087,6 +1130,11 @@ export async function convertQuoteToInvoiceAction(input: ConvertQuoteInput) {
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);
+    await maybeAutoSendInvoice(payload, parsed.tenantId, Number(doc.customer), {
+      id: doc.id,
+      status: doc.status,
+      totalUSD: Number(doc.totalUSD) || 0,
+    });
     revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
     revalidatePath(`/${parsed.tenantSlug}/erp`);
 
@@ -1482,6 +1530,11 @@ export async function issueInvoiceFromOrderAction(input: {
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
+    await maybeAutoSendInvoice(payload, parsed.tenantId, Number(doc.customer), {
+      id: doc.id,
+      status: doc.status,
+      totalUSD: Number(doc.totalUSD) || 0,
+    });
     revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
     revalidatePath(`/${parsed.tenantSlug}/erp`);
 
@@ -3375,6 +3428,7 @@ export interface UpdateTenantSettingsInput {
   autoSyncRate: boolean;
   salesDocumentDefault?: 'nota_entrega' | 'factura';
   autoSendQuoteEmail?: boolean;
+  autoSendInvoiceEmail?: boolean;
 }
 
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
@@ -3399,8 +3453,18 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
         ...(parsed.salesDocumentDefault
           ? { salesConfig: { salesDocumentDefault: parsed.salesDocumentDefault } }
           : {}),
-        ...(parsed.autoSendQuoteEmail !== undefined
-          ? { emailConfig: { autoSendQuoteEmail: parsed.autoSendQuoteEmail } }
+        ...(parsed.autoSendQuoteEmail !== undefined ||
+        parsed.autoSendInvoiceEmail !== undefined
+          ? {
+              emailConfig: {
+                ...(parsed.autoSendQuoteEmail !== undefined
+                  ? { autoSendQuoteEmail: parsed.autoSendQuoteEmail }
+                  : {}),
+                ...(parsed.autoSendInvoiceEmail !== undefined
+                  ? { autoSendInvoiceEmail: parsed.autoSendInvoiceEmail }
+                  : {}),
+              },
+            }
           : {}),
       },
     });
