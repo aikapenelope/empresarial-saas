@@ -135,12 +135,7 @@ export function QuotesView({
 
       {/* Embudo comercial (pieza distintiva del módulo) */}
       {/* Embudo desde KPIs server-side (conjunto filtrado completo) */}
-      <QuoteFunnel
-        quotes={Object.entries(totals.byStatus).flatMap(([status, count]) =>
-          Array.from({ length: count }, () => ({ status, totalUSD: 0 })),
-        )}
-        tenantSlug={tenantSlug}
-      />
+      <QuoteFunnel statusCounts={totals.byStatus} tenantSlug={tenantSlug} />
 
       {/* Listado */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -149,7 +144,7 @@ export function QuotesView({
             <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <h2 className="text-sm font-semibold text-foreground">Cotizaciones del Inquilino</h2>
           </div>
-          <span className="text-xs text-muted-foreground">{quotes.length} registro(s)</span>
+          <span className="text-xs text-muted-foreground">{pagination.totalDocs} registro(s)</span>
         </div>
 
         {quotes.length === 0 ? (
