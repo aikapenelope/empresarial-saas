@@ -104,11 +104,11 @@ export function CashClosureModal({
         )}
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Caja Registradora a Cerrar *</label>
+          <label className="block font-semibold text-foreground mb-1">Caja Registradora a Cerrar *</label>
           <select
             value={cashRegisterId}
             onChange={(e) => setCashRegisterId(Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
           >
             {cashRegisters.map((cr) => (
               <option key={cr.id} value={cr.id}>
@@ -119,135 +119,135 @@ export function CashClosureModal({
         </div>
 
         {/* Declaración de Efectivo */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 space-y-3">
-          <div className="flex items-center gap-1.5 text-slate-300 font-semibold uppercase text-[10px] tracking-wider">
-            <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
+        <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
+          <div className="flex items-center gap-1.5 text-foreground font-semibold uppercase text-[10px] tracking-wider">
+            <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>Efectivo Físico en Gaveta</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block font-medium text-slate-400 mb-1">Billetes USD ($)</label>
+              <label className="block font-medium text-muted-foreground mb-1">Billetes USD ($)</label>
               <input
                 type="number"
                 min="0"
                 step="1"
                 value={physicalUSD}
                 onChange={(e) => setPhysicalUSD(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
               />
             </div>
 
             <div>
-              <label className="block font-medium text-slate-400 mb-1">Billetes Bolívares (Bs.)</label>
+              <label className="block font-medium text-muted-foreground mb-1">Billetes Bolívares (Bs.)</label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={physicalVES}
                 onChange={(e) => setPhysicalVES(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
               />
             </div>
           </div>
         </div>
 
         {/* Declaración Canales Bancarios VES */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 space-y-3">
-          <div className="flex items-center gap-1.5 text-slate-300 font-semibold uppercase text-[10px] tracking-wider">
+        <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
+          <div className="flex items-center gap-1.5 text-foreground font-semibold uppercase text-[10px] tracking-wider">
             <CreditCard className="h-3.5 w-3.5 text-indigo-400" />
             <span>Canales Bancarios (VES)</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block font-medium text-slate-400 mb-1">Total Lote POS / Débito (Bs.)</label>
+              <label className="block font-medium text-muted-foreground mb-1">Total Lote POS / Débito (Bs.)</label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={physicalPOS}
                 onChange={(e) => setPhysicalPOS(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
               />
             </div>
 
             <div>
-              <label className="block font-medium text-slate-400 mb-1">Total Pago Móvil Declarado (Bs.)</label>
+              <label className="block font-medium text-muted-foreground mb-1">Total Pago Móvil Declarado (Bs.)</label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={physicalPagoMovil}
                 onChange={(e) => setPhysicalPagoMovil(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
               />
             </div>
 
             <div>
-              <label className="block font-medium text-slate-400 mb-1">Total Transferencias (Bs.)</label>
+              <label className="block font-medium text-muted-foreground mb-1">Total Transferencias (Bs.)</label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={physicalTransfer}
                 onChange={(e) => setPhysicalTransfer(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
               />
             </div>
           </div>
         </div>
 
         {/* Declaración Moneda Digital USD */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 space-y-3">
-          <div className="flex items-center gap-1.5 text-slate-300 font-semibold uppercase text-[10px] tracking-wider">
-            <Smartphone className="h-3.5 w-3.5 text-amber-400" />
+        <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
+          <div className="flex items-center gap-1.5 text-foreground font-semibold uppercase text-[10px] tracking-wider">
+            <Smartphone className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
             <span>Canales Digitales en Divisa (USD)</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block font-medium text-slate-400 mb-1">Total Zelle Declarado ($)</label>
+              <label className="block font-medium text-muted-foreground mb-1">Total Zelle Declarado ($)</label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={physicalZelle}
                 onChange={(e) => setPhysicalZelle(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
               />
             </div>
 
             <div>
-              <label className="block font-medium text-slate-400 mb-1">Total Binance Pay USDT ($)</label>
+              <label className="block font-medium text-muted-foreground mb-1">Total Binance Pay USDT ($)</label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
                 value={physicalBinance}
                 onChange={(e) => setPhysicalBinance(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono"
               />
             </div>
           </div>
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Observaciones / Incidencias del Turno</label>
+          <label className="block font-semibold text-foreground mb-1">Observaciones / Incidencias del Turno</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Ej. Cierre de turno sin novedades, corte de luz 15 mins a las 4pm"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
