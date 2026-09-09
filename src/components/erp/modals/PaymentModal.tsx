@@ -159,7 +159,7 @@ export function PaymentModal({
 
         {/* Cliente */}
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Cliente / Deudor *</label>
+          <label className="block font-semibold text-foreground mb-1">Cliente / Deudor *</label>
           <select
             value={customerId}
             onChange={(e) => {
@@ -167,7 +167,7 @@ export function PaymentModal({
               setCustomerId(cid);
               setInvoiceId(undefined);
             }}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
           >
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
@@ -181,7 +181,7 @@ export function PaymentModal({
         {/* Factura Opcional para Imputar */}
         {customerInvoices.length > 0 && (
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">
+            <label className="block font-semibold text-foreground mb-1">
               Imputar a Factura Específica (Opcional)
             </label>
             <select
@@ -194,7 +194,7 @@ export function PaymentModal({
                   if (selectedInv) setAmountUSD(selectedInv.balanceUSD);
                 }
               }}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none font-mono"
             >
               <option value="">-- Abono general al saldo del cliente --</option>
               {customerInvoices.map((inv) => (
@@ -210,7 +210,7 @@ export function PaymentModal({
         {/* Método y Monto */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Método de Cobro *</label>
+            <label className="block font-semibold text-foreground mb-1">Método de Cobro *</label>
             <select
               value={method}
               onChange={(e) =>
@@ -225,7 +225,7 @@ export function PaymentModal({
                     | 'binance',
                 )
               }
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               <option value="cash_usd">Efectivo USD ($)</option>
               <option value="cash_ves">Efectivo Bolívares (Bs.)</option>
@@ -238,7 +238,7 @@ export function PaymentModal({
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Monto Cobrado (USD) *</label>
+            <label className="block font-semibold text-foreground mb-1">Monto Cobrado (USD) *</label>
             <input
               type="number"
               min="0.01"
@@ -246,28 +246,28 @@ export function PaymentModal({
               required
               value={amountUSD}
               onChange={(e) => setAmountUSD(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono focus:border-ring focus:outline-none"
             />
           </div>
         </div>
 
         {/* Resumen de Conversión en Tiempo Real */}
-        <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs">
+        <div className="p-3 rounded-xl border border-border bg-muted/50 flex items-center justify-between text-xs">
           <div>
-            <span className="text-slate-400">Contravalor a registrar en caja:</span>
-            <div className="font-mono font-bold text-emerald-400 text-sm mt-0.5">
+            <span className="text-muted-foreground">Contravalor a registrar en caja:</span>
+            <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm mt-0.5">
               {isUSDMethod ? formatUSD(amountNative) : formatVES(amountNative)}
             </div>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-slate-500">Tasa de aplicación:</span>
-            <div className="font-mono text-slate-300 text-xs">{formatVES(rate)}</div>
+            <span className="text-[10px] text-muted-foreground">Tasa de aplicación:</span>
+            <div className="font-mono text-foreground text-xs">{formatVES(rate)}</div>
           </div>
         </div>
 
         {/* Referencia */}
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">
+          <label className="block font-semibold text-foreground mb-1">
             Nro. de Referencia / Comprobante
           </label>
           <input
@@ -275,44 +275,44 @@ export function PaymentModal({
             value={referenceNumber}
             onChange={(e) => setReferenceNumber(e.target.value)}
             placeholder="Ej. Ref #849202 o Últimos 4 dígitos de tarjeta"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
           />
         </div>
 
         {/* Comprobante adjunto */}
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">
+          <label className="block font-semibold text-foreground mb-1">
             Comprobante Digital (opcional, imagen o PDF ≤ 8 MB)
           </label>
           <input
             type="file"
             accept="image/*,.pdf"
             onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-indigo-600 file:text-white text-[11px]"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-indigo-600 file:text-white text-[11px]"
           />
           {receiptFile && (
-            <p className="text-[10px] text-slate-500 mt-1">Adjunto: {receiptFile.name}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Adjunto: {receiptFile.name}</p>
           )}
         </div>
 
         {/* Notas */}
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Observaciones / Concepto</label>
+          <label className="block font-semibold text-foreground mb-1">Observaciones / Concepto</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Abono a cuenta corriente, recibido en turno mañana"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
         </div>
 
         {/* Botones */}
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>

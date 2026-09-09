@@ -77,20 +77,20 @@ export function CashRegisterModal({
         )}
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Nombre de la Caja *</label>
+          <label className="block font-semibold text-foreground mb-1">Nombre de la Caja *</label>
           <input
             type="text"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ej. Caja Principal Mostrador"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="font-semibold text-slate-300">Código de Caja *</label>
+            <label className="font-semibold text-foreground">Código de Caja *</label>
             <button
               type="button"
               onClick={handleGenerateCode}
@@ -105,16 +105,16 @@ export function CashRegisterModal({
             value={code}
             onChange={(e) => setCode(e.target.value)}
             placeholder="Ej. CJ-01"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
           />
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Depósito / Almacén Vinculado *</label>
+          <label className="block font-semibold text-foreground mb-1">Depósito / Almacén Vinculado *</label>
           <select
             value={warehouseId}
             onChange={(e) => setWarehouseId(Number(e.target.value))}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
           >
             {warehouses.length > 0 ? (
               warehouses.map((w) => (
@@ -128,11 +128,11 @@ export function CashRegisterModal({
           </select>
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>

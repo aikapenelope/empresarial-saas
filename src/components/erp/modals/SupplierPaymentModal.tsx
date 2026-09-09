@@ -151,14 +151,14 @@ export function SupplierPaymentModal({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Proveedor *</label>
+            <label className="block font-semibold text-foreground mb-1">Proveedor *</label>
             <select
               value={supplierId}
               onChange={(e) => {
                 setSupplierId(Number(e.target.value));
                 setPurchaseInvoiceId(undefined);
               }}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -169,7 +169,7 @@ export function SupplierPaymentModal({
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Monto (USD) *</label>
+            <label className="block font-semibold text-foreground mb-1">Monto (USD) *</label>
             <input
               type="number"
               min="0.01"
@@ -177,18 +177,18 @@ export function SupplierPaymentModal({
               required
               value={amountUSD}
               onChange={(e) => setAmountUSD(Number(e.target.value))}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white font-mono focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground font-mono focus:border-ring focus:outline-none"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">Método de Pago *</label>
+            <label className="block font-semibold text-foreground mb-1">Método de Pago *</label>
             <select
               value={method}
               onChange={(e) => setMethod(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
             >
               {PAYMENT_METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -199,7 +199,7 @@ export function SupplierPaymentModal({
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">
+            <label className="block font-semibold text-foreground mb-1">
               Imputar a Factura (opcional)
             </label>
             <select
@@ -207,7 +207,7 @@ export function SupplierPaymentModal({
               onChange={(e) =>
                 setPurchaseInvoiceId(e.target.value ? Number(e.target.value) : undefined)
               }
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white focus:border-indigo-500 focus:outline-none font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none font-mono"
             >
               <option value="">-- FIFO automático por vencimiento --</option>
               {openInvoices.map((inv) => (
@@ -220,32 +220,32 @@ export function SupplierPaymentModal({
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Nro. de Referencia</label>
+          <label className="block font-semibold text-foreground mb-1">Nro. de Referencia</label>
           <input
             type="text"
             value={referenceNumber}
             onChange={(e) => setReferenceNumber(e.target.value)}
             placeholder="Ej. Transferencia #849202"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none font-mono"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
           />
         </div>
 
         <div>
-          <label className="block font-semibold text-slate-300 mb-1">Notas</label>
+          <label className="block font-semibold text-foreground mb-1">Notas</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Ej. Pago parcial orden de compra #123"
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold"
+            className="px-4 py-2 rounded-lg border border-border hover:bg-background text-foreground font-semibold"
           >
             Cancelar
           </button>
