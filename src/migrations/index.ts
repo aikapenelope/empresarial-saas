@@ -101,9 +101,12 @@ export const migrations = [
   },
   {
     up: migration_20260906_090000_add_share_tokens.up,
-    up: migration_20260909_000000_add_email_config.up,
     down: migration_20260906_090000_add_share_tokens.down,
-    down: migration_20260909_000000_add_email_config.down,
     name: '20260906_090000_add_share_tokens'
+  },
+  {
+    up: migration_20260909_000000_add_email_config.up,
+    down: migration_20260909_000000_add_email_config.down,
+    name: '20260909_000000_add_email_config'
   },
 ];
