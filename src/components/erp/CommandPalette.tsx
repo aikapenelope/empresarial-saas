@@ -252,7 +252,7 @@ export function CommandPalette({
           {entries.map((item, idx) => (
             <React.Fragment key={item.key}>
               {(idx === 0 || entries[idx - 1].section !== item.section) && (
-                <p className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase text-slate-500">
+                <p role="presentation" className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase text-slate-500">
                   {SECTION_LABELS[item.section]}
                 </p>
               )}

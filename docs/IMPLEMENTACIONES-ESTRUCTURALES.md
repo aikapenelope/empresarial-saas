@@ -118,6 +118,16 @@ es aditivo.
    limpia al completar la venta. Verificación contable: el cobro registrado es
    SIEMPRE el total de la factura, así que el arqueo (físico vs. sistema) cuadra sin
    registrar el vuelto.
+6. **Fix Devin #78 (🔴 F4 duplicaba ventas)**: el atajo ignora key-repeat
+   (`e.repeat`) y el estado `loading` (vía `loadingRef` reasignada en efecto,
+   misma técnica de `submitRef`) — mantener F4 o pulsarlo durante un envío ya no
+   dispara una segunda venta.
+7. **Fix Devin #78 (🟡 exactas múltiples, 2 rondas)**: el reconocimiento de la
+   ambigüedad es INDEPENDIENTE de la visibilidad del dropdown (`ambiguousPending`,
+   reseteado al cambiar la búsqueda) — mientras el escáner escribe los dígitos el
+   dropdown ya está abierto, así que fiarse de `scanOpen` auto-seleccionaba el
+   índice 0. Ahora: primer Enter marca la ambigüedad y muestra las opciones (con
+   aviso visible); el cajero elige con ↑↓ y confirma con un Enter posterior.
 
 ### Item 17 — Command palette extendida
 
