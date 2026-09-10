@@ -11,6 +11,7 @@ import {
   Timer,
   ReceiptText,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { formatUSD } from './format';
 import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
@@ -222,9 +223,7 @@ export function PurchasesView({
         </div>
 
         {invoicePage.docs.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">
-            No hay compras registradas todavía.
-          </p>
+          <EmptyState icon={ReceiptText} title="No hay compras registradas todavía." />
         ) : (
           <div className="overflow-x-auto">
             <Table>

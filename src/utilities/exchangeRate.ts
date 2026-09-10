@@ -154,12 +154,17 @@ async function fetchBinanceP2PRate(): Promise<number | null> {
 
     const prices = ads
       .map((item) => Number(item?.adv?.price))
-      .filter((p) => !isNaN(p) && p > 0);
+      // Devin #82 🔴: mismo criterio de plausibilidad que BCV/paralelo — Binance
+      // era la única fuente que aceptaba cualquier positivo y el resolvedor la
+      // prefiere cuando BCV falla (una cotización absurda entraría a snapshots).
+      .filter((p) => isPlausibleRate(p));
 
     if (prices.length === 0) return null;
 
     prices.sort((a, b) => a - b);
     const median = prices[Math.floor(prices.length / 2)];
+    // Defensa en profundidad: la mediana se revalida antes de exponerse.
+    if (!isPlausibleRate(median)) return null;
     return Number(median.toFixed(4));
   } catch {
     return null;

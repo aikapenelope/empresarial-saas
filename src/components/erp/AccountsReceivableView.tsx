@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Wallet, TriangleAlert, Users, FileText } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { KpiCard } from './KpiCard';
 import { formatUSD } from './format';
 import { ErpPageHeader } from './ErpPageHeader';
@@ -237,9 +238,7 @@ export function AccountsReceivableView({
         </div>
 
         {filteredRows.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">
-            No hay saldos abiertos con estos filtros.
-          </p>
+          <EmptyState icon={Wallet} title="No hay saldos abiertos con estos filtros." />
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -316,9 +315,7 @@ export function AccountsReceivableView({
         />
 
         {payments.docs.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">
-            No hay cobros confirmados en el período seleccionado.
-          </p>
+          <EmptyState icon={FileText} title="No hay cobros confirmados en el período seleccionado." />
         ) : (
           <div className="overflow-x-auto">
             <Table>

@@ -13,6 +13,7 @@ import {
   ClipboardList,
   UserCheck,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { toast } from 'sonner';
 import { acknowledgeAlertAction, resolveAlertAction } from '@/actions/erpActions';
 import { ErpPageHeader } from './ErpPageHeader';
@@ -116,10 +117,8 @@ export function AlertsView({ tenantId, tenantSlug, active, resolved, counts }: A
       {/* Activas — feed por severidad */}
       <div className="space-y-2">
         {active.length === 0 ? (
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
-            <CircleCheck className="h-8 w-8 text-emerald-500 mx-auto" aria-hidden="true" />
-            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mt-2">Todo en orden</p>
-            <p className="text-xs text-muted-foreground">No hay alertas activas para este inquilino.</p>
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+            <EmptyState icon={CircleCheck} title="Todo en orden" description="No hay alertas activas para este inquilino." />
           </div>
         ) : (
           active.map((a) => {

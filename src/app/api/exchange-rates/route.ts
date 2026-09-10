@@ -33,8 +33,15 @@ export async function GET(request: Request) {
     const forceRefresh = searchParams.get('refresh') === 'true';
 
     if (forceRefresh) {
+      // Devin #82 🟨: la PRIMERA entrada de x-forwarded-for la controla el
+      // cliente (puede rotarla y saltarse el límite). Se prioriza x-real-ip
+      // (fijada por la plataforma), luego la ÚLTIMA entrada del XFF (la que
+      // añade nuestro proxy) y 'unknown' como fin — los desconocidos comparten
+      // un cubo global, acotando el abuso en vez de permitirlo.
       const ip =
-        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+        request.headers.get('x-real-ip')?.trim() ||
+        request.headers.get('x-forwarded-for')?.split(',').pop()?.trim() ||
+        'unknown';
       if (isRateLimited(`refresh:${ip}`)) {
         return NextResponse.json(
           {

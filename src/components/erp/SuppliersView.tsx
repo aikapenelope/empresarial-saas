@@ -11,6 +11,7 @@ import {
   FileStack,
   Building,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
@@ -118,14 +119,12 @@ export function SuppliersView({
         </div>
 
         {filteredSuppliers.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground text-xs space-y-3">
-            <Truck className="h-8 w-8 mx-auto text-muted-foreground/50" aria-hidden="true" />
-            <p>No hay proveedores registrados en este inquilino.</p>
+          <EmptyState icon={Truck} title="No hay proveedores registrados." description="Registra el primer proveedor de este inquilino.">
             <Button size="sm" onClick={() => setIsSupplierModalOpen(true)}>
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               Registrar Primer Proveedor
             </Button>
-          </div>
+          </EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <Table>

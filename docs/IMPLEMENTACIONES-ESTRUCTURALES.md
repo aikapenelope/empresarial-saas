@@ -102,6 +102,33 @@ detal venezolano) y el escáner es infraestructura estándar de bodega.
 **Migración:** no. **Riesgo:** bajo — el flujo select→agregar queda byte-idéntico; todo
 es aditivo.
 
+**Refinamientos decididos al implementar (2026-09-10):**
+1. `barcode` es indexado pero NO único: con 2+ coincidencias exactas el escáner NO
+   auto-agrega — el dropdown se restringe a las exactas para que el cajero elija
+   (regla anti-duplicado; exacta única = agrega directo).
+2. F4 invoca el MISMO `handleSubmit` del botón (ref de closure fresca reasignada por
+   render): un solo camino de validaciones, el atajo no puede saltarse guardas
+   (carrito vacío, turno cerrado, crédito sin cliente…).
+3. Dropdown con semántica combobox/listbox ARIA (`role`, `aria-expanded`,
+   `aria-activedescendant`, opciones con `role="option"`) — el estándar de teclado del
+   sprint.
+4. El escaneo repetido suma cantidad reutilizando la fusión de líneas existente
+   (mismo producto + mismo precio de tier → +1), cero código de acumulación nuevo.
+5. El vuelto aparece sólo con contado en efectivo USD/Bs y carrito con contenido; se
+   limpia al completar la venta. Verificación contable: el cobro registrado es
+   SIEMPRE el total de la factura, así que el arqueo (físico vs. sistema) cuadra sin
+   registrar el vuelto.
+6. **Fix Devin #78 (🔴 F4 duplicaba ventas)**: el atajo ignora key-repeat
+   (`e.repeat`) y el estado `loading` (vía `loadingRef` reasignada en efecto,
+   misma técnica de `submitRef`) — mantener F4 o pulsarlo durante un envío ya no
+   dispara una segunda venta.
+7. **Fix Devin #78 (🟡 exactas múltiples, 2 rondas)**: el reconocimiento de la
+   ambigüedad es INDEPENDIENTE de la visibilidad del dropdown (`ambiguousPending`,
+   reseteado al cambiar la búsqueda) — mientras el escáner escribe los dígitos el
+   dropdown ya está abierto, así que fiarse de `scanOpen` auto-seleccionaba el
+   índice 0. Ahora: primer Enter marca la ambigüedad y muestra las opciones (con
+   aviso visible); el cajero elige con ↑↓ y confirma con un Enter posterior.
+
 ### Item 17 — Command palette extendida
 
 **Estado verificado (`CommandPalette.tsx`, 206 líneas):** busca rutas (solo por nombre) +
@@ -122,6 +149,26 @@ resultado de producto cae en la lista de inventario.
 
 **Migración:** no. **Riesgo:** medio-bajo (la única pieza delicada es extraer
 `navConfig` sin alterar el sidebar).
+
+**Notas de implementación (2026-09-10):**
+1. El "navConfig compartido" **ya existía**: `src/components/app-shared.tsx` concentra
+   `NAV_ITEMS` + `NAV_GROUPS` + `ROLE_NAV` + `buildNavGroups` (App Shell 4). No se
+   extrajo nada — la paleta consumió la MISMA fuente vía nuevo helper
+   `getPaletteRoutes(tenantSlug, userRole)`. El sidebar quedó byte-idéntico; de paso
+   la paleta ahora muestra TODAS las rutas (le faltaban compras y reportes).
+2. `keywords` se añadió como campo opcional de `NAV_ITEMS` (sinónimos en español por
+   ruta: "pos punto de venta mostrador cobrar", "cxc cobranza cartera aging"…). El
+   filtro compara título **o** keywords.
+3. Lista APLANADA determinista: rutas → pedidos → cotizaciones → clientes →
+   productos; un único índice activo con ↑↓/Enter (envolvente), hover sincroniza,
+   `scrollIntoView` mantiene visible la opción activa; secciones con encabezados.
+4. Pedidos por número vía REST (`where[orderNumber][like]`) → `orders/[id]`.
+   **Cotizaciones**: no existe página `quotes/[id]` (sólo lista + quick) — el
+   resultado por `quoteNumber` lleva a la lista de cotizaciones; una página de
+   detalle de cotización sería un item futuro pequeño.
+5. Lección React: el `useEffect` de `scrollIntoView` vive ANTES del early-return
+   `if (!open)` — los hooks no pueden quedar tras un retorno condicional
+   (regla `react-hooks/rules-of-hooks`).
 
 ### Item 25 — Email de alertas críticas (+ alerta de cuota vencida)
 
@@ -156,12 +203,35 @@ verifica su dominio en Resend.
 idempotente). **Riesgo:** bajo (el evaluador actual no se toca salvo añadir la sección y
 el queue final).
 
+**Reparaciones Devin #80 (2026-09-10, 6 hallazgos):**
+1. 🟡 Alerta REACTIVADA no llegaba por email: conservaba el `notifiedAt` previo y el
+   digest la omitía → la reactivación limpia `resolvedAt` **y** `notifiedAt`.
+2. 🔴 F4 duplicaba ventas (POSView heredado del PR2): resuelto vía merge de la pila
+   (`loadingRef` + `e.repeat` del fix #78).
+3. 🟡 Crash entre `sendEmail` y los N updates duplicaba el digest → estampado
+   **atómico en un solo statement** (`UPDATE alerts ... WHERE id IN (...)`): la
+   ventana de crash queda en un statement; at-least-once deliberado (un duplicado
+   es mejor que perder una alerta crítica) — outbox durable = hardening v2.
+4. 🟡 El `down()` de la migración fallaba con filas usando los valores nuevos →
+   borra `overdue_installment` y los jobs del digest ANTES de estrechar los enums.
+5. 🟡 "Auditoría Global" desapareció de la paleta (NAV_ITEMS no la tenía) →
+   añadida al catálogo SOLO para super-admin/tenant-admin: la auditoría es
+   exclusiva de administradores (getAuditLogData revalida con 403 — error de
+   verificación mío pensar que era para todos los roles). NO va a NAV_GROUPS:
+   el sidebar queda byte-idéntico.
+6. 🟥 **Inyección HTML del nombre del inquilino** en el digest → `escapeHtml`
+   aplicado a tenant.name y a las líneas de alerta.
+7. 🟡 Estampado atómico extendido: `SET notified_at = now(), updated_at = now()`
+   — el SQL crudo bypassa el mantenimiento de timestamps de Payload y los
+   consumidores que sincronicen por `updatedAt` perderían el cambio.
+
 ### Item 6 — Crédito: enforcement del límite + UI del plan de cuotas
 
-**Estado verificado:** `creditAllowed`/`creditLimitUSD`/`creditDays` existen en
-Customers (`Customers/index.ts:295–308`) y se persisten desde las actions, pero
-**nada los valida** en `createInvoiceCore`. La UI del detalle de factura muestra
-`dueDate` pero no el plan de cuotas.
+**Estado CORREGIDO al implementar (2026-09-10):** el enforcement del límite **YA EXISTÍA**
+desde el Sprint 10 (commit `1e68279`, inline en `createInvoiceCore`) y el **Plan de
+Cuotas del detalle también ya existía** (`invoices/[id]/page.tsx:196`) — tercer error
+del explorador en este plan (tras los ítems 2 y 6-backend). Lo que este PR añade de
+verdad: utility pura + test CI + select de cuotas en el modal (ver notas al final).
 
 **Diseño:**
 - **`src/utilities/credit.ts`** — función pura `evaluateCreditSale({
@@ -180,6 +250,17 @@ Customers (`Customers/index.ts:295–308`) y se persisten desde las actions, per
 
 **Migración:** no (todos los campos existen). **Riesgo:** contenido — enforcement es
 lectura + throw previo a escrituras; función pura con test unitario para CI.
+
+**Notas de implementación (2026-09-10):**
+1. `evaluateCreditSale` extrajo el enforcement inline con **semántica idéntica a la
+   vigente desde el Sprint 10**, que difiere del diseño original en un punto:
+   **límite 0 + crédito habilitado = BLOQUEA** (tope cero), no "sin tope". Se preserva
+   la regla en producción; cambiarla sería decisión de negocio aparte.
+2. `tests/unit/credit.test.ts` — 6 casos, incluida la semántica del tope cero y la
+   tolerancia de redondeo (0.005 USD).
+3. Select de cuotas 1–12 en `InvoiceModal` a crédito: el core consumía
+   `installmentsCount` desde el Sprint 12 pero el modal nunca lo enviaba (faltaba
+   también en la interface `CreateInvoiceInput`).
 
 ### Item 1 — Aprobaciones con firma
 

@@ -454,6 +454,11 @@ export const updateTenantSettingsSchema = z.object({
   salesDocumentDefault: z.enum(['nota_entrega', 'factura']).optional(),
   autoSendQuoteEmail: z.boolean().optional(),
   autoSendInvoiceEmail: z.boolean().optional(),
+  alertsEmailEnabled: z.boolean().optional(),
+  alertsEmailRecipients: z
+    .array(z.string().trim().email('Email inválido.').max(200))
+    .max(10)
+    .optional(),
 });
 
 export const createTenantSchema = z.object({

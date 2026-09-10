@@ -10,6 +10,15 @@
 
 ## 1. Los repos del ecosistema — qué hay y qué está vivo
 
+> **Catálogo local de consulta (sep-2026)**: los repos viven clonados en
+> `~/Documents/storelinksaas/ve-erp-references/` — LVE, bin-odoo-ve, factura-digital,
+> l10n-venezuela, l10n-venezuela-bw, l10n_ve_seniat, odoo-venezuela (con git: `git pull`
+> para refrescar) + erpcya-docs, solop-docs, pos-improvements, payroll-multi-engine
+> (carpetas de docs SIN git: refrescar = re-descargar). Referencia destacada para el
+> storefront: `solop-docs/docs/dictionary/web-store/web-store-order.md` (ciclo pedido
+> web → Orden de Venta del canal, ver §8). **Las referencias de diseño salen de estos
+> activos, no de internet** — son los que están actualizados y operando con clientes.
+
 ### 1.1 ADempiere (la casa venezolana: ERPCYA/Solop, Yamel Senih)
 
 | Repo | Estado | Qué aporta a nuestro plugin |
@@ -72,6 +81,16 @@ adaptaremos a Payload, en orden:
 
 **Arquitectura (decidida)**: `fiscalPlugin({ enabled })` in-repo — colecciones propias (`fiscal-rate-lists`, `withholdings`, `withholding-declarations`, campos inyectados en clientes/proveedores/facturas), hooks compuestos, jobs para el cálculo, flag de activación **por inquilino**, tasas y formatos como data. Apagar el plugin = config intacta.
 
+**Dónde vive el libro fiscal hoy (aclaración)**: el Libro de Ventas simple (reporte +
+export CSV, Sprint 39, `getSalesBookReport`) y el desglose informativo de IVA/IGTF
+(Sprint 42, `src/utilities/tax.ts`) quedan en el núcleo de Reportes — sirven con el
+plugin apagado y para todos los inquilinos. Es legal y suficiente: la obligación de
+llevar libros es del contribuyente (COT + Reglamento IVA Arts. 70-78; PA 0071 fija los
+parámetros) y la PA SNAT/2026/00084 derogó la homologación obligatoria de software.
+El fiscalPlugin v1 los **upgradea** (número de control, columnas de alícuota/retención,
+formato fiscal PA 0071, TXT/XML) mediante campos y colecciones inyectadas — no se
+duplica el motor.
+
 ---
 
 ## 3. Tesorería liviana + MacroDroid — inspiración y diseño
@@ -124,17 +143,165 @@ time-off; **cero cálculos**. `hrPlugin({ enabled })`:
 | **Sprint "retenciones y devoluciones"** | Asignado | Devoluciones: hecha. Retenciones (incluida la retención sobre notas de crédito): vive dentro del plugin fiscal v1/v2 (§2), no como sprint suelto — así no se duplica el motor. |
 | **Contabilidad** | Descartada | Por decisión del usuario. El sustituto útil: tesorería liviana (§3). |
 | **CRM** | Enriquecer un poco | El CRM actual (clientes + cartera) puede sumar barato: notas/actividades en el perfil y último contacto — dentro del pulido continuo, sin módulo nuevo. |
-| **Inbox WhatsApp + Instagram** | Diferido | Requiere WhatsApp Business Cloud API + Instagram Messaging API con verificación Meta por tenant y coste por conversación. Módulo real y vendible — planear después de tesorería/HR, como `inboxPlugin` con Composio u OAuth propio. |
-| **Conexión a página web / e-commerce** | Viable y sencillo, diferido | La arquitectura lo permite barato: storefront público por tenant (como nuestras páginas share) reutilizando REST — catálogo con stock visible + carrito → crea Cotización/Pedido + checkout por WhatsApp. `storefrontPlugin` futuro. No pagos online en v1. |
+| **Inbox WhatsApp + Instagram** | Diferido → **diseño cerrado (§7)** | Módulo real y vendible vía **Composio** (decisión: se usa Composio para todo lo externo). V1 WhatsApp, v2 Instagram. |
+| **Conexión a página web / e-commerce** | Viable y sencillo, diferido → **diseño cerrado (§8)** | `storefrontPlugin`: vitrina B2B de presupuesto — catálogo con stock disponible + "Solicitar Presupuesto" que cae como `Order` canal `web` al módulo de Pedidos existente. Sin compra ni pagos online en v1. |
 | **Redes sociales (publicación)** | Descartada | Se desvía del núcleo. |
 | **Composio SDK (login/integraciones)** | Planeado para luego | Capa futura de integraciones gestionadas (OAuth de terceros por tenant vía Composio). Evaluar cuando llegue `inboxPlugin`/`storefrontPlugin`. |
 | **Nómina** | Plugin futuro | Expediente de Personal primero (§4); motor de cálculo solo si el mercado lo exige. |
 
 ---
 
-## 7. Orden sugerido de ejecución (después de los 7 PRs aprobados)
+## 7. inboxPlugin — arquitectura cerrada con Composio (verificada en docs oficiales, sep-2026)
+
+**Decisión de plataforma**: todo lo externo pasa por Composio (OAuth, tokens, refresh,
+delivery de triggers, firma, logs — SOC 2 / ISO 27001). Nada de OpenBSP ni protocolos no
+oficiales de WhatsApp Web: Meta banea números por automatización no oficial, y la vía
+WABA/Cloud API es la única durable para un negocio.
+
+**Modelo Composio verificado** (toolkit WhatsApp: 17 tools + 1 trigger; Instagram con
+OAuth Business Login):
+
+- Enviar: mensaje, plantilla aprobada, media, contactos, botones interactivos (hasta 3),
+  listas (menú), ubicación. Ciclo completo de plantillas (crear/listar/estado/eliminar).
+- Media entrante: "Get media info" entrega URL de descarga → se archiva en nuestro S3.
+- **No existe tool de historial** (ni en la Cloud API de Meta): el corpus de
+  conversaciones se construye guardando cada entrante (trigger → webhook) y cada saliente
+  (lo enviamos nosotros) en `InboxMessages`. Ese registro propio es el insumo de futuro
+  análisis de sentimiento (no hay historia retroactiva en ninguna plataforma).
+- Proxy Execute = llamada cruda a endpoints Meta no envueltos como tool (plano de
+  escape; el diseño no lo requiere).
+- Pricing: free tier por cuenta Composio (100.000 tool calls/mes + hasta 1.000
+  conexiones), luego $0.10/conexión.
+
+**Modelo por inquilino (decisión)**: un **proyecto Composio por tenant** con su propia
+API key. Cada empresa consume su propio free tier y paga su excedente — coste
+infraestructura para nosotros: cero. En Tenants se inyecta el grupo
+`integrations.composio` (`projectId`, `apiKey`, `webhookSecret`), configurado solo por
+super-admin. El cliente jamás ve una credencial.
+
+**Conexión global de la empresa (ratificado)**: dentro de cada proyecto, el TENANT es
+la entidad (`user_id` = tenant): **una sola conexión de WhatsApp y una de Instagram por
+empresa**, conectadas por el super-admin y usadas por todo el staff — el agente actúa
+como el negocio, no como un empleado (verificado: Composio guarda las conexiones bajo
+el `user_id` del proyecto). Si algún tenant necesitara dos números, Composio ofrece
+multi-account mode con alias — sin re-arquitectura.
+
+**Flujo sin saturación**:
+
+1. El proyecto Composio de cada tenant apunta su webhook a
+   `/api/webhooks/composio/[tenantId]` (endpoint raíz, patrón Stripe oficial).
+2. Handler: verifica firma con el `webhookSecret` del tenant
+   (`composio.triggers.parse(body, headers, verifySecret)`), responde 200 en
+   milisegundos y **encola** `processInboxMessage` en la Jobs Queue de Payload. Los
+   reintentos de Composio cubren caídas; Composio gestiona delivery + retries + firma.
+3. El job hace lo pesado: match teléfono→Customer, upsert de `InboxThread`, inserción de
+   `InboxMessages`, descarga de media, enriquecimientos (sentimiento = job opcional
+   futuro). Idempotencia: índice único por ID de mensaje Composio.
+4. Límites Meta por WABA quedan aislados naturalmente (un proyecto por tenant).
+
+**Colecciones del plugin**: `InboxThreads` (tenant, customer, canal whatsapp/instagram,
+último mensaje, unread) e `InboxMessages` (thread, dirección, texto, media ref, IDs
+externos, timestamps). UI: `/erp/inbox` (threads por cliente, composer con ventana 24h +
+plantillas), item de sidebar con badge. Los botones share existentes (wa.me) evolucionan
+a **envío real desde el número del negocio** vía Composio.
+
+**v1 (WhatsApp, ~3 sprints)**: PoC previo de 1 día (WABA demo → trigger firmado →
+webhook). **v2 (+1 sprint)**: Instagram DMs (PoC de trigger de DMs requerido). IA
+(respuestas sugeridas vía MCP/Tool Router + LLM): decisión posterior sin re-arquitectura.
+
+## 8. storefrontPlugin — vitrina B2B de presupuesto (diseño simplificado, sep-2026)
+
+**Naturaleza de la página (decisión del usuario)**: NO es un e-commerce de compra. Es
+la **vitrina del inventario para empresas, fábricas y proveedores**: se muestra el
+catálogo con las **unidades disponibles** y la única acción es **"Solicitar
+Presupuesto"**. La página no cobra — el cierre comercial lo hace el vendedor en el ERP.
+
+**Ciclo validado contra la casa ADempiere** (referencia local
+`ve-erp-references/solop-docs/docs/dictionary/web-store/web-store-order.md`,
+"Órdenes desde Tienda Web"): el pedido de la tienda externa llega **automático como
+Orden de Venta**, con un tipo de documento que identifica el canal, el socio de negocio
+se crea o reutiliza, y el operador continúa el ciclo normal (entrega → facturación →
+despacho). Es exactamente el flujo adoptado.
+
+**Flujo de Empresarial**:
+1. **Página pública `/t/[slug]`** (en Empresarial `/[tenant]` es el ERP): catálogo con
+   foto, descripción, precio (opcional — B2B a veces oculta precio) y **stock
+   disponible** (`getProductWarehouseStock` existe), paginado server-side, tema por
+   rubro.
+2. **"Solicitar Presupuesto"** (nombre + teléfono + items/cantidades): la solicitud
+   cae en **Pedidos** como `Order` con `channel: 'web'` en borrador — NO cae en el
+   POS (mostrador presencial que factura al instante, decisión S41.2). Cliente
+   creado/reutilizado por teléfono — alimenta el CRM (tiers, vendedor asignado,
+   comisión) que ya existe.
+3. **El vendedor procesa en Pedidos**: ajusta cantidades y aplica tier de precio
+   (wholesale/vendor/promo vía `effectivePriceForTier`), confirma → factura →
+   auto-envío WhatsApp/email (S43 existente). El pago — Zelle, Binance, pago móvil,
+   transferencia, punto, efectivo (los 7 métodos de `CustomerPayments.method`) — se
+   registra **en el ERP al facturar**, no en la web.
+4. Aviso WhatsApp/email opcional al vendedor cuando entra una solicitud.
+
+**Porte desde storelink-saas (v1)**: la página por tenant con ISR + SEO
+(canonical/OG), las temáticas visuales por rubro, `image-hosts` (whitelist https +
+normalización de enlaces de Drive), la tasa VES cacheada, y el endurecimiento de
+formularios públicos (nonce + honeypot + rate-limit por IP) aplicado al formulario de
+presupuesto. **Fase 2 — solo si el negocio lo pide**: carrito con checkout endurecido
++ `paymentDetails` VE (pago móvil/Zelle/Binance con `pending_verification` →
+verificación humana, engancha con TreasuryPlugin).
+
+**Bultos, cantidades y descuentos (estado real + referencia)**: hoy `'box'` es solo una
+etiqueta de unidad — no existe conversión 1 caja = N unidades ni precio por bulto; los
+tiers de precio (pricingPlugin: wholesale/vendor/promo sobre el precio base retail) son
+por **segmento de cliente**, no por cantidad. **v1**: el comprador pide cantidades
+libres y el vendedor aplica el tier al procesar — cero código nuevo. Si se quiere
+**descuento por volumen visible** en la página ("a partir de 12 unidades: precio
+mayorista"), el patrón del ecosistema es el pricelist de Odoo (regla con cantidad
+mínima → precio/descuento, campo `min_quantity`); la adaptación sería un campo
+`quantityBreaks` en Products — **decisión pendiente**.
+
+**Imágenes por URL — el modelo (en la BD solo se guardan URLs)**:
+- La base de datos **nunca almacena bytes**: los campos guardan URL. La pregunta es
+  únicamente DÓNDE viven los bytes.
+- **v1 — URL-first**: campo `imageUrls` (`text[]`, importable por el
+  importExportPlugin oficial — `Products.image` está excluido del import por su flag
+  `custom`) + whitelist https portada de storelink (`image-hosts`). El tenant trae las
+  URLs de donde ya tenga las fotos (proveedor, su propio host, Drive).
+- **Subida opcional al bucket propio, con reescalado obligatorio**: colección upload
+  pública SEPARADA para fotos de producto (`disablePayloadAccessControl` → la URL del
+  doc apunta directo al bucket; `Media` queda privada — ahí viven comprobantes de
+  pago) + `imageSizes` de Payload (reescalado a ~800px webp al subir). Con imágenes de
+  ~100 KB, 10 GB ≈ ~100.000 fotos: holgado para catálogos B2B con uso moderado, y
+  visible por tenant.
+- **Fase 2 — bucket BYO por tenant** (el patrón con el que el SaaS no asume el coste):
+  el tenant pega credenciales de su propio almacenamiento S3-compatible — **R2 free de
+  Cloudflare: 10 GB + egreso gratis, el estándar para este caso** (o Cloudinary free) —
+  y el sistema sube ALLÁ con el SDK, guardando esa URL. Nuestro bucket queda como
+  fallback, no como almacén del mundo.
+- **Drive solo como origen de importación**, con rehost opcional: el servidor baja la
+  foto del enlace y la sube al destino final, guardando SOLO nuestra URL (nada queda
+  dependiendo de permisos/cuotas de Google). ERPCYA ya recomienda en sus requirements
+  la convención `codigo-nombre-producto.jpg`.
+- **DECISIÓN ABIERTA del usuario**: v1 solo-URL vs v1 con subida al bucket propio
+  (reescalado) + BYO por tenant en fase 2.
+
+**Trabajo real del v1** (~1-1.5 sprints, menor que el trasplante completo):
+1. `/t/[slug]`: catálogo público RSC (Local API) + formulario de presupuesto
+   endurecido → `createOrderAction` con `channel: 'web'`.
+2. Campo `channel` en Orders (enum con valor `web`) para identificar el canal.
+3. Campos inyectados por plugin: `storefrontConfig` en Tenants (enabled, tema,
+   WhatsApp de contacto, mostrar precio/sí/no) + `storefrontVisible`/`imageUrls` en
+   Products.
+4. Port de `image-hosts` + hardening de formulario; fusionar libs duplicadas
+   (exchange-rate, rate-limit, csv) con las utilities existentes.
+5. Widget de WhatsApp en la web (visitante → inbox del ERP) como pieza natural del
+   mismo plugin cuando exista inboxPlugin (§7).
+
+## 9. Orden sugerido de ejecución (después de los 7 PRs aprobados)
 
 1. **TreasuryPlugin v1** — MacroDroid + matching (2-3 sprints, más valor inmediato).
-2. **HrPlugin** — Expediente de Personal (1.5-2 sprints).
-3. **FiscalPlugin v1** — previo: sprint de investigación (formatos 99035/XML reales + contador) (3-4 sprints).
-4. Storefront / Inbox / Fiscal v2+ — según demanda de clientes.
+2. **StorefrontPlugin** — vitrina B2B de presupuesto (§8, ~1-1.5 sprints; puede
+   avanzar en paralelo porque la base existe).
+3. **HrPlugin** — Expediente de Personal (1.5-2 sprints).
+4. **InboxPlugin v1** — previo: PoC de 1 día de Composio (§7) (3 sprints).
+5. **FiscalPlugin v1** — previo: sprint de investigación (formatos 99035/XML reales +
+   contador) (3-4 sprints).
+6. Inbox v2 (Instagram) / Fiscal v2+ / Payroll — según demanda de clientes.

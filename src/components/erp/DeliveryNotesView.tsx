@@ -11,6 +11,7 @@ import {
   FileX2,
   FileText,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { toast } from 'sonner';
 import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
@@ -127,9 +128,7 @@ export function DeliveryNotesView({
         </div>
 
         {notes.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">
-            No hay remisiones registradas. Emítalas desde un pedido confirmado.
-          </p>
+          <EmptyState icon={Truck} title="No hay remisiones registradas." description="Emítalas desde un pedido confirmado." />
         ) : (
           <div className="overflow-x-auto">
             <Table>

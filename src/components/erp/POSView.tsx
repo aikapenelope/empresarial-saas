@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSyncOnKeyChange } from './hooks/useSyncOnKeyChange';
 import Link from 'next/link';
 import {
@@ -15,7 +15,9 @@ import {
   Minus,
   ReceiptText,
   UserRound,
+  ScanBarcode,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { createInvoiceAction, ensureWalkInCustomerAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from './format';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
@@ -34,6 +36,7 @@ interface POSViewProps {
     id: number;
     name: string;
     sku: string;
+    barcode?: string | null;
     priceUSD: number;
     unitOfMeasure: string;
     priceTiers?: Array<{ tier: string; priceUSD: number }> | null;
@@ -48,6 +51,8 @@ interface POSViewProps {
   registers: Array<{ id: number; name: string; code: string; currentStatus: string }>;
   warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
 }
+
+type PosProduct = POSViewProps['products'][number];
 
 interface CartLine {
   productId: number;
@@ -152,6 +157,145 @@ export function POSView({
   );
   const totalVES = totalUSD * rate;
   const totalItems = cart.reduce((acc, it) => acc + it.quantity, 0);
+
+  // ── Escáner de barras / búsqueda rápida (IE-PR2) ───────────────────────────
+  // Los escáneres HID escriben el código y envían Enter: el input auto-focusado
+  // captura la coincidencia EXACTA por barcode/sku (case-insensitive) y agrega
+  // al precio efectivo del tier SIN pasar por el input manual de precio — la
+  // semántica Devin #52 (precio manual = sólo vía select) queda intacta.
+  // barcode NO es único en el catálogo: con 2+ exactas NO se auto-agrega, el
+  // dropdown se restringe a las exactas para que el cajero elija.
+  const scannerRef = useRef<HTMLInputElement>(null);
+  const [scanQuery, setScanQuery] = useState('');
+  const [scanOpen, setScanOpen] = useState(false);
+  // Devin #78 (2ª ronda): reconocimiento de ambigüedad SEPARADO de la
+  // visibilidad del dropdown — mientras el escáner escribe, scanOpen ya está
+  // true, así que el Enter del escáner no puede distinguir "reportar
+  // ambigüedad" de "confirmar elección" fiándose de scanOpen.
+  const [ambiguousPending, setAmbiguousPending] = useState(false);
+  const [scanIndex, setScanIndex] = useState(0);
+  const [amountGiven, setAmountGiven] = useState('');
+
+  const normalizedScan = scanQuery.trim().toLowerCase();
+
+  const exactMatches = useMemo(() => {
+    if (!normalizedScan) return [];
+    return products.filter(
+      (p) =>
+        p.sku.trim().toLowerCase() === normalizedScan ||
+        (p.barcode ?? '').trim().toLowerCase() === normalizedScan,
+    );
+  }, [products, normalizedScan]);
+
+  const scanSuggestions = useMemo(() => {
+    if (!normalizedScan) return [];
+    return products
+      .filter(
+        (p) =>
+          p.name.toLowerCase().includes(normalizedScan) ||
+          p.sku.toLowerCase().includes(normalizedScan) ||
+          (p.barcode ?? '').toLowerCase().includes(normalizedScan),
+      )
+      .slice(0, 8);
+  }, [products, normalizedScan]);
+
+  const scanOptions: PosProduct[] = exactMatches.length > 1 ? exactMatches : scanSuggestions;
+
+  const addProductAtTierPrice = (prod: PosProduct) => {
+    const linePrice = effectivePriceForTier(prod, activeTier);
+    setCart((prev) => {
+      // Mismo producto al mismo precio de tier → el escaneo repetido suma +1
+      // reutilizando la fusión de líneas que ya usaba el select.
+      const existing = prev.find((l) => l.productId === prod.id && l.unitPriceUSD === linePrice);
+      if (existing) {
+        return prev.map((l) => (l === existing ? { ...l, quantity: l.quantity + 1 } : l));
+      }
+      return [
+        ...prev,
+        {
+          productId: prod.id,
+          sku: prod.sku,
+          description: prod.name,
+          quantity: 1,
+          unitPriceUSD: linePrice,
+        },
+      ];
+    });
+    setError(null);
+  };
+
+  const clearScan = () => {
+    setScanQuery('');
+    setScanOpen(false);
+    setScanIndex(0);
+    setAmbiguousPending(false);
+    scannerRef.current?.focus();
+  };
+
+  const handleScanKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (exactMatches.length === 1) {
+        addProductAtTierPrice(exactMatches[0]);
+        clearScan();
+        return;
+      }
+      if (exactMatches.length > 1) {
+        // Ambigüedad (barcode no único). El reconocimiento de la ambigüedad es
+        // INDEPENDIENTE de la visibilidad del dropdown (Devin #78, 2ª ronda):
+        // mientras el escáner escribe los dígitos scanOpen ya está true, así
+        // que el primer Enter NO puede fiarse de scanOpen — usa el estado
+        // `ambiguousPending` (se resetea al cambiar la búsqueda). Primer Enter:
+        // marca la solicitud y muestra las opciones; el cajero elige con ↑↓ y
+        // confirma con un Enter posterior. Sin auto-selección del índice 0.
+        if (!ambiguousPending) {
+          setAmbiguousPending(true);
+          setScanOpen(true);
+          setScanIndex(0);
+          return;
+        }
+        const picked = scanOptions[scanIndex];
+        if (picked) {
+          addProductAtTierPrice(picked);
+          clearScan();
+        }
+        return;
+      }
+      const picked = scanOpen ? scanOptions[scanIndex] : undefined;
+      if (picked) {
+        addProductAtTierPrice(picked);
+        clearScan();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (scanOptions.length === 0) return;
+      setScanOpen(true);
+      setScanIndex((i) => Math.min(i + 1, scanOptions.length - 1));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setScanIndex((i) => Math.max(i - 1, 0));
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      clearScan();
+    }
+  };
+
+  // Vuelto bimonetario (IE-PR2): puro cálculo de UI. El cobro registrado es
+  // SIEMPRE el total de la factura y el arqueo compara lo físico declarado
+  // contra esos totales, así que el "Entregado" sólo ayuda al cajero a dar el
+  // cambio correcto — no viaja al backend ni altera el recibo del turno.
+  const isCashChange =
+    paymentTerms === 'cash' && (cashMethod === 'cash_usd' || cashMethod === 'cash_ves');
+  const givenAmount = Number(amountGiven);
+  const hasGiven = amountGiven.trim() !== '' && Number.isFinite(givenAmount) && givenAmount >= 0;
+  const cashTotal = cashMethod === 'cash_usd' ? totalUSD : totalVES;
+  const changeAmount = givenAmount - cashTotal;
 
   const handleAddLine = () => {
     const prod = products.find((p) => p.sku === selectedSku);
@@ -264,10 +408,46 @@ export function POSView({
       setLastInvoiceNumber((res.data as { invoiceNumber: string }).invoiceNumber);
       setCart([]);
       setQuantity(1);
+      setAmountGiven('');
     } else {
       setError(res.error || 'Error al procesar la venta.');
     }
   };
+
+  // Atajos globales (IE-PR2): F2 enfoca el escáner, F4 dispara "Cobrar y
+  // Facturar". F4 invoca el MISMO handleSubmit del botón mediante ref de
+  // closure fresca — un único camino de validaciones, el atajo no puede
+  // saltarse ninguna guarda. Las F-keys no escriben texto: un listener global
+  // de keydown no interfiere con ningún input.
+  const submitRef = useRef<() => void>(() => {});
+  // Devin #78: F4 con la tecla mantenida (auto-repeat) o durante un envío en
+  // curso volvía a disparar handleSubmit y DUPLICABA la venta. El atajo ignora
+  // key-repeat y respeta el estado loading vía ref (misma técnica que
+  // submitRef, reasignada en efecto).
+  const loadingRef = useRef(false);
+
+  // Closure fresca: la ref se reasigna en cada render (dentro de un efecto, como
+  // exige la regla react-hooks/refs), así F4 ejecuta siempre la versión vigente.
+  useEffect(() => {
+    submitRef.current = handleSubmit;
+    loadingRef.current = loading;
+  });
+
+  useEffect(() => {
+    const onGlobalKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      if (e.key === 'F2') {
+        e.preventDefault();
+        scannerRef.current?.focus();
+      } else if (e.key === 'F4') {
+        e.preventDefault();
+        if (loadingRef.current) return;
+        submitRef.current();
+      }
+    };
+    window.addEventListener('keydown', onGlobalKey);
+    return () => window.removeEventListener('keydown', onGlobalKey);
+  }, []);
 
   return (
     <div className="space-y-5">
@@ -320,6 +500,80 @@ export function POSView({
                 <Badge variant="indigo" size="sm">
                   Tier {activeTier}
                 </Badge>
+              )}
+            </div>
+
+            {/* Escáner / búsqueda rápida (IE-PR2): HID escribe + Enter → exacto barcode|sku agrega al tier */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-medium text-muted-foreground text-[11px]" htmlFor="pos-scan">
+                  <ScanBarcode className="h-3.5 w-3.5 inline mr-1 -mt-0.5" aria-hidden="true" />
+                  Escáner / búsqueda rápida
+                </label>
+                <span className="text-[10px] text-muted-foreground font-mono">F2 enfoca · ESC limpia · F4 cobra</span>
+              </div>
+              <Input
+                ref={scannerRef}
+                id="pos-scan"
+                type="text"
+                autoComplete="off"
+                autoFocus
+                role="combobox"
+                aria-expanded={scanOpen && scanOptions.length > 0}
+                aria-controls="pos-scan-listbox"
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  scanOpen && scanOptions[scanIndex] ? `pos-scan-opt-${scanIndex}` : undefined
+                }
+                value={scanQuery}
+                onChange={(e) => {
+                  setScanQuery(e.target.value);
+                  setScanOpen(e.target.value.trim() !== '');
+                  setScanIndex(0);
+                  setAmbiguousPending(false);
+                }}
+                onKeyDown={handleScanKeyDown}
+                placeholder="Dispara el escáner o escribe nombre / SKU…"
+                className="h-11 text-sm"
+              />
+              {ambiguousPending && exactMatches.length > 1 && (
+                <p className="mt-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400" role="status">
+                  Varios productos comparten este código: elige con ↑↓ y confirma con Enter.
+                </p>
+              )}
+              {scanOpen && scanOptions.length > 0 && (
+                <ul
+                  id="pos-scan-listbox"
+                  role="listbox"
+                  aria-label="Resultados de producto"
+                  className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-64 overflow-y-auto overflow-hidden"
+                >
+                  {scanOptions.map((p, idx) => (
+                    <li
+                      key={p.id}
+                      id={`pos-scan-opt-${idx}`}
+                      role="option"
+                      aria-selected={idx === scanIndex}
+                      className={cn(
+                        'px-3 py-2.5 text-sm cursor-pointer flex items-center justify-between gap-2',
+                        idx === scanIndex ? 'bg-muted' : 'hover:bg-muted/60',
+                      )}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        addProductAtTierPrice(p);
+                        clearScan();
+                      }}
+                      onMouseEnter={() => setScanIndex(idx)}
+                    >
+                      <span className="font-medium text-foreground truncate">{p.name}</span>
+                      <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                        {p.sku}
+                        {p.barcode ? ` · ${p.barcode}` : ''} ·{' '}
+                        {formatUSD(effectivePriceForTier(p, activeTier))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
 
@@ -411,9 +665,7 @@ export function POSView({
             </div>
 
             {cart.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10">
-                Agrega artículos desde el panel superior para comenzar la venta.
-              </p>
+              <EmptyState icon={ShoppingCart} title="El ticket está vacío" description="Agrega artículos desde el panel superior para comenzar la venta." />
             ) : (
               <ul className="divide-y divide-border">
                 {cart.map((l, idx) => (
@@ -619,6 +871,56 @@ export function POSView({
                 <span className="font-mono tabular-nums">{formatVES(totalVES)}</span>
               </div>
             </div>
+
+            {/* Vuelto bimonetario (IE-PR2): puro UI, el cobro registrado sigue siendo el total */}
+            {isCashChange && cart.length > 0 && (
+              <div className="space-y-2">
+                <label className="block font-semibold text-muted-foreground mb-1 text-xs" htmlFor="pos-given">
+                  Entregado por el cliente ({cashMethod === 'cash_usd' ? '$' : 'Bs.'})
+                </label>
+                <Input
+                  id="pos-given"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={amountGiven}
+                  onChange={(e) => setAmountGiven(e.target.value)}
+                  className="h-11 text-right font-mono text-sm"
+                  placeholder={cashMethod === 'cash_usd' ? formatUSD(totalUSD) : formatVES(totalVES)}
+                />
+                {hasGiven && (
+                  changeAmount >= 0 ? (
+                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1">
+                      <div className="flex items-center justify-between text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                        <span>Vuelto {cashMethod === 'cash_usd' ? '(USD)' : '(Bs.)'}</span>
+                        <span className="font-mono tabular-nums">
+                          {cashMethod === 'cash_usd' ? formatUSD(changeAmount) : formatVES(changeAmount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                        <span>Equivale a</span>
+                        <span className="font-mono tabular-nums">
+                          {cashMethod === 'cash_usd'
+                            ? formatVES(changeAmount * rate)
+                            : formatUSD(changeAmount / rate)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-bold text-rose-600 dark:text-rose-400"
+                      role="alert"
+                    >
+                      Faltan{' '}
+                      {cashMethod === 'cash_usd'
+                        ? formatUSD(-changeAmount)
+                        : formatVES(-changeAmount)}{' '}
+                      para cubrir el total.
+                    </div>
+                  )
+                )}
+              </div>
+            )}
 
             <Button
               type="button"

@@ -1,5 +1,6 @@
 import React from 'react';
-import { TrendingUp, History, Landmark, Bitcoin, Scale } from 'lucide-react';
+import { TrendingUp, History, Landmark, Bitcoin, Scale, FileText } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { formatUSD, formatVES } from './format';
 import { KpiCard } from './KpiCard';
 import { ErpPageHeader } from './ErpPageHeader';
@@ -116,7 +117,7 @@ export function RatesView({ tenantId, tenantSlug, tenantName, currencyConfig, da
           <span className="text-xs text-muted-foreground ml-auto">últimos {data.priceHistory.length}</span>
         </div>
         {data.priceHistory.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8">Sin cambios de precio registrados.</p>
+          <EmptyState icon={History} title="Sin cambios de precio registrados." />
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -155,7 +156,7 @@ export function RatesView({ tenantId, tenantSlug, tenantName, currencyConfig, da
           <span className="text-xs text-muted-foreground ml-auto">últimas {data.invoiceHistory.length}</span>
         </div>
         {data.invoiceHistory.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8">Sin facturas emitidas todavía.</p>
+          <EmptyState icon={FileText} title="Sin facturas emitidas todavía." />
         ) : (
           <div className="overflow-x-auto">
             <Table>

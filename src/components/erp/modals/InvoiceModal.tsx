@@ -42,6 +42,9 @@ export function InvoiceModal({
 
   const [customerId, setCustomerId] = useState<number>(customers[0]?.id || 0);
   const [paymentTerms, setPaymentTerms] = useState<'cash' | 'credit'>('cash');
+  // Plan de cuotas a crédito (IE-PR5): 1 = un solo vencimiento; el core genera
+  // N cuotas (primera a creditDays, siguientes cada 30 días, ajuste en la última).
+  const [installmentsCount, setInstallmentsCount] = useState<number>(1);
   const [cashMethod, setCashMethod] = useState<
     'cash_usd' | 'cash_ves' | 'pos_ves' | 'pago_movil' | 'transfer_ves' | 'zelle' | 'binance'
   >('cash_usd');
@@ -135,6 +138,7 @@ export function InvoiceModal({
       paymentTerms,
       cashMethod: paymentTerms === 'cash' ? cashMethod : undefined,
       cashRegisterId: paymentTerms === 'cash' ? cashRegisterId : undefined,
+      installmentsCount: paymentTerms === 'credit' ? installmentsCount : undefined,
       warehouseId,
       items,
       notes,
@@ -194,6 +198,31 @@ export function InvoiceModal({
             </select>
           </div>
         </div>
+
+        {/* Plan de cuotas a crédito (IE-PR5): el core ya lo generaba, el modal nunca lo pedía */}
+        {paymentTerms === 'credit' && (
+          <div>
+            <label className="block font-semibold text-foreground mb-1" htmlFor="invoice-installments">
+              Cuotas (1–12)
+            </label>
+            <select
+              id="invoice-installments"
+              value={installmentsCount}
+              onChange={(e) => setInstallmentsCount(Number(e.target.value))}
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-ring focus:outline-none"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n === 1 ? '1 cuota (un solo vencimiento)' : `${n} cuotas`}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              La primera cuota vence a los días de crédito del cliente y las siguientes cada 30 días;
+              el ajuste de redondeo va a la última. El límite de crédito se valida antes de emitir.
+            </p>
+          </div>
+        )}
 
         {/* Almacén de despacho: de dónde sale el inventario de esta venta */}
         {warehouses.length > 0 && (
