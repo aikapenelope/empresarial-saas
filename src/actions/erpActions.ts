@@ -620,7 +620,11 @@ async function createInvoiceCore(
 
   let subtotalUSD = 0;
   const formattedItems = parsed.items.map((it) => {
-    const totalItem = it.quantity * it.unitPriceUSD;
+    // Redondeo canónico por línea (Devin #81 🟡): DEBE coincidir con
+    // beforeValidateInvoice — el chequeo de crédito y el balance se derivan de
+    // esta representación, no de la suma cruda (200 × $0.005 = $1 crudo pero
+    // $2 persistido con líneas redondeadas al centavo).
+    const totalItem = Number((it.quantity * it.unitPriceUSD).toFixed(2));
     subtotalUSD += totalItem;
     return {
       product: it.productId || undefined,
@@ -632,7 +636,7 @@ async function createInvoiceCore(
     };
   });
 
-  const totalUSD = subtotalUSD;
+  const totalUSD = Number(subtotalUSD.toFixed(2));
 
   // Desglose fiscal (Sprint 42): el IVA se clasifica por el `taxRate` del
   // producto del catálogo (exempt/reduced/general — la alícuota general es
@@ -656,9 +660,9 @@ async function createInvoiceCore(
   }
   const generalRatePct = Number(tenant?.taxConfig?.generalRatePct ?? 16);
   const taxBreakdown = computeInvoiceTax(
-    parsed.items.map((it) => ({
-      totalUSD: it.quantity * it.unitPriceUSD,
-      taxRate: it.productId ? taxRateByProduct.get(it.productId) : 'exempt',
+    formattedItems.map((it) => ({
+      totalUSD: it.totalUSD,
+      taxRate: it.product ? taxRateByProduct.get(it.product) : 'exempt',
     })),
     generalRatePct,
   );
@@ -668,15 +672,27 @@ async function createInvoiceCore(
   // Venta a crédito: validar habilitación y capacidad disponible del cliente
   // (límite − deuda vigente) ANTES de crear el documento. Regla extraída a la
   // utility pura evaluateCreditSale (IE-PR5) — misma semántica vigente desde
-  // el Sprint 10, ahora testeable en CI; el IE-PR6 enchufa aquí las
-  // aprobaciones.
+  // el Sprint 10, ahora testeable en CI.
   if (!isCash) {
+    // Devin #81 🔴: lock de fila del cliente ANTES de leer la deuda — dos
+    // ventas a crédito concurrentes serializan sobre el mismo cliente y la
+    // segunda ve la deuda YA actualizada por la primera (check-then-act
+    // atómico; mismo patrón que lockOrderRow de pedidos).
+    const db = getActiveDb(req);
+    await db.execute(sql`SELECT id FROM customers WHERE id = ${parsed.customerId} FOR UPDATE`);
+    // Re-lectura POST-lock: el snapshot de arriba puede estar obsoleto.
+    const fresh = await payload.findByID({
+      collection: 'customers',
+      id: parsed.customerId,
+      depth: 0,
+      req,
+    });
     const creditCheck = evaluateCreditSale({
-      creditAllowed: customer.creditAllowed,
-      creditLimitUSD: customer.creditLimitUSD,
-      currentDebtUSD: customer.currentDebtUSD,
+      creditAllowed: fresh.creditAllowed,
+      creditLimitUSD: fresh.creditLimitUSD,
+      currentDebtUSD: fresh.currentDebtUSD,
       totalUSD,
-      customerName: customer.name,
+      customerName: fresh.name,
     });
     if (!creditCheck.ok) {
       throw new Error(creditCheck.reason);
