@@ -167,6 +167,34 @@ export const Tenants: CollectionConfig = {
               'Requiere RESEND_API_KEY. La factura viaja como enlace público al emitirla; sin email del cliente no hay envío.',
           },
         },
+        {
+          name: 'alertsEmailEnabled',
+          label: 'Alertas nuevas por email (warning/critical)',
+          type: 'checkbox',
+          defaultValue: false,
+          admin: {
+            description:
+              'Digest anti-spam: un email por ciclo del evaluador con las alertas aún no notificadas. Requiere RESEND_API_KEY y dominio verificado. OFF hasta activarlo aquí.',
+          },
+        },
+        {
+          name: 'alertsEmailRecipients',
+          label: 'Destinatarios de Alertas',
+          type: 'array',
+          labels: { singular: 'Destinatario', plural: 'Destinatarios' },
+          admin: {
+            description:
+              'Si se deja vacío, el digest se envía a los emails de los administradores del inquilino (tenant-admin).',
+          },
+          fields: [
+            {
+              name: 'email',
+              label: 'Email',
+              type: 'email',
+              required: true,
+            },
+          ],
+        },
       ],
     },
   ],

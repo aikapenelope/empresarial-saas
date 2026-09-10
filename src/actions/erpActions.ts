@@ -3429,6 +3429,8 @@ export interface UpdateTenantSettingsInput {
   salesDocumentDefault?: 'nota_entrega' | 'factura';
   autoSendQuoteEmail?: boolean;
   autoSendInvoiceEmail?: boolean;
+  alertsEmailEnabled?: boolean;
+  alertsEmailRecipients?: string[];
 }
 
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
@@ -3454,7 +3456,9 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
           ? { salesConfig: { salesDocumentDefault: parsed.salesDocumentDefault } }
           : {}),
         ...(parsed.autoSendQuoteEmail !== undefined ||
-        parsed.autoSendInvoiceEmail !== undefined
+        parsed.autoSendInvoiceEmail !== undefined ||
+        parsed.alertsEmailEnabled !== undefined ||
+        parsed.alertsEmailRecipients !== undefined
           ? {
               emailConfig: {
                 ...(parsed.autoSendQuoteEmail !== undefined
@@ -3462,6 +3466,16 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
                   : {}),
                 ...(parsed.autoSendInvoiceEmail !== undefined
                   ? { autoSendInvoiceEmail: parsed.autoSendInvoiceEmail }
+                  : {}),
+                ...(parsed.alertsEmailEnabled !== undefined
+                  ? { alertsEmailEnabled: parsed.alertsEmailEnabled }
+                  : {}),
+                ...(parsed.alertsEmailRecipients !== undefined
+                  ? {
+                      alertsEmailRecipients: parsed.alertsEmailRecipients.map((email) => ({
+                        email,
+                      })),
+                    }
                   : {}),
               },
             }

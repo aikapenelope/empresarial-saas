@@ -41,6 +41,16 @@ export const evaluateAlertsTask: TaskConfig<'evaluateAlerts'> = {
         created += result.created;
         updated += result.updated;
         resolved += result.resolved;
+        if (result.created > 0 || result.reactivated > 0) {
+          // Digest anti-spam (IE-PR4): un job por inquilino con alertas nuevas
+          // o reactivadas. El propio job filtra las aún no notificadas, así
+          // que encolar de más es inofensivo.
+          await req.payload.jobs.queue({
+            task: 'notifyAlertsEmail',
+            input: { tenantId: tenant.id },
+            queue: 'alerts',
+          });
+        }
       } catch (error: unknown) {
         // Un inquilino con datos inconsistentes no debe abortar el resto:
         // se registra y se continúa; el reintento del job lo cubrirá.
