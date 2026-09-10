@@ -31,6 +31,22 @@ let cachedRates: CacheEntry | null = null;
 const CACHE_TTL_MS = 120 * 1000; // 120 segundos (2 minutos)
 const REQUEST_TIMEOUT_MS = 5000; // 5 segundos
 
+/**
+ * Rango de plausibilidad de una tasa VES/USD (Sprint R1 · auditoría
+ * 2026-09-10 · P2-S1-02): una fuente comprometida o troll no puede
+ * propagar tasas absurdas a snapshots de documentos. Venezuela histórica:
+ * 1–1,000 Bs/USD; margen 1,000× por encima para sobrevivir devaluaciones
+ * sin maintenance. Fuera de rango → la fuente se descarta (null) y el
+ * resolvedor cae a la siguiente.
+ */
+const MIN_PLAUSIBLE_RATE = 1;
+const MAX_PLAUSIBLE_RATE = 1_000_000;
+
+/** Valida que la tasa sea un número finito dentro del rango plausible. */
+function isPlausibleRate(value: number): boolean {
+  return Number.isFinite(value) && value >= MIN_PLAUSIBLE_RATE && value <= MAX_PLAUSIBLE_RATE;
+}
+
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -61,7 +77,7 @@ async function fetchBCVRate(): Promise<number | null> {
     if (res.ok) {
       const json = (await res.json()) as { promedio?: number; price?: number };
       const val = Number(json?.promedio ?? json?.price);
-      if (!isNaN(val) && val > 0) {
+      if (!isNaN(val) && isPlausibleRate(val)) { // Sprint R1: sanity bounds P2-S1-02
         return Number(val.toFixed(4));
       }
     }
@@ -75,7 +91,7 @@ async function fetchBCVRate(): Promise<number | null> {
     if (res.ok) {
       const json = (await res.json()) as { monitors?: { usd?: { price?: number } } };
       const val = Number(json?.monitors?.usd?.price);
-      if (!isNaN(val) && val > 0) {
+      if (!isNaN(val) && isPlausibleRate(val)) { // Sprint R1: sanity bounds P2-S1-02
         return Number(val.toFixed(4));
       }
     }
@@ -95,7 +111,7 @@ async function fetchParaleloRate(): Promise<number | null> {
     if (res.ok) {
       const json = (await res.json()) as { promedio?: number; price?: number };
       const val = Number(json?.promedio ?? json?.price);
-      if (!isNaN(val) && val > 0) {
+      if (!isNaN(val) && isPlausibleRate(val)) { // Sprint R1: sanity bounds P2-S1-02
         return Number(val.toFixed(4));
       }
     }
