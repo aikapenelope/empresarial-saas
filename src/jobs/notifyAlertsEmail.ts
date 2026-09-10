@@ -114,7 +114,7 @@ export const notifyAlertsEmailTask: TaskConfig<'notifyAlertsEmail'> = {
     const db = getActiveDb(req);
     await db.execute(sql`
       UPDATE alerts
-      SET notified_at = now()
+      SET notified_at = now(), updated_at = now()
       WHERE id IN (${sql.join(
         pending.map((a) => sql`${a.id}`),
         sql`, `,

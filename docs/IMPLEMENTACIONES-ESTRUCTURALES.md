@@ -215,10 +215,15 @@ el queue final).
 4. 🟡 El `down()` de la migración fallaba con filas usando los valores nuevos →
    borra `overdue_installment` y los jobs del digest ANTES de estrechar los enums.
 5. 🟡 "Auditoría Global" desapareció de la paleta (NAV_ITEMS no la tenía) →
-   añadida al catálogo visible para todos los roles (la página no restringe rol);
-   NO va a NAV_GROUPS: el sidebar queda byte-idéntico.
+   añadida al catálogo SOLO para super-admin/tenant-admin: la auditoría es
+   exclusiva de administradores (getAuditLogData revalida con 403 — error de
+   verificación mío pensar que era para todos los roles). NO va a NAV_GROUPS:
+   el sidebar queda byte-idéntico.
 6. 🟥 **Inyección HTML del nombre del inquilino** en el digest → `escapeHtml`
    aplicado a tenant.name y a las líneas de alerta.
+7. 🟡 Estampado atómico extendido: `SET notified_at = now(), updated_at = now()`
+   — el SQL crudo bypassa el mantenimiento de timestamps de Payload y los
+   consumidores que sincronicen por `updatedAt` perderían el cambio.
 
 ### Item 6 — Crédito: enforcement del límite + UI del plan de cuotas
 
