@@ -102,6 +102,23 @@ detal venezolano) y el escáner es infraestructura estándar de bodega.
 **Migración:** no. **Riesgo:** bajo — el flujo select→agregar queda byte-idéntico; todo
 es aditivo.
 
+**Refinamientos decididos al implementar (2026-09-10):**
+1. `barcode` es indexado pero NO único: con 2+ coincidencias exactas el escáner NO
+   auto-agrega — el dropdown se restringe a las exactas para que el cajero elija
+   (regla anti-duplicado; exacta única = agrega directo).
+2. F4 invoca el MISMO `handleSubmit` del botón (ref de closure fresca reasignada por
+   render): un solo camino de validaciones, el atajo no puede saltarse guardas
+   (carrito vacío, turno cerrado, crédito sin cliente…).
+3. Dropdown con semántica combobox/listbox ARIA (`role`, `aria-expanded`,
+   `aria-activedescendant`, opciones con `role="option"`) — el estándar de teclado del
+   sprint.
+4. El escaneo repetido suma cantidad reutilizando la fusión de líneas existente
+   (mismo producto + mismo precio de tier → +1), cero código de acumulación nuevo.
+5. El vuelto aparece sólo con contado en efectivo USD/Bs y carrito con contenido; se
+   limpia al completar la venta. Verificación contable: el cobro registrado es
+   SIEMPRE el total de la factura, así que el arqueo (físico vs. sistema) cuadra sin
+   registrar el vuelto.
+
 ### Item 17 — Command palette extendida
 
 **Estado verificado (`CommandPalette.tsx`, 206 líneas):** busca rutas (solo por nombre) +
