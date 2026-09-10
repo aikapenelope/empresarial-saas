@@ -124,15 +124,87 @@ time-off; **cero cálculos**. `hrPlugin({ enabled })`:
 | **Sprint "retenciones y devoluciones"** | Asignado | Devoluciones: hecha. Retenciones (incluida la retención sobre notas de crédito): vive dentro del plugin fiscal v1/v2 (§2), no como sprint suelto — así no se duplica el motor. |
 | **Contabilidad** | Descartada | Por decisión del usuario. El sustituto útil: tesorería liviana (§3). |
 | **CRM** | Enriquecer un poco | El CRM actual (clientes + cartera) puede sumar barato: notas/actividades en el perfil y último contacto — dentro del pulido continuo, sin módulo nuevo. |
-| **Inbox WhatsApp + Instagram** | Diferido | Requiere WhatsApp Business Cloud API + Instagram Messaging API con verificación Meta por tenant y coste por conversación. Módulo real y vendible — planear después de tesorería/HR, como `inboxPlugin` con Composio u OAuth propio. |
-| **Conexión a página web / e-commerce** | Viable y sencillo, diferido | La arquitectura lo permite barato: storefront público por tenant (como nuestras páginas share) reutilizando REST — catálogo con stock visible + carrito → crea Cotización/Pedido + checkout por WhatsApp. `storefrontPlugin` futuro. No pagos online en v1. |
+| **Inbox WhatsApp + Instagram** | Diferido → **diseño cerrado (§7)** | Módulo real y vendible vía **Composio** (decisión: se usa Composio para todo lo externo). V1 WhatsApp, v2 Instagram. |
+| **Conexión a página web / e-commerce** | Viable y sencillo, diferido → **diseño cerrado (§8)** | `storefrontPlugin`: catálogo público por tenant reutilizando el patrón share + pedidos que caen al módulo Orders existente. Sin pagos online en v1. |
 | **Redes sociales (publicación)** | Descartada | Se desvía del núcleo. |
 | **Composio SDK (login/integraciones)** | Planeado para luego | Capa futura de integraciones gestionadas (OAuth de terceros por tenant vía Composio). Evaluar cuando llegue `inboxPlugin`/`storefrontPlugin`. |
 | **Nómina** | Plugin futuro | Expediente de Personal primero (§4); motor de cálculo solo si el mercado lo exige. |
 
 ---
 
-## 7. Orden sugerido de ejecución (después de los 7 PRs aprobados)
+## 7. inboxPlugin — arquitectura cerrada con Composio (verificada en docs oficiales, sep-2026)
+
+**Decisión de plataforma**: todo lo externo pasa por Composio (OAuth, tokens, refresh,
+delivery de triggers, firma, logs — SOC 2 / ISO 27001). Nada de OpenBSP ni protocolos no
+oficiales de WhatsApp Web: Meta banea números por automatización no oficial, y la vía
+WABA/Cloud API es la única durable para un negocio.
+
+**Modelo Composio verificado** (toolkit WhatsApp: 17 tools + 1 trigger; Instagram con
+OAuth Business Login):
+
+- Enviar: mensaje, plantilla aprobada, media, contactos, botones interactivos (hasta 3),
+  listas (menú), ubicación. Ciclo completo de plantillas (crear/listar/estado/eliminar).
+- Media entrante: "Get media info" entrega URL de descarga → se archiva en nuestro S3.
+- **No existe tool de historial** (ni en la Cloud API de Meta): el corpus de
+  conversaciones se construye guardando cada entrante (trigger → webhook) y cada saliente
+  (lo enviamos nosotros) en `InboxMessages`. Ese registro propio es el insumo de futuro
+  análisis de sentimiento (no hay historia retroactiva en ninguna plataforma).
+- Proxy Execute = llamada cruda a endpoints Meta no envueltos como tool (plano de
+  escape; el diseño no lo requiere).
+- Pricing: free tier por cuenta Composio (100.000 tool calls/mes + hasta 1.000
+  conexiones), luego $0.10/conexión.
+
+**Modelo por inquilino (decisión)**: un **proyecto Composio por tenant** con su propia
+API key. Cada empresa consume su propio free tier y paga su excedente — coste
+infraestructura para nosotros: cero. En Tenants se inyecta el grupo
+`integrations.composio` (`projectId`, `apiKey`, `webhookSecret`), configurado solo por
+super-admin. El cliente jamás ve una credencial.
+
+**Flujo sin saturación**:
+
+1. El proyecto Composio de cada tenant apunta su webhook a
+   `/api/webhooks/composio/[tenantId]` (endpoint raíz, patrón Stripe oficial).
+2. Handler: verifica firma con el `webhookSecret` del tenant
+   (`composio.triggers.parse(body, headers, verifySecret)`), responde 200 en
+   milisegundos y **encola** `processInboxMessage` en la Jobs Queue de Payload. Los
+   reintentos de Composio cubren caídas; Composio gestiona delivery + retries + firma.
+3. El job hace lo pesado: match teléfono→Customer, upsert de `InboxThread`, inserción de
+   `InboxMessages`, descarga de media, enriquecimientos (sentimiento = job opcional
+   futuro). Idempotencia: índice único por ID de mensaje Composio.
+4. Límites Meta por WABA quedan aislados naturalmente (un proyecto por tenant).
+
+**Colecciones del plugin**: `InboxThreads` (tenant, customer, canal whatsapp/instagram,
+último mensaje, unread) e `InboxMessages` (thread, dirección, texto, media ref, IDs
+externos, timestamps). UI: `/erp/inbox` (threads por cliente, composer con ventana 24h +
+plantillas), item de sidebar con badge. Los botones share existentes (wa.me) evolucionan
+a **envío real desde el número del negocio** vía Composio.
+
+**v1 (WhatsApp, ~3 sprints)**: PoC previo de 1 día (WABA demo → trigger firmado →
+webhook). **v2 (+1 sprint)**: Instagram DMs (PoC de trigger de DMs requerido). IA
+(respuestas sugeridas vía MCP/Tool Router + LLM): decisión posterior sin re-arquitectura.
+
+## 8. storefrontPlugin — arquitectura cerrada
+
+El plugin solo inyecta config/campos (patrón oficial); las páginas son capa Next.js:
+
+- **Inyecta en Tenants**: `storefrontConfig` (enabled, hero, WhatsApp de contacto,
+  instrucciones de pago, mostrar stock). **Inyecta en Products**: `storefrontVisible`,
+  `storefrontPriceUSD` (opcional), `imageUrls` (array de URLs).
+- **Catálogo masivo sin módulo nuevo**: el `importExportPlugin` oficial ya corre sobre
+  Products — el cliente descarga su CSV, llena `imageUrls` (URLs de fotos externas) y lo
+  sube. "Excel con imágenes en URL" resuelto con lo que existe.
+- **Páginas públicas** (RSC + Local API, patrón de las páginas share): `/t/[slug]`
+  (catálogo con cards, badge "sin stock") + `/t/[slug]/producto/[id]`. Cacheable, SEO
+  mínimo.
+- **Carrito**: client-side (localStorage) → checkout nombre + teléfono → server action
+  con Zod crea/halla el Customer por teléfono y genera un **Order** con `channel: 'web'`
+  en pendiente — cae al módulo de pedidos existente y opcionalmente dispara el flujo
+  WhatsApp de confirmación.
+- Sin pagos online en v1 (transferencia/pago móvil + WhatsApp para cerrar). Widget de
+  WhatsApp en la web (visitor → inbox del ERP) como pieza natural del mismo plugin.
+- Costo: ~2-3 sprints, construible en paralelo con el inbox.
+
+## 9. Orden sugerido de ejecución (después de los 7 PRs aprobados)
 
 1. **TreasuryPlugin v1** — MacroDroid + matching (2-3 sprints, más valor inmediato).
 2. **HrPlugin** — Expediente de Personal (1.5-2 sprints).
