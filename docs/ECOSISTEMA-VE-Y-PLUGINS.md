@@ -183,30 +183,64 @@ a **envío real desde el número del negocio** vía Composio.
 webhook). **v2 (+1 sprint)**: Instagram DMs (PoC de trigger de DMs requerido). IA
 (respuestas sugeridas vía MCP/Tool Router + LLM): decisión posterior sin re-arquitectura.
 
-## 8. storefrontPlugin — arquitectura cerrada
+## 8. storefrontPlugin — base: storelink-saas (decisión verificada)
 
-El plugin solo inyecta config/campos (patrón oficial); las páginas son capa Next.js:
+**Hallazgo clave**: `storelink-saas` (repo hermano, mismo filesystem del usuario) ya
+tiene construida y endurecida la tienda que Empresarial necesita, **con el mismo stack
+exacto** — Payload 3.88, `@payloadcms/plugin-multi-tenant`, db-postgres, Next.js App
+Router, Resend, S3. No es un diseño desde cero: es un trasplante entre apps hermanas.
 
-- **Inyecta en Tenants**: `storefrontConfig` (enabled, hero, WhatsApp de contacto,
-  instrucciones de pago, mostrar stock). **Inyecta en Products**: `storefrontVisible`,
-  `storefrontPriceUSD` (opcional), `imageUrls` (array de URLs).
-- **Catálogo masivo sin módulo nuevo**: el `importExportPlugin` oficial ya corre sobre
-  Products — el cliente descarga su CSV, llena `imageUrls` (URLs de fotos externas) y lo
-  sube. "Excel con imágenes en URL" resuelto con lo que existe.
-- **Páginas públicas** (RSC + Local API, patrón de las páginas share): `/t/[slug]`
-  (catálogo con cards, badge "sin stock") + `/t/[slug]/producto/[id]`. Cacheable, SEO
-  mínimo.
-- **Carrito**: client-side (localStorage) → checkout nombre + teléfono → server action
-  con Zod crea/halla el Customer por teléfono y genera un **Order** con `channel: 'web'`
-  en pendiente — cae al módulo de pedidos existente y opcionalmente dispara el flujo
-  WhatsApp de confirmación.
-- Sin pagos online en v1 (transferencia/pago móvil + WhatsApp para cerrar). Widget de
-  WhatsApp en la web (visitor → inbox del ERP) como pieza natural del mismo plugin.
-- Costo: ~2-3 sprints, construible en paralelo con el inbox.
+**Lo que storelink-saas ya tiene validado (se porta)**:
+- Storefront por tenant en `/[tenant]` con ISR (revalida 5 min + instantáneo en cada
+  mutación vía `revalidatePath/revalidateTag`), SEO con canonical + OpenGraph, y **9
+  temáticas visuales por rubro** (basic, fashion, food, hardware, moto, editorial,
+  b2b-matrix, vercel-commerce, fluid-pwa) — `src/components/themes/`.
+- Carrito + checkout endurecidos (`storefront-client.tsx` 656 líneas,
+  `cart-drawer.tsx` 1.543): **nonce anti-abuso emitido al render + honeypot +
+  rate-limit por IP (Upstash) + idempotencia de checkout** — semanas de hardening ya
+  resueltas.
+- **Métodos de pago venezolanos en el checkout**: pago móvil (banco + teléfono emisor),
+  Zelle, Binance Pay (TXID/nickname), referencia — con `paymentStatus
+  pending_verification` para verificación manual.
+- **CRM de la tienda**: upsert de cliente por teléfono con deltas SQL (totalOrders,
+  ticket promedio).
+- Catálogo masivo: importación CSV **y sincronización con Google Sheets**.
+- Tasa VES cacheada con tags (`revalidateTag('rate')`), PDF de orden, emails, caché de
+  catálogo, normalización de URLs de imágenes externas (`image-hosts`).
+
+**Lo que NO se porta (decisión de diseño)**: las colecciones Orders/Customers/Products
+de storelink (self-contained para tienda). El checkout se **reescribe contra las
+colecciones ERP de Empresarial**: Customer por teléfono (ya existe) → **Order** con
+`channel: 'web'` en pendiente → ciclo ERP real (confirmar → facturar → kardex).
+
+**Lo que Empresarial YA tiene (no se rehace)**: el punto de venta (la venta), el CRM
+(clientes + cartera + tiers), el catálogo/collections donde se cargan los productos,
+`importExportPlugin` oficial sobre Products (el "Excel con imágenes en URL": descarga
+CSV, llena `imageUrls`, sube), el patrón de páginas share públicas, utilities de tasa de
+cambio y validación.
+
+**Trabajo real del trasplante**:
+1. Montar la tienda en `/t/[slug]` (en Empresarial `/[tenant]` es el ERP) — port de
+   `storefront-client`, `cart-drawer` y las 9 temáticas.
+2. Reescribir el checkout contra colecciones ERP (la única pieza de diseño nuevo).
+3. Inyectar campos por plugin: `storefrontConfig` en Tenants (enabled, tema, hero,
+   WhatsApp de contacto, instrucciones de pago, mostrar stock) y en Products
+   (`storefrontVisible`, `storefrontPriceUSD` opcional, `imageUrls`).
+4. Fusionar libs duplicadas (exchange-rate, rate-limit, csv) con las utilities
+   existentes en vez de duplicarlas.
+5. Sin pagos online en v1 (transferencia/pago móvil + WhatsApp para cerrar). Widget de
+   WhatsApp en la web (visitor → inbox del ERP) como pieza natural del mismo plugin.
+
+**Costo ajustado: ~2 sprints** (bajó de 2-3: parte de código ya aguantado en
+producción), construible en paralelo con el inbox.
 
 ## 9. Orden sugerido de ejecución (después de los 7 PRs aprobados)
 
 1. **TreasuryPlugin v1** — MacroDroid + matching (2-3 sprints, más valor inmediato).
-2. **HrPlugin** — Expediente de Personal (1.5-2 sprints).
-3. **FiscalPlugin v1** — previo: sprint de investigación (formatos 99035/XML reales + contador) (3-4 sprints).
-4. Storefront / Inbox / Fiscal v2+ — según demanda de clientes.
+2. **StorefrontPlugin** — trasplante de storelink-saas (§8, ~2 sprints; puede avanzar en
+   paralelo porque la base existe).
+3. **HrPlugin** — Expediente de Personal (1.5-2 sprints).
+4. **InboxPlugin v1** — previo: PoC de 1 día de Composio (§7) (3 sprints).
+5. **FiscalPlugin v1** — previo: sprint de investigación (formatos 99035/XML reales +
+   contador) (3-4 sprints).
+6. Inbox v2 (Instagram) / Fiscal v2+ / Payroll — según demanda de clientes.
