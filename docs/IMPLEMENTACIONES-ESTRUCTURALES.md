@@ -118,6 +118,13 @@ es aditivo.
    limpia al completar la venta. Verificación contable: el cobro registrado es
    SIEMPRE el total de la factura, así que el arqueo (físico vs. sistema) cuadra sin
    registrar el vuelto.
+6. **Fix Devin #78 (🔴 F4 duplicaba ventas)**: el atajo ignora key-repeat
+   (`e.repeat`) y el estado `loading` (vía `loadingRef` reasignada en efecto,
+   misma técnica de `submitRef`) — mantener F4 o pulsarlo durante un envío ya no
+   dispara una segunda venta.
+7. **Fix Devin #78 (🟡 exactas múltiples inseleccionables)**: el primer Enter abre
+   el dropdown de coincidencias exactas; los siguientes Enters seleccionan la
+   opción resaltada (↑↓ mueven). Antes cada Enter reseteaba el índice a 0.
 
 ### Item 17 — Command palette extendida
 

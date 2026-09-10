@@ -235,9 +235,20 @@ export function POSView({
         return;
       }
       if (exactMatches.length > 1) {
-        // Ambigüedad: abrir el dropdown limitado a las exactas y dejar elegir.
-        setScanOpen(true);
-        setScanIndex(0);
+        // Ambigüedad (Devin #78): el PRIMER Enter abre el dropdown limitado a
+        // las exactas; los siguientes Enters SELECCIONAN la opción resaltada
+        // (↑↓ mueven la selección). Antes cada Enter reseteaba el índice y era
+        // imposible elegir otra opción.
+        if (!scanOpen) {
+          setScanOpen(true);
+          setScanIndex(0);
+          return;
+        }
+        const picked = scanOptions[scanIndex];
+        if (picked) {
+          addProductAtTierPrice(picked);
+          clearScan();
+        }
         return;
       }
       const picked = scanOpen ? scanOptions[scanIndex] : undefined;
@@ -399,20 +410,28 @@ export function POSView({
   // saltarse ninguna guarda. Las F-keys no escriben texto: un listener global
   // de keydown no interfiere con ningún input.
   const submitRef = useRef<() => void>(() => {});
+  // Devin #78: F4 con la tecla mantenida (auto-repeat) o durante un envío en
+  // curso volvía a disparar handleSubmit y DUPLICABA la venta. El atajo ignora
+  // key-repeat y respeta el estado loading vía ref (misma técnica que
+  // submitRef, reasignada en efecto).
+  const loadingRef = useRef(false);
 
   // Closure fresca: la ref se reasigna en cada render (dentro de un efecto, como
   // exige la regla react-hooks/refs), así F4 ejecuta siempre la versión vigente.
   useEffect(() => {
     submitRef.current = handleSubmit;
+    loadingRef.current = loading;
   });
 
   useEffect(() => {
     const onGlobalKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       if (e.key === 'F2') {
         e.preventDefault();
         scannerRef.current?.focus();
       } else if (e.key === 'F4') {
         e.preventDefault();
+        if (loadingRef.current) return;
         submitRef.current();
       }
     };
