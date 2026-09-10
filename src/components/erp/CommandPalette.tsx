@@ -103,13 +103,14 @@ export function CommandPalette({
     return () => window.removeEventListener('keydown', handler);
   }, [setOpen]);
 
-  // Reset síncrono de resultados/índice cuando la búsqueda deja de ser válida:
-  // ajuste de estado en render (patrón oficial de React) en lugar de useEffect.
+  // Reset síncrono de resultados/índice cuando cambia la búsqueda (Devin #81):
+  // los resultados stale NO son seleccionables durante el debounce ni si una
+  // consulta falla — Enter sólo navegará por las rutas locales hasta que llegue
+  // la respuesta vigente. Ajuste de estado en render (patrón oficial de React)
+  // en lugar de useEffect.
   useSyncOnKeyChange(`${open}:${query}`, () => {
     setActiveIndexRaw(0);
-    if (!open || query.trim().length < 2) {
-      setResults(EMPTY_RESULTS);
-    }
+    setResults(EMPTY_RESULTS);
   });
 
   // Búsqueda en vivo (debounce simple) — las rutas se filtran localmente; los
