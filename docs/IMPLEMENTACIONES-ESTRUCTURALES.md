@@ -122,9 +122,12 @@ es aditivo.
    (`e.repeat`) y el estado `loading` (vía `loadingRef` reasignada en efecto,
    misma técnica de `submitRef`) — mantener F4 o pulsarlo durante un envío ya no
    dispara una segunda venta.
-7. **Fix Devin #78 (🟡 exactas múltiples inseleccionables)**: el primer Enter abre
-   el dropdown de coincidencias exactas; los siguientes Enters seleccionan la
-   opción resaltada (↑↓ mueven). Antes cada Enter reseteaba el índice a 0.
+7. **Fix Devin #78 (🟡 exactas múltiples, 2 rondas)**: el reconocimiento de la
+   ambigüedad es INDEPENDIENTE de la visibilidad del dropdown (`ambiguousPending`,
+   reseteado al cambiar la búsqueda) — mientras el escáner escribe los dígitos el
+   dropdown ya está abierto, así que fiarse de `scanOpen` auto-seleccionaba el
+   índice 0. Ahora: primer Enter marca la ambigüedad y muestra las opciones (con
+   aviso visible); el cajero elige con ↑↓ y confirma con un Enter posterior.
 
 ### Item 17 — Command palette extendida
 
