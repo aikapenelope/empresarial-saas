@@ -8,6 +8,7 @@ import {
   Save,
   AlertTriangle,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import {
   completeInventoryCountAction,
   createInventoryCountAction,
@@ -300,7 +301,7 @@ export function CountsView({ tenantId, tenantSlug, counts, warehouses }: CountsV
         </div>
 
         {counts.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8">No hay conteos registrados.</p>
+          <EmptyState icon={ClipboardList} title="No hay conteos registrados." />
         ) : (
           <div className="overflow-x-auto">
             <Table>

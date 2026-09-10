@@ -15,6 +15,7 @@ import {
   Wallet,
   ListChecks,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
@@ -208,14 +209,12 @@ export function InvoicesView({
       {/* Tabla de Facturas */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         {filteredInvoices.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground text-xs space-y-3">
-            <Receipt className="h-8 w-8 mx-auto text-muted-foreground/50" aria-hidden="true" />
-            <p>No se encontraron facturas registradas.</p>
+          <EmptyState icon={Receipt} title="No hay facturas registradas." description="Emite la primera factura o ajusta los filtros de búsqueda.">
             <Button size="sm" onClick={() => setIsInvoiceModalOpen(true)}>
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               Emitir Primera Factura
             </Button>
-          </div>
+          </EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <Table>

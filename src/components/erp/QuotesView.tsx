@@ -10,6 +10,7 @@ import {
   Calendar,
   Zap,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { ErpPageHeader } from './ErpPageHeader';
@@ -148,9 +149,7 @@ export function QuotesView({
         </div>
 
         {quotes.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">
-            No hay cotizaciones registradas todavía.
-          </p>
+          <EmptyState icon={FileText} title="No hay cotizaciones registradas todavía." />
         ) : (
           <div className="overflow-x-auto">
             <Table>
