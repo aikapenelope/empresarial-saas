@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { History } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { Badge } from './Badge';
 import { ErpPageHeader } from './ErpPageHeader';
 import { Button } from '@/components/ui/button';
@@ -172,9 +173,7 @@ export function AuditView({
         </div>
 
         {entries.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-10">
-            No hay eventos de auditoría con esos filtros.
-          </p>
+          <EmptyState icon={History} title="No hay eventos de auditoría con esos filtros." />
         ) : (
           <ol className="divide-y divide-border">
             {entries.map((e) => {

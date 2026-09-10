@@ -16,6 +16,7 @@ import {
   Factory,
   TriangleAlert,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { formatUSD } from './format';
 import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
@@ -214,14 +215,12 @@ export function InventoryView({
         </div>
 
         {filteredProducts.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground text-xs space-y-3">
-            <Package className="h-8 w-8 mx-auto text-muted-foreground/50" aria-hidden="true" />
-            <p>No se encontraron artículos registrados con los filtros seleccionados.</p>
+          <EmptyState icon={Package} title="Sin artículos con los filtros actuales." description="Ajusta los filtros o registra el primer artículo del catálogo.">
             <Button size="sm" onClick={() => setIsProductModalOpen(true)}>
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               Registrar Primer Artículo
             </Button>
-          </div>
+          </EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <Table>

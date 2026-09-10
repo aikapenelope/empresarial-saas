@@ -12,6 +12,7 @@ import {
   TriangleAlert,
   Contact,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { formatUSD, formatVES } from './format';
 import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
@@ -196,14 +197,12 @@ export function CustomersView({
         </div>
 
         {filteredCustomers.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground text-xs space-y-3">
-            <Users className="h-8 w-8 mx-auto text-muted-foreground/50" aria-hidden="true" />
-            <p>No se encontraron clientes registrados en este inquilino.</p>
+          <EmptyState icon={Users} title="No hay clientes registrados." description="Registra el primer cliente de este inquilino.">
             <Button size="sm" onClick={() => setIsCustomerModalOpen(true)}>
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
               Registrar Primer Cliente
             </Button>
-          </div>
+          </EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <Table>

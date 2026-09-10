@@ -16,6 +16,7 @@ import {
   ReceiptText,
   UserRound,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { createInvoiceAction, ensureWalkInCustomerAction } from '@/actions/erpActions';
 import { formatUSD, formatVES } from './format';
 import { effectivePriceForTier } from '@/utilities/priceTiers';
@@ -411,9 +412,7 @@ export function POSView({
             </div>
 
             {cart.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10">
-                Agrega artículos desde el panel superior para comenzar la venta.
-              </p>
+              <EmptyState icon={ShoppingCart} title="El ticket está vacío" description="Agrega artículos desde el panel superior para comenzar la venta." />
             ) : (
               <ul className="divide-y divide-border">
                 {cart.map((l, idx) => (

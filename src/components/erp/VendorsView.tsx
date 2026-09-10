@@ -7,6 +7,7 @@ import {
   Trophy,
   FileSpreadsheet,
 } from 'lucide-react';
+import { EmptyState } from './EmptyState';
 import { formatUSD } from './format';
 import { Badge } from './Badge';
 import { KpiCard } from './KpiCard';
@@ -131,11 +132,13 @@ export function VendorsView({ tenantSlug, data }: VendorsViewProps) {
         </div>
 
         {customers.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8">
-            {isVendor
+          <EmptyState
+            icon={Users}
+            title="No hay clientes asignados"
+            description={isVendor
               ? 'Aún no tienes clientes asignados. Contacta al administrador.'
               : 'No hay clientes con vendedor asignado. Asigna uno desde el admin.'}
-          </p>
+          />
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -179,9 +182,7 @@ export function VendorsView({ tenantSlug, data }: VendorsViewProps) {
         </div>
 
         {filteredRows.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8">
-            No hay facturas con vendedor asociado todavía.
-          </p>
+          <EmptyState icon={Receipt} title="No hay facturas con vendedor asociado todavía." />
         ) : (
           <div className="overflow-x-auto">
             <Table>
