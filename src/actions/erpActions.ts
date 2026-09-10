@@ -16,6 +16,7 @@ import { prepareDocumentEmail } from './shareActions';
 import { after } from 'next/server';
 import { computeInvoiceTax, computeIgtfUSD } from '../utilities/tax';
 import type { CatalogTaxRate } from '../utilities/tax';
+import { evaluateCreditSale } from '../utilities/credit';
 import { getActiveDb } from '@/utilities/inventoryLedger';
 import { assertNoOpenShiftForRegister } from '@/utilities/cashLedger';
 import {
@@ -507,6 +508,7 @@ export interface CreateInvoiceInput {
     | 'binance';
   cashRegisterId?: number;
   warehouseId?: number;
+  installmentsCount?: number;
   items: InvoiceItemInput[];
   notes?: string;
 }
@@ -664,19 +666,20 @@ async function createInvoiceCore(
   const isCash = parsed.paymentTerms === 'cash';
 
   // Venta a crédito: validar habilitación y capacidad disponible del cliente
-  // (límite - deuda vigente) ANTES de crear el documento.
+  // (límite − deuda vigente) ANTES de crear el documento. Regla extraída a la
+  // utility pura evaluateCreditSale (IE-PR5) — misma semántica vigente desde
+  // el Sprint 10, ahora testeable en CI; el IE-PR6 enchufa aquí las
+  // aprobaciones.
   if (!isCash) {
-    if (customer.creditAllowed === false) {
-      throw new Error(
-        `El cliente "${customer.name}" no tiene crédito habilitado. Registre la venta de contado o habilite su línea de crédito.`,
-      );
-    }
-    const availableCreditUSD =
-      (Number(customer.creditLimitUSD) || 0) - (Number(customer.currentDebtUSD) || 0);
-    if (totalUSD > availableCreditUSD + 0.005) {
-      throw new Error(
-        `Límite de crédito insuficiente para "${customer.name}": disponible ${Math.max(availableCreditUSD, 0).toFixed(2)} USD, requerido ${totalUSD.toFixed(2)} USD.`,
-      );
+    const creditCheck = evaluateCreditSale({
+      creditAllowed: customer.creditAllowed,
+      creditLimitUSD: customer.creditLimitUSD,
+      currentDebtUSD: customer.currentDebtUSD,
+      totalUSD,
+      customerName: customer.name,
+    });
+    if (!creditCheck.ok) {
+      throw new Error(creditCheck.reason);
     }
   }
 

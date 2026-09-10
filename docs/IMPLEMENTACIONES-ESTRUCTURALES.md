@@ -195,10 +195,11 @@ el queue final).
 
 ### Item 6 — Crédito: enforcement del límite + UI del plan de cuotas
 
-**Estado verificado:** `creditAllowed`/`creditLimitUSD`/`creditDays` existen en
-Customers (`Customers/index.ts:295–308`) y se persisten desde las actions, pero
-**nada los valida** en `createInvoiceCore`. La UI del detalle de factura muestra
-`dueDate` pero no el plan de cuotas.
+**Estado CORREGIDO al implementar (2026-09-10):** el enforcement del límite **YA EXISTÍA**
+desde el Sprint 10 (commit `1e68279`, inline en `createInvoiceCore`) y el **Plan de
+Cuotas del detalle también ya existía** (`invoices/[id]/page.tsx:196`) — tercer error
+del explorador en este plan (tras los ítems 2 y 6-backend). Lo que este PR añade de
+verdad: utility pura + test CI + select de cuotas en el modal (ver notas al final).
 
 **Diseño:**
 - **`src/utilities/credit.ts`** — función pura `evaluateCreditSale({
@@ -217,6 +218,17 @@ Customers (`Customers/index.ts:295–308`) y se persisten desde las actions, per
 
 **Migración:** no (todos los campos existen). **Riesgo:** contenido — enforcement es
 lectura + throw previo a escrituras; función pura con test unitario para CI.
+
+**Notas de implementación (2026-09-10):**
+1. `evaluateCreditSale` extrajo el enforcement inline con **semántica idéntica a la
+   vigente desde el Sprint 10**, que difiere del diseño original en un punto:
+   **límite 0 + crédito habilitado = BLOQUEA** (tope cero), no "sin tope". Se preserva
+   la regla en producción; cambiarla sería decisión de negocio aparte.
+2. `tests/unit/credit.test.ts` — 6 casos, incluida la semántica del tope cero y la
+   tolerancia de redondeo (0.005 USD).
+3. Select de cuotas 1–12 en `InvoiceModal` a crédito: el core consumía
+   `installmentsCount` desde el Sprint 12 pero el modal nunca lo enviaba (faltaba
+   también en la interface `CreateInvoiceInput`).
 
 ### Item 1 — Aprobaciones con firma
 
