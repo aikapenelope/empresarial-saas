@@ -43,3 +43,9 @@ pnpm-debug.log*
 # Índices locales de herramientas de agentes (codegraph, serena)
 .codegraph/
 .serena/
+
+# Tooling local de agentes IA (no es código de la app):
+# - skills del plugin Vercel instaladas por Claude (solo .agents/skills/payload es compartida)
+# - config local de Claude Code
+.agents/skills/*
+.claude/
