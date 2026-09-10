@@ -6,6 +6,7 @@ import {
 	ClipboardList,
 	ClipboardCheck,
 	FileText,
+	History,
 	LayoutDashboard,
 	Layers,
 	Package,
@@ -49,6 +50,12 @@ const NAV_ITEMS: Array<{
 	{ routeKey: "customers", title: "Clientes & Cartera", segment: "customers", icon: Users, keywords: "clientes crm rif deuda estado de cuenta" },
 	{ routeKey: "alerts", title: "Alertas", segment: "alerts", icon: BellRing, keywords: "alertas notificaciones avisos" },
 	{ routeKey: "approvals", title: "Aprobaciones", segment: "approvals", icon: ClipboardCheck, keywords: "aprobaciones autorizar crédito supervisión pendientes firmar" },
+	// Devin #80: la paleta anterior tenía "Auditoría Global" y al consumir
+	// NAV_ITEMS desapareció. La auditoría es EXCLUSIVA de super-admin/
+	// tenant-admin (getAuditLogData lo revalida con 403), así que la ruta va al
+	// catálogo para esos roles vía ALL_NAV y NO se lista en ROLE_NAV de los
+	// roles operativos, y NO va a NAV_GROUPS: el sidebar no cambia.
+	{ routeKey: "audit", title: "Auditoría Global", segment: "audit", icon: History, keywords: "auditoría bitácora eventos cambios quién registro" },
 	{ routeKey: "receivables", title: "Cartera por Antigüedad", segment: "receivables", icon: Wallet, keywords: "cxc cobranza cartera aging antigüedad vencidos" },
 	{ routeKey: "quotes", title: "Cotizaciones", segment: "quotes", icon: FileText, keywords: "cotizaciones presupuesto cotizar proforma" },
 	{ routeKey: "quotes-quick", title: "Cotización rápida", segment: "quotes/quick", icon: Zap, keywords: "cotización rápida quick quote venta rápida presupuesto express" },
@@ -88,6 +95,8 @@ const NAV_GROUPS: Array<{ label: string; routeKeys: string[] }> = [
 
 /** Visibilidad por rol (UX; la autoridad real es la capa de datos server-side). */
 const ROLE_NAV: Record<string, string[]> = {
+	// 'audit' NO se lista aquí: es exclusiva de super-admin/tenant-admin
+	// (ALL_NAV) — ofrecerla a roles operativos sería un 403 garantizado.
 	vendor: ["dashboard", "alerts", "pos", "quotes", "quotes-quick", "orders", "delivery-notes", "vendors", "customers", "receivables"],
 	cashier: ["dashboard", "alerts", "pos", "invoices", "orders", "delivery-notes", "customers", "cash-registers"],
 	employee: ["dashboard", "alerts", "invoices", "customers", "inventory", "quotes", "quotes-quick", "orders", "delivery-notes"],

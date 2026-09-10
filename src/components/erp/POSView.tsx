@@ -171,6 +171,11 @@ export function POSView({
   const scannerRef = useRef<HTMLInputElement>(null);
   const [scanQuery, setScanQuery] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
+  // Devin #78 (2ª ronda): reconocimiento de ambigüedad SEPARADO de la
+  // visibilidad del dropdown — mientras el escáner escribe, scanOpen ya está
+  // true, así que el Enter del escáner no puede distinguir "reportar
+  // ambigüedad" de "confirmar elección" fiándose de scanOpen.
+  const [ambiguousPending, setAmbiguousPending] = useState(false);
   const [scanIndex, setScanIndex] = useState(0);
   const [amountGiven, setAmountGiven] = useState('');
 
@@ -226,6 +231,7 @@ export function POSView({
     setScanQuery('');
     setScanOpen(false);
     setScanIndex(0);
+    setAmbiguousPending(false);
     scannerRef.current?.focus();
   };
 
@@ -238,9 +244,24 @@ export function POSView({
         return;
       }
       if (exactMatches.length > 1) {
-        // Ambigüedad: abrir el dropdown limitado a las exactas y dejar elegir.
-        setScanOpen(true);
-        setScanIndex(0);
+        // Ambigüedad (barcode no único). El reconocimiento de la ambigüedad es
+        // INDEPENDIENTE de la visibilidad del dropdown (Devin #78, 2ª ronda):
+        // mientras el escáner escribe los dígitos scanOpen ya está true, así
+        // que el primer Enter NO puede fiarse de scanOpen — usa el estado
+        // `ambiguousPending` (se resetea al cambiar la búsqueda). Primer Enter:
+        // marca la solicitud y muestra las opciones; el cajero elige con ↑↓ y
+        // confirma con un Enter posterior. Sin auto-selección del índice 0.
+        if (!ambiguousPending) {
+          setAmbiguousPending(true);
+          setScanOpen(true);
+          setScanIndex(0);
+          return;
+        }
+        const picked = scanOptions[scanIndex];
+        if (picked) {
+          addProductAtTierPrice(picked);
+          clearScan();
+        }
         return;
       }
       const picked = scanOpen ? scanOptions[scanIndex] : undefined;
@@ -334,7 +355,22 @@ export function POSView({
     setCart((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const submitLockRef = useRef(false);
+
+  /** Único camino de cobro (botón y F4): lock SÍNCRONO anti-re-entrada. */
   const handleSubmit = async () => {
+    // Devin #83: el estado `loading` no es un lock — dos F4 en el mismo tick
+    // entraban antes del re-render. La ref se setea/limpia sincrónicamente.
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    try {
+      await runCheckout();
+    } finally {
+      submitLockRef.current = false;
+    }
+  };
+
+  const runCheckout = async () => {
     setError(null);
 
     if (cart.length === 0) {
@@ -412,20 +448,29 @@ export function POSView({
   // saltarse ninguna guarda. Las F-keys no escriben texto: un listener global
   // de keydown no interfiere con ningún input.
   const submitRef = useRef<() => void>(() => {});
+  // Devin #78: F4 con la tecla mantenida (auto-repeat) o durante un envío en
+  // curso volvía a disparar handleSubmit y DUPLICABA la venta. El atajo ignora
+  // key-repeat y respeta el estado loading vía ref (misma técnica que
+  // submitRef, reasignada en efecto).
+  const loadingRef = useRef(false);
 
   // Closure fresca: la ref se reasigna en cada render (dentro de un efecto, como
-  // exige la regla react-hooks/refs), así F4 ejecuta siempre la versión vigente.
+  // exige la regla react-hooks/refs), así F4 ejecuta siempre la versión vigente
+  // — que internamente además lleva el lock síncrono anti-re-entrada.
   useEffect(() => {
     submitRef.current = handleSubmit;
+    loadingRef.current = loading;
   });
 
   useEffect(() => {
     const onGlobalKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       if (e.key === 'F2') {
         e.preventDefault();
         scannerRef.current?.focus();
       } else if (e.key === 'F4') {
         e.preventDefault();
+        if (loadingRef.current) return;
         submitRef.current();
       }
     };
@@ -525,11 +570,17 @@ export function POSView({
                   setScanQuery(e.target.value);
                   setScanOpen(e.target.value.trim() !== '');
                   setScanIndex(0);
+                  setAmbiguousPending(false);
                 }}
                 onKeyDown={handleScanKeyDown}
                 placeholder="Dispara el escáner o escribe nombre / SKU…"
                 className="h-11 text-sm"
               />
+              {ambiguousPending && exactMatches.length > 1 && (
+                <p className="mt-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400" role="status">
+                  Varios productos comparten este código: elige con ↑↓ y confirma con Enter.
+                </p>
+              )}
               {scanOpen && scanOptions.length > 0 && (
                 <ul
                   id="pos-scan-listbox"

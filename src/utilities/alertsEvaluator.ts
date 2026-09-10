@@ -282,7 +282,10 @@ export async function evaluateAlertsForTenant(
           data: {
             message: alert.message,
             severity: alert.severity,
-            ...(isResolved ? { resolvedAt: null } : {}),
+            // Reactivar limpia TAMBIÉN notifiedAt (Devin #80): la condición
+            // reaparecida es una ocurrencia nueva y el digest debe re-enviarla;
+            // si conservara el timestamp previo, notifyAlertsEmail la omitiría.
+            ...(isResolved ? { resolvedAt: null, notifiedAt: null } : {}),
           },
           req,
         });

@@ -38,6 +38,9 @@ export function OrderInvoiceModal({
   const openRegisters = cashRegisters.filter((cr) => cr.currentStatus === 'open');
 
   const [loading, setLoading] = useState(false);
+  // Devin #83: pending_approval es un resultado TERMINAL de este intento — la
+  // solicitud queda en /erp/approvals y el modal avisa sin dejar re-enviar.
+  const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paymentTerms, setPaymentTerms] = useState<'cash' | 'credit'>('cash');
   const [cashMethod, setCashMethod] = useState<string>('cash_usd');
@@ -63,6 +66,15 @@ export function OrderInvoiceModal({
 
     setLoading(false);
 
+    if (res.success && 'status' in res && res.status === 'pending_approval') {
+      // El pedido NO se facturó: sigue confirmado; la solicitud espera en
+      // Aprobaciones. No se cierra el modal como si la factura existiera.
+      setApprovalNotice(
+        `Solicitud #${res.approvalId} enviada a supervisión — la facturación espera autorización.`,
+      );
+      return;
+    }
+
     if (res.success) {
       onClose();
     } else {
@@ -79,6 +91,11 @@ export function OrderInvoiceModal({
       maxWidth="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        {approvalNotice && (
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5 text-amber-300" role="status">
+            {approvalNotice}
+          </div>
+        )}
         {error && (
           <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
             {error}
@@ -176,7 +193,7 @@ export function OrderInvoiceModal({
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || Boolean(approvalNotice)}
             className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

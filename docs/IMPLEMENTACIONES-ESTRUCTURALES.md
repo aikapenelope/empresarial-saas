@@ -118,6 +118,16 @@ es aditivo.
    limpia al completar la venta. Verificación contable: el cobro registrado es
    SIEMPRE el total de la factura, así que el arqueo (físico vs. sistema) cuadra sin
    registrar el vuelto.
+6. **Fix Devin #78 (🔴 F4 duplicaba ventas)**: el atajo ignora key-repeat
+   (`e.repeat`) y el estado `loading` (vía `loadingRef` reasignada en efecto,
+   misma técnica de `submitRef`) — mantener F4 o pulsarlo durante un envío ya no
+   dispara una segunda venta.
+7. **Fix Devin #78 (🟡 exactas múltiples, 2 rondas)**: el reconocimiento de la
+   ambigüedad es INDEPENDIENTE de la visibilidad del dropdown (`ambiguousPending`,
+   reseteado al cambiar la búsqueda) — mientras el escáner escribe los dígitos el
+   dropdown ya está abierto, así que fiarse de `scanOpen` auto-seleccionaba el
+   índice 0. Ahora: primer Enter marca la ambigüedad y muestra las opciones (con
+   aviso visible); el cajero elige con ↑↓ y confirma con un Enter posterior.
 
 ### Item 17 — Command palette extendida
 
@@ -192,6 +202,28 @@ verifica su dominio en Resend.
 **Migración:** sí — `alerts.notifiedAt` + 2 campos en `emailConfig` (quirúrgica,
 idempotente). **Riesgo:** bajo (el evaluador actual no se toca salvo añadir la sección y
 el queue final).
+
+**Reparaciones Devin #80 (2026-09-10, 6 hallazgos):**
+1. 🟡 Alerta REACTIVADA no llegaba por email: conservaba el `notifiedAt` previo y el
+   digest la omitía → la reactivación limpia `resolvedAt` **y** `notifiedAt`.
+2. 🔴 F4 duplicaba ventas (POSView heredado del PR2): resuelto vía merge de la pila
+   (`loadingRef` + `e.repeat` del fix #78).
+3. 🟡 Crash entre `sendEmail` y los N updates duplicaba el digest → estampado
+   **atómico en un solo statement** (`UPDATE alerts ... WHERE id IN (...)`): la
+   ventana de crash queda en un statement; at-least-once deliberado (un duplicado
+   es mejor que perder una alerta crítica) — outbox durable = hardening v2.
+4. 🟡 El `down()` de la migración fallaba con filas usando los valores nuevos →
+   borra `overdue_installment` y los jobs del digest ANTES de estrechar los enums.
+5. 🟡 "Auditoría Global" desapareció de la paleta (NAV_ITEMS no la tenía) →
+   añadida al catálogo SOLO para super-admin/tenant-admin: la auditoría es
+   exclusiva de administradores (getAuditLogData revalida con 403 — error de
+   verificación mío pensar que era para todos los roles). NO va a NAV_GROUPS:
+   el sidebar queda byte-idéntico.
+6. 🟥 **Inyección HTML del nombre del inquilino** en el digest → `escapeHtml`
+   aplicado a tenant.name y a las líneas de alerta.
+7. 🟡 Estampado atómico extendido: `SET notified_at = now(), updated_at = now()`
+   — el SQL crudo bypassa el mantenimiento de timestamps de Payload y los
+   consumidores que sincronicen por `updatedAt` perderían el cambio.
 
 ### Item 6 — Crédito: enforcement del límite + UI del plan de cuotas
 
