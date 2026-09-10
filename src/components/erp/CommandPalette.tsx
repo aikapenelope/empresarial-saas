@@ -3,12 +3,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSyncOnKeyChange } from './hooks/useSyncOnKeyChange';
 import { useRouter } from 'next/navigation';
+import { getPaletteRoutes, type PaletteRoute } from '../app-shared';
 import { Search, CornerDownLeft } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface CommandPaletteProps {
   tenantSlug: string;
   /** Inquilino de la sesión: obligatorio para aislar las búsquedas REST. */
   tenantId: number;
+  /** Rol del usuario en sesión: filtra las rutas EXACTAMENTE como el sidebar
+   *  (misma fuente NAV_ITEMS + ROLE_NAV vía getPaletteRoutes). */
+  userRole?: string | null;
   /** Estado controlado opcional: lo usa el App Shell (botón Buscar del header). */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -17,13 +22,44 @@ interface CommandPaletteProps {
 interface SearchResults {
   clientes: Array<{ id: number; name: string; taxId: string }>;
   productos: Array<{ id: number; name: string; sku: string }>;
+  pedidos: Array<{ id: number; orderNumber: string; status: string }>;
+  cotizaciones: Array<{ id: number; quoteNumber: string; status: string }>;
 }
 
+type PaletteSection = 'nav' | 'pedidos' | 'cotizaciones' | 'clientes' | 'productos';
+
+interface PaletteEntry {
+  key: string;
+  section: PaletteSection;
+  label: string;
+  hint?: string;
+  href: string;
+}
+
+const SECTION_LABELS: Record<PaletteSection, string> = {
+  nav: 'Navegación',
+  pedidos: 'Pedidos por número',
+  cotizaciones: 'Cotizaciones por número',
+  clientes: 'Clientes',
+  productos: 'Productos',
+};
+
+const EMPTY_RESULTS: SearchResults = { clientes: [], productos: [], pedidos: [], cotizaciones: [] };
+
 /**
- * Paleta de comandos ⌘K (Sprint 17): navegación rápida a rutas del ERP y
- * búsqueda en vivo de clientes/productos vía REST (cookie de sesión incluida).
+ * Paleta de comandos ⌘K (Sprint 17 → IE-PR3): navegación por teclado ↑↓/Enter
+ * sobre una lista APLANADA y determinista (rutas del sidebar según rol +
+ * resultados REST en vivo: pedidos/cotizaciones por número, clientes,
+ * productos). Las rutas salen de la MISMA fuente que el sidebar
+ * (NAV_ITEMS + ROLE_NAV vía getPaletteRoutes) con sinónimos `keywords`.
  */
-export function CommandPalette({ tenantSlug, tenantId, open: openProp, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({
+  tenantSlug,
+  tenantId,
+  userRole,
+  open: openProp,
+  onOpenChange,
+}: CommandPaletteProps) {
   const router = useRouter();
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
@@ -38,9 +74,13 @@ export function CommandPalette({ tenantSlug, tenantId, open: openProp, onOpenCha
     [onOpenChange, open],
   );
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResults>({ clientes: [], productos: [] });
+  const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
+  const [activeIndexRaw, setActiveIndexRaw] = useState(0);
 
-  const navRoutes = useMemoRoutes(tenantSlug);
+  const paletteRoutes = React.useMemo(
+    () => getPaletteRoutes(tenantSlug, userRole),
+    [tenantSlug, userRole],
+  );
 
   const navigate = useCallback(
     (href: string) => {
@@ -63,32 +103,41 @@ export function CommandPalette({ tenantSlug, tenantId, open: openProp, onOpenCha
     return () => window.removeEventListener('keydown', handler);
   }, [setOpen]);
 
-  // Reset síncrono de resultados cuando la búsqueda deja de ser válida:
+  // Reset síncrono de resultados/índice cuando la búsqueda deja de ser válida:
   // ajuste de estado en render (patrón oficial de React) en lugar de useEffect.
   useSyncOnKeyChange(`${open}:${query}`, () => {
+    setActiveIndexRaw(0);
     if (!open || query.trim().length < 2) {
-      setResults({ clientes: [], productos: [] });
+      setResults(EMPTY_RESULTS);
     }
   });
 
-  // Búsqueda en vivo (debounce simple)
+  // Búsqueda en vivo (debounce simple) — las rutas se filtran localmente; los
+  // documentos van por REST con el tenant en la consulta (sesión + where
+  // tenant, mismo aislamiento del sprint 17).
   useEffect(() => {
     if (!open || query.trim().length < 2) return;
     const timeout = setTimeout(async () => {
       try {
         const q = encodeURIComponent(query.trim());
-        const [custRes, prodRes] = await Promise.all([
-          // Aislamiento multi-inquilino: el acceso de colección sólo exige
-          // sesión, así que la restricción por tenant va en la consulta.
+        const [custRes, prodRes, ordRes, quoteRes] = await Promise.all([
           fetch(`/api/customers?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include' }),
           fetch(`/api/products?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include' }),
+          fetch(`/api/orders?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[orderNumber][like]=${q}`, { credentials: 'include' }),
+          fetch(`/api/quotes?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[quoteNumber][like]=${q}`, { credentials: 'include' }),
         ]);
-        if (custRes.ok && prodRes.ok) {
-          const cust = await custRes.json();
-          const prod = await prodRes.json();
+        if (custRes.ok && prodRes.ok && ordRes.ok && quoteRes.ok) {
+          const [cust, prod, ord, quote] = (await Promise.all([
+            custRes.json(),
+            prodRes.json(),
+            ordRes.json(),
+            quoteRes.json(),
+          ])) as Array<{ docs?: Array<Record<string, unknown>> }>;
           setResults({
-            clientes: (cust.docs || []).slice(0, 5),
-            productos: (prod.docs || []).slice(0, 5),
+            clientes: (cust.docs || []).slice(0, 5) as SearchResults['clientes'],
+            productos: (prod.docs || []).slice(0, 5) as SearchResults['productos'],
+            pedidos: (ord.docs || []).slice(0, 5) as SearchResults['pedidos'],
+            cotizaciones: (quote.docs || []).slice(0, 5) as SearchResults['cotizaciones'],
           });
         }
       } catch {
@@ -98,11 +147,80 @@ export function CommandPalette({ tenantSlug, tenantId, open: openProp, onOpenCha
     return () => clearTimeout(timeout);
   }, [query, open, tenantId]);
 
-  if (!open) return null;
+  const q = query.trim().toLowerCase();
+  const navMatches: PaletteRoute[] = q
+    ? paletteRoutes.filter(
+        (r) => r.title.toLowerCase().includes(q) || (r.keywords ?? '').includes(q),
+      )
+    : paletteRoutes;
 
-  const filteredRoutes = query.trim()
-    ? navRoutes.filter((r) => r.name.toLowerCase().includes(query.toLowerCase()))
-    : navRoutes;
+  // Lista APLANADA en orden determinista: rutas → pedidos → cotizaciones →
+  // clientes → productos. Un único índice activo gobierna ↑↓/Enter.
+  const entries: PaletteEntry[] = [
+    ...navMatches.map((r) => ({
+      key: `nav:${r.href}`,
+      section: 'nav' as const,
+      label: r.title,
+      href: r.href,
+    })),
+    ...results.pedidos.map((o) => ({
+      key: `pedido:${o.id}`,
+      section: 'pedidos' as const,
+      label: o.orderNumber,
+      hint: o.status,
+      href: `/${tenantSlug}/erp/orders/${o.id}`,
+    })),
+    ...results.cotizaciones.map((c) => ({
+      key: `cot:${c.id}`,
+      section: 'cotizaciones' as const,
+      label: c.quoteNumber,
+      hint: c.status,
+      // No existe página de detalle de cotización (quotes/[id]): el resultado
+      // lleva a la lista, donde la cotización se abre y gestiona.
+      href: `/${tenantSlug}/erp/quotes`,
+    })),
+    ...results.clientes.map((c) => ({
+      key: `cli:${c.id}`,
+      section: 'clientes' as const,
+      label: c.name,
+      hint: c.taxId,
+      href: `/${tenantSlug}/erp/customers/${c.id}`,
+    })),
+    ...results.productos.map((p) => ({
+      key: `prod:${p.id}`,
+      section: 'productos' as const,
+      label: p.name,
+      hint: p.sku,
+      href: `/${tenantSlug}/erp/inventory`,
+    })),
+  ];
+
+  const activeIndex = entries.length === 0 ? 0 : Math.min(activeIndexRaw, entries.length - 1);
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (entries.length > 0) setActiveIndexRaw((i) => (i + 1) % entries.length);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (entries.length > 0) setActiveIndexRaw((i) => (i - 1 + entries.length) % entries.length);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const item = entries[activeIndex];
+      if (item) navigate(item.href);
+    }
+  };
+
+  // Mantiene la opción activa visible al navegar con ↑↓.
+  useEffect(() => {
+    document.getElementById(`palette-opt-${activeIndex}`)?.scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
+
+  if (!open) return null;
 
   return (
     <div
@@ -119,88 +237,52 @@ export function CommandPalette({ tenantSlug, tenantId, open: openProp, onOpenCha
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar rutas, clientes, productos..."
+            onKeyDown={handleInputKeyDown}
+            role="combobox"
+            aria-expanded
+            aria-controls="palette-listbox"
+            aria-autocomplete="list"
+            placeholder="Buscar rutas, PED-…, QUE-…, clientes, productos…"
             className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
           />
           <kbd className="text-[10px] px-1.5 py-0.5 rounded border border-slate-700 text-slate-500">ESC</kbd>
         </div>
 
-        <div className="max-h-[50vh] overflow-y-auto p-2 text-sm">
-          {filteredRoutes.length > 0 && (
-            <p className="px-2 py-1 text-[10px] font-bold uppercase text-slate-500">Navegación</p>
-          )}
-          {filteredRoutes.map((r) => (
-            <button
-              key={r.href}
-              onClick={() => navigate(r.href)}
-              className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200 flex items-center justify-between"
-            >
-              <span>{r.name}</span>
-              <CornerDownLeft className="h-3 w-3 text-slate-600" />
-            </button>
+        <div id="palette-listbox" role="listbox" aria-label="Resultados de la paleta" className="max-h-[50vh] overflow-y-auto p-2 text-sm">
+          {entries.map((item, idx) => (
+            <React.Fragment key={item.key}>
+              {(idx === 0 || entries[idx - 1].section !== item.section) && (
+                <p className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase text-slate-500">
+                  {SECTION_LABELS[item.section]}
+                </p>
+              )}
+              <button
+                id={`palette-opt-${idx}`}
+                role="option"
+                aria-selected={idx === activeIndex}
+                onClick={() => navigate(item.href)}
+                onMouseEnter={() => setActiveIndexRaw(idx)}
+                className={cn(
+                  'w-full text-left px-3 py-2 rounded-lg flex items-center justify-between gap-3',
+                  idx === activeIndex ? 'bg-slate-800 text-white' : 'text-slate-200 hover:bg-slate-800/60',
+                )}
+              >
+                <span className="truncate">
+                  {item.label}
+                  {item.hint && (
+                    <span className="text-slate-500 font-mono text-xs ml-2">({item.hint})</span>
+                  )}
+                </span>
+                {idx === activeIndex && <CornerDownLeft className="h-3 w-3 text-slate-600 shrink-0" />}
+              </button>
+            </React.Fragment>
           ))}
 
-          {results.clientes.length > 0 && (
-            <p className="px-2 py-1 mt-2 text-[10px] font-bold uppercase text-slate-500">Clientes</p>
+          {entries.length === 0 && query.trim().length >= 2 && (
+            <p className="text-slate-500 text-center py-6">Sin resultados para &quot;{query}&quot;.</p>
           )}
-          {results.clientes.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => navigate(`/${tenantSlug}/erp/customers/${c.id}`)}
-              className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200"
-            >
-              {c.name} <span className="text-slate-500 font-mono text-xs">({c.taxId})</span>
-            </button>
-          ))}
-
-          {results.productos.length > 0 && (
-            <p className="px-2 py-1 mt-2 text-[10px] font-bold uppercase text-slate-500">Productos</p>
-          )}
-          {results.productos.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => navigate(`/${tenantSlug}/erp/inventory`)}
-              className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 text-slate-200"
-            >
-              {p.name} <span className="text-slate-500 font-mono text-xs">({p.sku})</span>
-            </button>
-          ))}
-
-          {filteredRoutes.length === 0 &&
-            results.clientes.length === 0 &&
-            results.productos.length === 0 &&
-            query.trim().length >= 2 && (
-              <p className="text-slate-500 text-center py-6">Sin resultados para &quot;{query}&quot;.</p>
-            )}
         </div>
       </div>
     </div>
-  );
-}
-
-function useMemoRoutes(tenantSlug: string) {
-  // Nota: useMemoRoutes sin deps — las rutas son estáticas por montaje.
-  return React.useMemo(
-    () => [
-      { name: 'Dashboard Ejecutivo', href: `/${tenantSlug}/erp` },
-      { name: 'Punto de Venta', href: `/${tenantSlug}/erp/pos` },
-      { name: 'Facturación & Ventas', href: `/${tenantSlug}/erp/invoices` },
-      { name: 'Clientes & Cartera CxC', href: `/${tenantSlug}/erp/customers` },
-      { name: 'Cotizaciones', href: `/${tenantSlug}/erp/quotes` },
-      { name: 'Cotización rápida', href: `/${tenantSlug}/erp/quotes/quick` },
-      { name: 'Pedidos de Venta', href: `/${tenantSlug}/erp/orders` },
-      { name: 'Remisiones', href: `/${tenantSlug}/erp/delivery-notes` },
-      { name: 'Cartera por Antigüedad (CxC)', href: `/${tenantSlug}/erp/receivables` },
-      { name: 'Tasas de Cambio', href: `/${tenantSlug}/erp/rates` },
-      { name: 'Centro de Alertas', href: `/${tenantSlug}/erp/alerts` },
-      { name: 'Auditoría Global', href: `/${tenantSlug}/erp/audit` },
-      { name: 'Catálogo, Stock & BOM', href: `/${tenantSlug}/erp/inventory` },
-      { name: 'Cajas & Arqueos', href: `/${tenantSlug}/erp/cash-registers` },
-      { name: 'Proveedores & CxP', href: `/${tenantSlug}/erp/suppliers` },
-      { name: 'Vendedores & Comisiones', href: `/${tenantSlug}/erp/vendors` },
-      { name: 'Plantillas Industriales', href: `/${tenantSlug}/erp/templates` },
-      { name: 'Ajustes de Empresa', href: `/${tenantSlug}/erp/settings` },
-    ],
-    [tenantSlug],
   );
 }

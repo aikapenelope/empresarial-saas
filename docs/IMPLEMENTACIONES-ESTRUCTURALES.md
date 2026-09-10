@@ -140,6 +140,26 @@ resultado de producto cae en la lista de inventario.
 **Migración:** no. **Riesgo:** medio-bajo (la única pieza delicada es extraer
 `navConfig` sin alterar el sidebar).
 
+**Notas de implementación (2026-09-10):**
+1. El "navConfig compartido" **ya existía**: `src/components/app-shared.tsx` concentra
+   `NAV_ITEMS` + `NAV_GROUPS` + `ROLE_NAV` + `buildNavGroups` (App Shell 4). No se
+   extrajo nada — la paleta consumió la MISMA fuente vía nuevo helper
+   `getPaletteRoutes(tenantSlug, userRole)`. El sidebar quedó byte-idéntico; de paso
+   la paleta ahora muestra TODAS las rutas (le faltaban compras y reportes).
+2. `keywords` se añadió como campo opcional de `NAV_ITEMS` (sinónimos en español por
+   ruta: "pos punto de venta mostrador cobrar", "cxc cobranza cartera aging"…). El
+   filtro compara título **o** keywords.
+3. Lista APLANADA determinista: rutas → pedidos → cotizaciones → clientes →
+   productos; un único índice activo con ↑↓/Enter (envolvente), hover sincroniza,
+   `scrollIntoView` mantiene visible la opción activa; secciones con encabezados.
+4. Pedidos por número vía REST (`where[orderNumber][like]`) → `orders/[id]`.
+   **Cotizaciones**: no existe página `quotes/[id]` (sólo lista + quick) — el
+   resultado por `quoteNumber` lleva a la lista de cotizaciones; una página de
+   detalle de cotización sería un item futuro pequeño.
+5. Lección React: el `useEffect` de `scrollIntoView` vive ANTES del early-return
+   `if (!open)` — los hooks no pueden quedar tras un retorno condicional
+   (regla `react-hooks/rules-of-hooks`).
+
 ### Item 25 — Email de alertas críticas (+ alerta de cuota vencida)
 
 **Estado verificado:** `evaluateAlerts` (cron cada 15 min, queue `alerts`) evalúa 5

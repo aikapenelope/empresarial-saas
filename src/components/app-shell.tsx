@@ -66,6 +66,7 @@ export function AppShell({
 				<CommandPalette
 					tenantSlug={tenantSlug}
 					tenantId={tenantId}
+					userRole={userRole}
 					open={commandOpen}
 					onOpenChange={setCommandOpen}
 				/>
