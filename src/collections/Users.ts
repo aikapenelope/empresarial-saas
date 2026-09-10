@@ -3,7 +3,16 @@ import { getUserTenantIds } from '../utilities/inventoryLedger';
 
 export const Users: CollectionConfig = {
   slug: 'users',
-  auth: true,
+  auth: {
+    // Blindaje de credenciales (Sprint R1 · auditoría 2026-09-10 · P1-S0-01):
+    // CVE de Payload ≤3.88.0 — el access unlock por defecto permite a
+    // cualquier usuario autenticado resetear lockouts AJENOS vía
+    // POST /api/users/unlock/:id. maxLoginAttempts activa el lockout nativo
+    // (las columnas login_attempts/lock_until existen desde init_core) y
+    // access.unlock (abajo) reserva el desbloqueo al super-admin.
+    maxLoginAttempts: 5,
+    lockTime: 30 * 60 * 1000, // 30 minutos de bloqueo tras 5 intentos fallidos
+  },
   labels: {
     singular: 'Usuario',
     plural: 'Usuarios',
@@ -14,6 +23,11 @@ export const Users: CollectionConfig = {
     defaultColumns: ['name', 'email', 'role', 'createdAt'],
   },
   access: {
+    // Mitigación del CVE de account-unlock (Sprint R1): el desbloqueo de
+    // cuentas queda reservado al super-admin (admin panel y REST). El flujo
+    // forgot-password NO pasa por esta operación: los usuarios siguen
+    // pudiendo auto-recuperarse con su email.
+    unlock: ({ req: { user } }) => user?.role === 'super-admin',
     // Aislamiento multi-inquilino: cada usuario sólo ve miembros de SUS
     // inquilinos (emails, roles, membresías); super-admin ve toda la plataforma.
     read: ({ req: { user } }) => {
