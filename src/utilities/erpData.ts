@@ -1546,6 +1546,27 @@ export async function getActiveAlertCount(tenantId: number): Promise<number> {
   return res.totalDocs;
 }
 
+/** Contador de aprobaciones pendientes/aprobadas sin consumir — badge de navegación (IE-PR6). */
+export async function getPendingApprovalsCount(tenantId: number): Promise<number> {
+  const user = await requireErpTenantAccess(tenantId);
+  const payload = await getPayload({ config });
+
+  const res = await payload.find({
+    collection: 'approvals',
+    where: {
+      and: [
+        { tenant: { equals: tenantId } },
+        { status: { in: ['pending', 'approved'] } },
+      ],
+    },
+    limit: 0,
+    depth: 0,
+    user,
+    overrideAccess: false,
+  });
+  return res.totalDocs;
+}
+
 export interface AuditLogPageData {
   docs: Alert[] | never[];
   auditEntries: Array<{

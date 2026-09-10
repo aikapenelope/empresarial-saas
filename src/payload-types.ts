@@ -89,6 +89,7 @@ export interface Config {
     orders: Order;
     'delivery-notes': DeliveryNote;
     alerts: Alert;
+    approvals: Approval;
     'inventory-counts': InventoryCount;
     'price-history': PriceHistory;
     'audit-log': AuditLog;
@@ -131,6 +132,7 @@ export interface Config {
     orders: OrdersSelect<false> | OrdersSelect<true>;
     'delivery-notes': DeliveryNotesSelect<false> | DeliveryNotesSelect<true>;
     alerts: AlertsSelect<false> | AlertsSelect<true>;
+    approvals: ApprovalsSelect<false> | ApprovalsSelect<true>;
     'inventory-counts': InventoryCountsSelect<false> | InventoryCountsSelect<true>;
     'price-history': PriceHistorySelect<false> | PriceHistorySelect<true>;
     'audit-log': AuditLogSelect<false> | AuditLogSelect<true>;
@@ -984,6 +986,53 @@ export interface Alert {
   createdAt: string;
 }
 /**
+ * Solicitudes de autorización (venta a crédito sobre el límite). Se crean desde el punto de venta y se resuelven aquí.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "approvals".
+ */
+export interface Approval {
+  id: number;
+  tenant?: (number | null) | Tenant;
+  type: 'credit_over_limit';
+  status: 'pending' | 'approved' | 'consumed' | 'rejected' | 'expired';
+  requestedBy: number | User;
+  /**
+   * Quien aprobó o rechazó la solicitud.
+   */
+  resolvedBy?: (number | null) | User;
+  /**
+   * Obligatoria al rechazar; opcional al aprobar.
+   */
+  decisionNote?: string | null;
+  /**
+   * Patrón alerts: a qué apunta la solicitud (customers para crédito).
+   */
+  refCollection?: string | null;
+  /**
+   * ID del cliente cuya línea de crédito se excedería.
+   */
+  refId?: number | null;
+  /**
+   * Input parseado completo de la venta (createInvoiceSchema) para re-ejecutarla con revalidación al aprobar.
+   */
+  payload:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * +24 h desde la solicitud; vencida no es consumible (debe solicitarse de nuevo).
+   */
+  expiresAt: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * Conteo físico por almacén con snapshot del sistema y ajustes por Kardex al completar.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1375,6 +1424,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'alerts';
         value: number | Alert;
+      } | null)
+    | ({
+        relationTo: 'approvals';
+        value: number | Approval;
       } | null)
     | ({
         relationTo: 'inventory-counts';
@@ -2105,6 +2158,24 @@ export interface AlertsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "approvals_select".
+ */
+export interface ApprovalsSelect<T extends boolean = true> {
+  tenant?: T;
+  type?: T;
+  status?: T;
+  requestedBy?: T;
+  resolvedBy?: T;
+  decisionNote?: T;
+  refCollection?: T;
+  refId?: T;
+  payload?: T;
+  expiresAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "inventory-counts_select".
  */
 export interface InventoryCountsSelect<T extends boolean = true> {
@@ -2365,6 +2436,7 @@ export interface TaskNotifyAlertsEmail {
     tenantId: number;
   };
   output: {
+    sent: boolean;
     notified: number;
   };
 }
@@ -2400,6 +2472,7 @@ export interface TaskCreateCollectionExport {
       | 'orders'
       | 'delivery-notes'
       | 'alerts'
+      | 'approvals'
       | 'inventory-counts'
       | 'price-history'
       | 'audit-log'

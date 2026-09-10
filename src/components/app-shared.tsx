@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
 	BellRing,
 	ClipboardList,
+	ClipboardCheck,
 	FileText,
 	LayoutDashboard,
 	Layers,
@@ -47,6 +48,7 @@ const NAV_ITEMS: Array<{
 	{ routeKey: "invoices", title: "Facturación & Ventas", segment: "invoices", icon: Receipt, keywords: "facturas facturar ventas cobrar emitir" },
 	{ routeKey: "customers", title: "Clientes & Cartera", segment: "customers", icon: Users, keywords: "clientes crm rif deuda estado de cuenta" },
 	{ routeKey: "alerts", title: "Alertas", segment: "alerts", icon: BellRing, keywords: "alertas notificaciones avisos" },
+	{ routeKey: "approvals", title: "Aprobaciones", segment: "approvals", icon: ClipboardCheck, keywords: "aprobaciones autorizar crédito supervisión pendientes firmar" },
 	{ routeKey: "receivables", title: "Cartera por Antigüedad", segment: "receivables", icon: Wallet, keywords: "cxc cobranza cartera aging antigüedad vencidos" },
 	{ routeKey: "quotes", title: "Cotizaciones", segment: "quotes", icon: FileText, keywords: "cotizaciones presupuesto cotizar proforma" },
 	{ routeKey: "quotes-quick", title: "Cotización rápida", segment: "quotes/quick", icon: Zap, keywords: "cotización rápida quick quote venta rápida presupuesto express" },
@@ -80,7 +82,7 @@ const NAV_GROUPS: Array<{ label: string; routeKeys: string[] }> = [
 	},
 	{
 		label: "Administración",
-		routeKeys: ["alerts", "templates", "settings"],
+		routeKeys: ["alerts", "approvals", "templates", "settings"],
 	},
 ];
 
@@ -91,7 +93,7 @@ const ROLE_NAV: Record<string, string[]> = {
 	employee: ["dashboard", "alerts", "invoices", "customers", "inventory", "quotes", "quotes-quick", "orders", "delivery-notes"],
 	supervisor: [
 		"dashboard", "pos", "invoices", "customers", "inventory", "quotes", "quotes-quick",
-		"orders", "delivery-notes", "alerts", "receivables", "cash-registers", "purchases", "vendors",
+		"orders", "delivery-notes", "alerts", "approvals", "receivables", "cash-registers", "purchases", "vendors",
 	],
 };
 
@@ -126,6 +128,7 @@ export function buildNavGroups(
 	tenantSlug: string,
 	userRole?: string | null,
 	activeAlertCount?: number,
+	approvalsPendingCount?: number,
 ): SidebarNavGroup[] {
 	const allowed = userRole ? ROLE_NAV[userRole] ?? ALL_NAV : ALL_NAV;
 	const byKey = new Map(NAV_ITEMS.map((item) => [item.routeKey, item]));
@@ -142,7 +145,12 @@ export function buildNavGroups(
 					path: `/${tenantSlug}/erp${item.segment ? `/${item.segment}` : ""}`,
 					icon: item.icon,
 					exact: item.exact,
-					badgeCount: key === "alerts" ? activeAlertCount : undefined,
+					badgeCount:
+						key === "alerts"
+							? activeAlertCount
+							: key === "approvals"
+								? approvalsPendingCount
+								: undefined,
 				};
 			})
 			.filter((item): item is SidebarNavItem => item !== null),

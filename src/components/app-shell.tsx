@@ -25,6 +25,7 @@ interface AppShellProps {
 	userName: string;
 	userEmail: string;
 	activeAlertCount?: number;
+	approvalsPendingCount?: number;
 	children: React.ReactNode;
 }
 
@@ -37,6 +38,7 @@ export function AppShell({
 	userName,
 	userEmail,
 	activeAlertCount,
+	approvalsPendingCount,
 	children,
 }: AppShellProps) {
 	const [commandOpen, setCommandOpen] = useState(false);
@@ -47,12 +49,13 @@ export function AppShell({
 		<TooltipProvider>
 		<SidebarProvider>
 			<AppSidebar
-				tenantName={tenantName}
-				tenantSlug={tenantSlug}
-				userRole={userRole}
-				activeAlertCount={activeAlertCount}
-				onOpenCommandPalette={() => setCommandOpen(true)}
-			/>
+					tenantName={tenantName}
+					tenantSlug={tenantSlug}
+					userRole={userRole}
+					activeAlertCount={activeAlertCount}
+					approvalsPendingCount={approvalsPendingCount}
+					onOpenCommandPalette={() => setCommandOpen(true)}
+				/>
 			<SidebarInset className="p-4 md:p-6">
 				<AppHeader
 					tenantName={tenantName}

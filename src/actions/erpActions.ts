@@ -17,6 +17,7 @@ import { after } from 'next/server';
 import { computeInvoiceTax, computeIgtfUSD } from '../utilities/tax';
 import type { CatalogTaxRate } from '../utilities/tax';
 import { evaluateCreditSale } from '../utilities/credit';
+import { approvalExpiry, consumeApproval, isApprovalExpired } from '../utilities/approvals';
 import { getActiveDb } from '@/utilities/inventoryLedger';
 import { assertNoOpenShiftForRegister } from '@/utilities/cashLedger';
 import {
@@ -28,6 +29,8 @@ import {
   createPaymentSchema,
   createProductSchema,
   adjustStockSchema,
+  approveApprovalSchema,
+  rejectApprovalSchema,
   createPurchaseInvoiceSchema,
   createQuoteSchema,
   createSaleReturnSchema,
@@ -85,9 +88,15 @@ async function withTransaction<T>(
   payload: Payload,
   user: User,
   fn: (req: PayloadRequest) => Promise<T>,
+  context?: Record<string, unknown>,
 ): Promise<T> {
   const transactionID = await payload.db.beginTransaction();
-  const req = { payload, user, context: {}, transactionID } as unknown as PayloadRequest;
+  const req = {
+    payload,
+    user,
+    context: context ?? {},
+    transactionID,
+  } as unknown as PayloadRequest;
 
   try {
     const result = await fn(req);
@@ -665,21 +674,45 @@ async function createInvoiceCore(
   const totalVES = totalUSD * rate;
   const isCash = parsed.paymentTerms === 'cash';
 
-  // Venta a crédito: validar habilitación y capacidad disponible del cliente
-  // (límite − deuda vigente) ANTES de crear el documento. Regla extraída a la
-  // utility pura evaluateCreditSale (IE-PR5) — misma semántica vigente desde
-  // el Sprint 10, ahora testeable en CI; el IE-PR6 enchufa aquí las
-  // aprobaciones.
+  // Venta a crédito (IE-PR6): tres caminos en el punto del límite.
+  // 1. req.context.approvalId presente → la solicitud ya fue autorizada: se
+  //    CONSUME atómicamente (single-use) y la venta continúa; el resto de las
+  //    validaciones (stock, precios, kardex) corren igual.
+  // 2. Sin approval y dentro del límite → sigue el flujo normal.
+  // 3. Sin approval y sobre el límite → NO se rechaza: se crea la solicitud
+  //    pendiente con el input parseado completo y se devuelve el marcador
+  //    pending_approval. No hay escrituras previas en la transacción, así que
+  //    el commit deja únicamente la fila de approval.
   if (!isCash) {
-    const creditCheck = evaluateCreditSale({
-      creditAllowed: customer.creditAllowed,
-      creditLimitUSD: customer.creditLimitUSD,
-      currentDebtUSD: customer.currentDebtUSD,
-      totalUSD,
-      customerName: customer.name,
-    });
-    if (!creditCheck.ok) {
-      throw new Error(creditCheck.reason);
+    const approvalId = (req.context as { approvalId?: number } | undefined)?.approvalId;
+    if (approvalId) {
+      await consumeApproval(req, approvalId);
+    } else {
+      const creditCheck = evaluateCreditSale({
+        creditAllowed: customer.creditAllowed,
+        creditLimitUSD: customer.creditLimitUSD,
+        currentDebtUSD: customer.currentDebtUSD,
+        totalUSD,
+        customerName: customer.name,
+      });
+      if (!creditCheck.ok) {
+        const approval = await req.payload.create({
+          collection: 'approvals',
+          data: {
+            tenant: parsed.tenantId,
+            type: 'credit_over_limit',
+            status: 'pending',
+            requestedBy: user.id,
+            refCollection: 'customers',
+            refId: parsed.customerId,
+            payload: parsed,
+            expiresAt: approvalExpiry(),
+          },
+          req,
+          overrideAccess: true,
+        });
+        return { pendingApproval: true as const, approvalId: approval.id as number };
+      }
     }
   }
 
@@ -882,9 +915,22 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
     const user = await requireErpTenantAccess(parsed.tenantId);
     const payload = await getPayload({ config });
 
-    const doc = await withTransaction(payload, user, (req) =>
+    const result = await withTransaction(payload, user, (req) =>
       createInvoiceCore(payload, user, parsed, req),
     );
+
+    if ('pendingApproval' in result) {
+      // IE-PR6: la venta excedió el límite de crédito — quedó como solicitud
+      // pendiente de autorización. No hay factura ni auto-envío.
+      revalidatePath(`/${parsed.tenantSlug}/erp/approvals`);
+      return {
+        success: true,
+        status: 'pending_approval' as const,
+        approvalId: result.approvalId,
+      };
+    }
+
+    const doc = result;
 
     // Auto-envío de factura (Sprint 43.3): enlace público por email al
     // emitirla, si el inquilino lo tiene activo y el cliente tiene email.
@@ -903,6 +949,138 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
     return { success: true, data: doc };
   } catch (error: unknown) {
     return { success: false, error: toSafeActionError(error, 'No se pudo emitir la factura.') };
+  }
+}
+
+// ==========================================
+// 3a-bis. APROBACIONES (IE-PR6) — venta a crédito sobre el límite
+// ==========================================
+export interface ApproveApprovalInput {
+  tenantId: number;
+  tenantSlug: string;
+  approvalId: number;
+  decisionNote?: string;
+}
+
+/** Sólo estos roles autorizan o rechazan solicitudes (super-admin incluido). */
+const APPROVAL_RESOLVER_ROLES: Array<User['role']> = [
+  'super-admin',
+  'tenant-admin',
+  'supervisor',
+];
+
+export async function approveApprovalAction(input: ApproveApprovalInput) {
+  try {
+    const parsed = approveApprovalSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, APPROVAL_RESOLVER_ROLES);
+    const payload = await getPayload({ config });
+
+    const approval = await payload.findByID({
+      collection: 'approvals',
+      id: parsed.approvalId,
+      depth: 0,
+    });
+    if (!approval || Number(approval.tenant) !== parsed.tenantId) {
+      throw new Error('La aprobación no pertenece a este inquilino.');
+    }
+    if (approval.status === 'consumed') {
+      throw new Error('La aprobación ya fue consumida por una venta exitosa.');
+    }
+    if (approval.status === 'rejected') {
+      throw new Error('La aprobación fue rechazada: el vendedor debe solicitar una nueva.');
+    }
+    if (isApprovalExpired(approval.expiresAt)) {
+      await payload.update({
+        collection: 'approvals',
+        id: approval.id,
+        data: { status: 'expired' },
+        overrideAccess: true,
+      });
+      throw new Error('La aprobación expiró (24 h): el vendedor debe solicitar una nueva.');
+    }
+
+    // Firma de la decisión. Un reintento tras un fallo de re-ejecución llega
+    // con status 'approved' y re-intenta la venta directamente.
+    if (approval.status === 'pending') {
+      await payload.update({
+        collection: 'approvals',
+        id: approval.id,
+        data: {
+          status: 'approved',
+          resolvedBy: user.id,
+          decisionNote: parsed.decisionNote || undefined,
+        },
+        overrideAccess: true,
+      });
+    }
+
+    // Re-ejecución con el input guardado: createInvoiceCore revalida TODO
+    // (stock, precios, kardex, cliente) de forma natural. El consumo es
+    // transaccional: sólo queda consumed si la venta completa tuvo éxito.
+    const invoiceParsed = createInvoiceSchema.parse(approval.payload);
+    const result = await withTransaction(
+      payload,
+      user,
+      (req) => createInvoiceCore(payload, user, invoiceParsed, req),
+      { approvalId: approval.id },
+    );
+    if ('pendingApproval' in result) {
+      throw new Error('La venta re-ejecutada volvió a requerir aprobación (input inconsistente).');
+    }
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/approvals`);
+    revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
+    revalidatePath(`/${parsed.tenantSlug}/erp`);
+
+    return {
+      success: true,
+      data: { invoiceId: result.id, invoiceNumber: result.invoiceNumber },
+    };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo aprobar la solicitud.'),
+    };
+  }
+}
+
+export async function rejectApprovalAction(input: ApproveApprovalInput) {
+  try {
+    const parsed = rejectApprovalSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, APPROVAL_RESOLVER_ROLES);
+    const payload = await getPayload({ config });
+
+    const approval = await payload.findByID({
+      collection: 'approvals',
+      id: parsed.approvalId,
+      depth: 0,
+    });
+    if (!approval || Number(approval.tenant) !== parsed.tenantId) {
+      throw new Error('La aprobación no pertenece a este inquilino.');
+    }
+    if (approval.status === 'consumed') {
+      throw new Error('La aprobación ya fue consumida por una venta exitosa.');
+    }
+
+    await payload.update({
+      collection: 'approvals',
+      id: approval.id,
+      data: {
+        status: 'rejected',
+        resolvedBy: user.id,
+        decisionNote: parsed.decisionNote,
+      },
+      overrideAccess: true,
+    });
+
+    revalidatePath(`/${parsed.tenantSlug}/erp/approvals`);
+
+    return { success: true };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: toSafeActionError(error, 'No se pudo rechazar la solicitud.'),
+    };
   }
 }
 
@@ -1119,6 +1297,12 @@ export async function convertQuoteToInvoiceAction(input: ConvertQuoteInput) {
 
       const invoice = await createInvoiceCore(payload, user, invoiceParsed, req);
 
+      if ('pendingApproval' in invoice) {
+        // IE-PR6: la conversión excede el límite — la cotización NO se marca
+        // converted (no hay factura) y la solicitud queda activa.
+        return { pendingApproval: true as const, approvalId: invoice.approvalId };
+      }
+
       await payload.update({
         collection: 'quotes',
         id: quote.id,
@@ -1131,6 +1315,15 @@ export async function convertQuoteToInvoiceAction(input: ConvertQuoteInput) {
 
       return invoice;
     });
+
+    if ('pendingApproval' in doc) {
+      revalidatePath(`/${parsed.tenantSlug}/erp/approvals`);
+      return {
+        success: true,
+        status: 'pending_approval' as const,
+        approvalId: doc.approvalId,
+      };
+    }
 
     revalidatePath(`/${parsed.tenantSlug}/erp/quotes`);
     await maybeAutoSendInvoice(payload, parsed.tenantId, Number(doc.customer), {
@@ -1519,6 +1712,12 @@ export async function issueInvoiceFromOrderAction(input: {
 
       const invoice = await createInvoiceCore(payload, user, invoiceParsed, req);
 
+      if ('pendingApproval' in invoice) {
+        // IE-PR6: la facturación del pedido excede el límite — el pedido NO se
+        // marca invoiced (no hay factura) y la solicitud queda activa.
+        return { pendingApproval: true as const, approvalId: invoice.approvalId };
+      }
+
       await payload.update({
         collection: 'orders',
         id: order.id,
@@ -1531,6 +1730,15 @@ export async function issueInvoiceFromOrderAction(input: {
 
       return invoice;
     });
+
+    if ('pendingApproval' in doc) {
+      revalidatePath(`/${parsed.tenantSlug}/erp/approvals`);
+      return {
+        success: true,
+        status: 'pending_approval' as const,
+        approvalId: doc.approvalId,
+      };
+    }
 
     revalidatePath(`/${parsed.tenantSlug}/erp/orders`);
     await maybeAutoSendInvoice(payload, parsed.tenantId, Number(doc.customer), {

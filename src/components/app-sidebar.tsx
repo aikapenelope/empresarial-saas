@@ -22,6 +22,7 @@ interface AppSidebarProps {
 	tenantSlug: string;
 	userRole?: string | null;
 	activeAlertCount?: number;
+	approvalsPendingCount?: number;
 	onOpenCommandPalette: () => void;
 }
 
@@ -30,9 +31,10 @@ export function AppSidebar({
 	tenantSlug,
 	userRole,
 	activeAlertCount,
+	approvalsPendingCount,
 	onOpenCommandPalette,
 }: AppSidebarProps) {
-	const navGroups = buildNavGroups(tenantSlug, userRole, activeAlertCount);
+	const navGroups = buildNavGroups(tenantSlug, userRole, activeAlertCount, approvalsPendingCount);
 	// FIX móvil: cerrar el drawer al elegir cualquier destino del sidebar.
 	const { isMobile, setOpenMobile } = useSidebar();
 	const closeMobile = () => {

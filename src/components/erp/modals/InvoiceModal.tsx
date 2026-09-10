@@ -39,6 +39,8 @@ export function InvoiceModal({
 }: InvoiceModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // IE-PR6: crédito sobre el límite → solicitud enviada a supervisión (no error).
+  const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
 
   const [customerId, setCustomerId] = useState<number>(customers[0]?.id || 0);
   const [paymentTerms, setPaymentTerms] = useState<'cash' | 'credit'>('cash');
@@ -130,6 +132,7 @@ export function InvoiceModal({
 
     setLoading(true);
     setError(null);
+    setApprovalNotice(null);
 
     const res = await createInvoiceAction({
       tenantId,
@@ -145,6 +148,13 @@ export function InvoiceModal({
     });
 
     setLoading(false);
+
+    if (res.success && 'status' in res && res.status === 'pending_approval') {
+      setApprovalNotice(
+        `Solicitud #${res.approvalId} enviada a supervisión — la venta espera autorización en "Aprobaciones".`,
+      );
+      return;
+    }
 
     if (res.success) {
       setNotes('');
@@ -163,11 +173,17 @@ export function InvoiceModal({
       maxWidth="2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-        {error && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
-            {error}
-          </div>
-        )}
+            {error && (
+              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-xs text-rose-600 dark:text-rose-400" role="alert">
+                {error}
+              </div>
+            )}
+
+            {approvalNotice && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-600 dark:text-amber-400" role="status">
+                {approvalNotice}
+              </div>
+            )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
