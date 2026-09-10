@@ -62,7 +62,10 @@ import {
   updateQuoteStatusSchema,
   updateTenantSettingsSchema,
 } from '@/utilities/erpValidation';
-import { importStockToWarehouse } from '@/utilities/inventoryImport';
+import {
+  importStockToWarehouse,
+  planStockImport,
+} from '@/utilities/inventoryImport';
 import {
   completeInventoryCount,
   snapshotWarehouseStock,
@@ -303,6 +306,37 @@ export interface ImportStockInput {
  * Toda la importación corre en UNA transacción: válido se crea, inválido se
  * rechaza por fila con mensaje; el stock resultante nunca puede quedar negativo.
  */
+/**
+ * Dry-run read-only de la carga masiva (IE-PR7): corre el planeador completo
+ * (validaciones + stock vigente por SKU) SIN locks NI escrituras. El wizard lo
+ * usa en el paso 3; el commit real (importStockAction) recalcula el plan en el
+ * momento, así que el resultado aplicado siempre refleja el stock al confirmar.
+ */
+export async function previewStockImportAction(input: ImportStockInput) {
+  try {
+    const parsed = importStockSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const plan = await withTransaction(payload, user, (req) =>
+      planStockImport({
+        tenantId: parsed.tenantId,
+        warehouseId: parsed.warehouseId,
+        mode: parsed.mode,
+        rows: parsed.rows,
+        req,
+      }),
+    );
+
+    return { success: true as const, data: plan };
+  } catch (error: unknown) {
+    return {
+      success: false as const,
+      error: toSafeActionError(error, 'No se pudo previsualizar la importación.'),
+    };
+  }
+}
+
 export async function importStockAction(input: ImportStockInput) {
   try {
     const parsed = importStockSchema.parse(input);

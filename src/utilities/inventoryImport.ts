@@ -24,6 +24,66 @@ export interface StockImportSummary {
   results: StockImportRowResult[];
 }
 
+/** Agregado neto de un SKU dentro de una importación. */
+export interface StockRowAggregate {
+  sku: string;
+  delta: number;
+  rowNumbers: number[];
+  /** Modo `set`: existencia absoluta pedida (la última fila manda). */
+  setTarget?: number;
+}
+
+export interface AggregateResult {
+  aggregates: Map<string, StockRowAggregate>;
+  rowErrors: StockImportRowResult[];
+}
+
+/**
+ * Agregación PURA de filas (IE-PR7): consolida por SKU y valida lo validable
+ * sin tocar la BD — vacíos, no numéricos, delta cero en `adjust`. Testeable en
+ * CI. Extraída byte-idéntica de la fase de agregación que corrió en producción
+ * desde el Sprint 22 (mismos mensajes, mismo orden, `rowNumber` = fila CSV
+ * 1-based con encabezado).
+ */
+export function aggregateStockRows(rows: StockImportRow[], mode: StockImportMode): AggregateResult {
+  const aggregates = new Map<string, StockRowAggregate>();
+  const rowErrors: StockImportRowResult[] = [];
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2; // +2: encabezado CSV 1-based
+    const sku = row.sku.trim();
+
+    if (!sku) {
+      rowErrors.push({ sku: row.sku, status: 'error', message: 'SKU vacío.' });
+      return;
+    }
+    if (!Number.isFinite(row.quantity)) {
+      rowErrors.push({ sku, status: 'error', message: 'Cantidad no numérica.' });
+      return;
+    }
+
+    let aggregate = aggregates.get(sku);
+    if (!aggregate) {
+      aggregate = { sku, delta: 0, rowNumbers: [] };
+      aggregates.set(sku, aggregate);
+    }
+
+    if (mode === 'adjust') {
+      if (row.quantity === 0) {
+        rowErrors.push({ sku, status: 'error', message: 'El delta no puede ser cero.' });
+        return;
+      }
+      aggregate.delta += row.quantity;
+    } else {
+      // 'set': la última fila manda para ese SKU
+      aggregate.setTarget = row.quantity;
+    }
+    aggregate.rowNumbers.push(rowNumber);
+  });
+
+  return { aggregates, rowErrors };
+}
+
 /**
  * Carga masiva de existencias por Kardex (única vía legítima para alterar stock).
  *
@@ -37,8 +97,49 @@ export interface StockImportSummary {
  * Toda fila cuyo resultado dejaría el almacén con stock negativo se rechaza con error
  * por fila; las válidas se crean en la misma transacción del llamador (req propagado)
  * y el hook `afterChangeStockMovement` recalcula `currentStock` por producto.
+ *
+ * IE-PR7 (wizard con dry-run): el flujo se divide en PLANEADOR + EJECUCIÓN.
+ * `planStockImport` hace TODAS las validaciones/lecturas SIN escribir (locks ni
+ * movimientos) y devuelve el plan para el dry-run del wizard. El commit
+ * (`importStockToWarehouse`) conserva el ORDEN EXACTO del original: locks de
+ * saldo → lectura de stock → decisiones → creación, todo dentro de la
+ * transacción del llamador — y el plan se recalcula en el momento, así que el
+ * resultado aplicado siempre refleja el stock vigente al confirmar.
  */
-export async function importStockToWarehouse({
+
+/** Movimiento propuesto por el planeador, listo para crearse en el Kardex. */
+export interface PlannedStockMovement {
+  sku: string;
+  productId: number;
+  movementType: 'adjustment_positive' | 'adjustment_negative';
+  quantity: number;
+  unitCostUSD: number;
+  totalCostUSD: number;
+  reason: string;
+}
+
+export interface StockImportPlan {
+  warehouse: { id: number; name: string; code: string };
+  /** Errores por fila (orden de fila) + resultado por SKU agregado (orden del Map). */
+  results: StockImportRowResult[];
+  /** Movimientos que se crearían — vacío si nada que escribir. */
+  movements: PlannedStockMovement[];
+  /** IDs de producto en el MISMO orden que los agregados (para el orden de locks). */
+  productIds: number[];
+  rowsProcessed: number;
+}
+
+/** Fase 1 (común a preview y commit): almacén + catálogo + agregación pura. */
+interface ImportBlueprint {
+  warehouse: Warehouse;
+  productsBySku: Map<string, Product>;
+  aggregates: Map<string, StockRowAggregate>;
+  /** Sólo errores por fila en orden de fila; los resultados por SKU llegan después. */
+  results: StockImportRowResult[];
+  rowsProcessed: number;
+}
+
+async function buildImportBlueprint({
   tenantId,
   warehouseId,
   mode,
@@ -50,9 +151,7 @@ export async function importStockToWarehouse({
   mode: StockImportMode;
   rows: StockImportRow[];
   req: PayloadRequest;
-}): Promise<StockImportSummary> {
-  const results: StockImportRowResult[] = [];
-
+}): Promise<ImportBlueprint> {
   // 1. Validar almacén del inquilino y activo
   const warehouse = (await req.payload.findByID({
     collection: 'warehouses',
@@ -96,78 +195,36 @@ export async function importStockToWarehouse({
     }
   }
 
-  // 3. Agregar filas por SKU según el modo
-  interface Aggregate {
-    sku: string;
-    delta: number;
-    rowNumbers: number[];
-    setTarget?: number;
-  }
-  const aggregates = new Map<string, Aggregate>();
+  // 3. Agregar filas por SKU según el modo (función pura, IE-PR7)
+  const { aggregates, rowErrors } = aggregateStockRows(rows, mode);
 
-  rows.forEach((row, index) => {
-    const rowNumber = index + 2; // +2: encabezado CSV 1-based
-    const sku = row.sku.trim();
+  return {
+    warehouse,
+    productsBySku,
+    aggregates,
+    results: [...rowErrors],
+    rowsProcessed: rows.length,
+  };
+}
 
-    if (!sku) {
-      results.push({ sku: row.sku, status: 'error', message: 'SKU vacío.' });
-      return;
-    }
-    if (!Number.isFinite(row.quantity)) {
-      results.push({ sku, status: 'error', message: 'Cantidad no numérica.' });
-      return;
-    }
-
-    const product = productsBySku.get(sku);
-    if (!product) {
-      results.push({ sku, status: 'error', message: 'SKU no encontrado en el catálogo del inquilino.' });
-      return;
-    }
-    if (product.productType === 'service' || product.trackInventory === false) {
-      results.push({ sku, status: 'error', message: `"${product.name}" no controla existencias (servicio o sin kardex).` });
-      return;
-    }
-    if (String(extractId(product.tenant)) !== String(tenantId)) {
-      results.push({ sku, status: 'error', message: 'Violación de multi-inquilino en el producto.' });
-      return;
-    }
-
-    let aggregate = aggregates.get(sku);
-    if (!aggregate) {
-      aggregate = { sku, delta: 0, rowNumbers: [] };
-      aggregates.set(sku, aggregate);
-    }
-
-    if (mode === 'adjust') {
-      if (row.quantity === 0) {
-        results.push({ sku, status: 'error', message: 'El delta no puede ser cero.' });
-        return;
-      }
-      aggregate.delta += row.quantity;
-    } else {
-      // 'set': la última fila manda para ese SKU
-      aggregate.setTarget = row.quantity;
-    }
-    aggregate.rowNumbers.push(rowNumber);
-  });
-
-  // 4. Validar saldos y crear movimientos (misma transacción)
-  let movementsCreated = 0;
-
-  // Orden global de locks: todos los advisory locks de saldo ANTES de cualquier
-  // row lock de producto (recalculateProductTotalStock del afterChange).
-  await lockStockBalances(
-    [...aggregates.values()]
-      .map((aggregate) => ({
-        productId: productsBySku.get(aggregate.sku)?.id,
-        warehouseId,
-      }))
-      .filter((pair) => Boolean(pair.productId)),
+/**
+ * Fase 2: lee el stock vigente por SKU agregado y decide — sin cambio neto
+ * (ok/none), stock insuficiente (error) o movimiento propuesto. Empuja los
+ * resultados por SKU a `blueprint.results` (después de los errores por fila,
+ * mismo orden del flujo original).
+ */
+async function decideStockMovements(
+  blueprint: ImportBlueprint,
+  {
+    warehouseId,
+    mode,
     req,
-  );
+  }: { warehouseId: number; mode: StockImportMode; req: PayloadRequest },
+): Promise<PlannedStockMovement[]> {
+  const movements: PlannedStockMovement[] = [];
 
-  for (const aggregate of aggregates.values()) {
-    const product = productsBySku.get(aggregate.sku);
+  for (const aggregate of blueprint.aggregates.values()) {
+    const product = blueprint.productsBySku.get(aggregate.sku);
     if (!product) continue;
 
     const currentStock = await getProductWarehouseStock(product.id, warehouseId, req);
@@ -181,7 +238,7 @@ export async function importStockToWarehouse({
     }
 
     if (delta === 0) {
-      results.push({
+      blueprint.results.push({
         sku: aggregate.sku,
         status: 'ok',
         movement: 'none',
@@ -193,33 +250,132 @@ export async function importStockToWarehouse({
 
     const finalStock = Number((currentStock + delta).toFixed(4));
     if (finalStock < -0.0001) {
-      results.push({
+      blueprint.results.push({
         sku: aggregate.sku,
         status: 'error',
-        message: `Stock insuficiente en "${warehouse.name}": disponible ${currentStock}, resultado sería ${finalStock}.`,
+        message: `Stock insuficiente en "${blueprint.warehouse.name}": disponible ${currentStock}, resultado sería ${finalStock}.`,
       });
       continue;
     }
 
     const isEntry = delta > 0;
+    movements.push({
+      sku: aggregate.sku,
+      productId: product.id,
+      movementType: isEntry ? 'adjustment_positive' : 'adjustment_negative',
+      quantity: Math.abs(delta),
+      unitCostUSD: Number(product.costUSD) || 0,
+      totalCostUSD: Number((Math.abs(delta) * (Number(product.costUSD) || 0)).toFixed(2)),
+      reason:
+        mode === 'set'
+          ? `Ajuste por carga masiva (fijar ${Number(aggregate.setTarget ?? 0)} en ${blueprint.warehouse.name})`
+          : `Ajuste por carga masiva (delta ${delta > 0 ? '+' : ''}${delta} en ${blueprint.warehouse.name})`,
+    });
+    blueprint.results.push({
+      sku: aggregate.sku,
+      status: 'ok',
+      movement: isEntry ? 'adjustment_positive' : 'adjustment_negative',
+      quantity: Math.abs(delta),
+      message: `${isEntry ? 'Entrada' : 'Salida'} de ${Math.abs(delta)} en ${blueprint.warehouse.name}.`,
+    });
+  }
+  return movements;
+}
+
+/**
+ * DRY-RUN (IE-PR7): plan completo SIN locks NI escrituras. La acción
+ * `previewStockImportAction` lo expone read-only para el paso 3 del wizard.
+ */
+export async function planStockImport({
+  tenantId,
+  warehouseId,
+  mode,
+  rows,
+  req,
+}: {
+  tenantId: number;
+  warehouseId: number;
+  mode: StockImportMode;
+  rows: StockImportRow[];
+  req: PayloadRequest;
+}): Promise<StockImportPlan> {
+  const blueprint = await buildImportBlueprint({ tenantId, warehouseId, mode, rows, req });
+  const movements = await decideStockMovements(blueprint, { warehouseId, mode, req });
+
+  const productIds: number[] = [];
+  for (const aggregate of blueprint.aggregates.values()) {
+    const product = blueprint.productsBySku.get(aggregate.sku);
+    if (product) productIds.push(product.id);
+  }
+
+  return {
+    warehouse: {
+      id: warehouseId,
+      name: blueprint.warehouse.name,
+      code: blueprint.warehouse.code,
+    },
+    results: blueprint.results,
+    movements,
+    productIds,
+    rowsProcessed: blueprint.rowsProcessed,
+  };
+}
+
+/**
+ * COMMIT (la vía que escribe): orden EXACTO del flujo original — locks de
+ * saldo ANTES de leer el stock (atomicidad del check-then-write), decisiones
+ * y creación de movimientos en la transacción del llamador. El plan se
+ * calcula fresco: el resultado aplicado refleja el stock vigente al confirmar.
+ */
+export async function importStockToWarehouse({
+  tenantId,
+  warehouseId,
+  mode,
+  rows,
+  req,
+}: {
+  tenantId: number;
+  warehouseId: number;
+  mode: StockImportMode;
+  rows: StockImportRow[];
+  req: PayloadRequest;
+}): Promise<StockImportSummary> {
+  const blueprint = await buildImportBlueprint({ tenantId, warehouseId, mode, rows, req });
+
+  // Orden global de locks: todos los advisory locks de saldo ANTES de cualquier
+  // row lock de producto (recalculateProductTotalStock del afterChange).
+  await lockStockBalances(
+    [...blueprint.aggregates.values()]
+      .map((aggregate) => ({
+        productId: blueprint.productsBySku.get(aggregate.sku)?.id,
+        warehouseId,
+      }))
+      .filter((pair) => Boolean(pair.productId)),
+    req,
+  );
+
+  const movements = await decideStockMovements(blueprint, {
+    warehouseId,
+    mode,
+    req,
+  });
+
+  for (const movement of movements) {
     await runIsolatedContext(req, () =>
       req.payload.create({
         collection: 'stock-movements',
-      data: {
-        reference: `IMPORT-${warehouse.code}`,
-        movementType: isEntry ? 'adjustment_positive' : 'adjustment_negative',
-        product: product.id,
-        ...(isEntry
-          ? { targetWarehouse: warehouseId }
-          : { sourceWarehouse: warehouseId }),
-        quantity: Math.abs(delta),
-        unitCostUSD: Number(product.costUSD) || 0,
-        totalCostUSD: Number((Math.abs(delta) * (Number(product.costUSD) || 0)).toFixed(2)),
-        tenant: tenantId,
-          reason:
-            mode === 'set'
-              ? `Ajuste por carga masiva (fijar ${Number(aggregate.setTarget ?? 0)} en ${warehouse.name})`
-              : `Ajuste por carga masiva (delta ${delta > 0 ? '+' : ''}${delta} en ${warehouse.name})`,
+        data: {
+          reference: `IMPORT-${blueprint.warehouse.code}`,
+          movementType: movement.movementType,
+          product: movement.productId,
+          ...(movement.movementType === 'adjustment_positive'
+            ? { targetWarehouse: warehouseId }
+            : { sourceWarehouse: warehouseId }),
+          quantity: movement.quantity,
+          unitCostUSD: movement.unitCostUSD,
+          totalCostUSD: movement.totalCostUSD,
+          tenant: tenantId,
+          reason: movement.reason,
         },
         req,
         overrideAccess: true,
@@ -229,20 +385,11 @@ export async function importStockToWarehouse({
         },
       }),
     );
-
-    movementsCreated++;
-    results.push({
-      sku: aggregate.sku,
-      status: 'ok',
-      movement: isEntry ? 'adjustment_positive' : 'adjustment_negative',
-      quantity: Math.abs(delta),
-      message: `${isEntry ? 'Entrada' : 'Salida'} de ${Math.abs(delta)} en ${warehouse.name}.`,
-    });
   }
 
   return {
-    movementsCreated,
-    rowsProcessed: rows.length,
-    results,
+    movementsCreated: movements.length,
+    rowsProcessed: blueprint.rowsProcessed,
+    results: blueprint.results,
   };
 }
