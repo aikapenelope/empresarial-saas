@@ -85,6 +85,7 @@ export default async function POSPage({ params }: PageProps) {
           id: p.id,
           name: p.name,
           sku: p.sku,
+          barcode: p.barcode,
           priceUSD: Number(p.priceUSD) || 0,
           unitOfMeasure: p.unitOfMeasure,
           priceTiers: p.priceTiers,
