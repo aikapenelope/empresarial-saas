@@ -103,29 +103,37 @@ export function CommandPalette({
     return () => window.removeEventListener('keydown', handler);
   }, [setOpen]);
 
-  // Reset síncrono de resultados/índice cuando la búsqueda deja de ser válida:
-  // ajuste de estado en render (patrón oficial de React) en lugar de useEffect.
+  // Reset síncrono de resultados/índice cuando cambia la búsqueda (Devin #81):
+  // los resultados stale NO son seleccionables durante el debounce ni si una
+  // consulta falla — Enter sólo navegará por las rutas locales hasta que llegue
+  // la respuesta vigente. Ajuste de estado en render (patrón oficial de React)
+  // en lugar de useEffect.
   useSyncOnKeyChange(`${open}:${query}`, () => {
     setActiveIndexRaw(0);
-    if (!open || query.trim().length < 2) {
-      setResults(EMPTY_RESULTS);
-    }
+    setResults(EMPTY_RESULTS);
   });
 
   // Búsqueda en vivo (debounce simple) — las rutas se filtran localmente; los
   // documentos van por REST con el tenant en la consulta (sesión + where
   // tenant, mismo aislamiento del sprint 17).
+  // Devin #81: AbortController por efecto — una respuesta lenta de una query
+  // anterior NUNCA sobreescribe los resultados de la query vigente (las
+  // respuestas pueden completar fuera de orden y Enter abriría el documento
+  // equivocado). El cleanup aborta el fetch huérfano y descarta su resultado.
   useEffect(() => {
     if (!open || query.trim().length < 2) return;
+    const controller = new AbortController();
     const timeout = setTimeout(async () => {
       try {
         const q = encodeURIComponent(query.trim());
+        const signal = controller.signal;
         const [custRes, prodRes, ordRes, quoteRes] = await Promise.all([
-          fetch(`/api/customers?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include' }),
-          fetch(`/api/products?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include' }),
-          fetch(`/api/orders?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[orderNumber][like]=${q}`, { credentials: 'include' }),
-          fetch(`/api/quotes?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[quoteNumber][like]=${q}`, { credentials: 'include' }),
+          fetch(`/api/customers?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include', signal }),
+          fetch(`/api/products?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include', signal }),
+          fetch(`/api/orders?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[orderNumber][like]=${q}`, { credentials: 'include', signal }),
+          fetch(`/api/quotes?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[quoteNumber][like]=${q}`, { credentials: 'include', signal }),
         ]);
+        if (controller.signal.aborted) return;
         if (custRes.ok && prodRes.ok && ordRes.ok && quoteRes.ok) {
           const [cust, prod, ord, quote] = (await Promise.all([
             custRes.json(),
@@ -133,6 +141,7 @@ export function CommandPalette({
             ordRes.json(),
             quoteRes.json(),
           ])) as Array<{ docs?: Array<Record<string, unknown>> }>;
+          if (controller.signal.aborted) return;
           setResults({
             clientes: (cust.docs || []).slice(0, 5) as SearchResults['clientes'],
             productos: (prod.docs || []).slice(0, 5) as SearchResults['productos'],
@@ -141,10 +150,14 @@ export function CommandPalette({
           });
         }
       } catch {
-        // silencioso: la paleta es un atajo, no un flujo crítico
+        // silencioso: la paleta es un atajo, no un flujo crítico (incluye los
+        // AbortError del cleanup cuando la query cambia a mitad de vuelo)
       }
     }, 250);
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [query, open, tenantId]);
 
   const q = query.trim().toLowerCase();
