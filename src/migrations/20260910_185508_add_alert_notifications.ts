@@ -21,6 +21,13 @@ export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
 
 export async function down({ db, payload, req }: MigrateDownArgs): Promise<void> {
   await db.execute(sql`
+   -- Política de datos del rollback (Devin #80): las filas que usan los
+   -- valores nuevos bloquearían el cast a los enums recreados. Se eliminan
+   -- ANTES de estrechar los enums: la alerta overdue_installment y los jobs
+   -- del digest son datos de la feature que se está revirtiendo.
+   DELETE FROM "payload_jobs_log" WHERE "task_slug" = 'notifyAlertsEmail';
+   DELETE FROM "payload_jobs" WHERE "task_slug" = 'notifyAlertsEmail';
+   DELETE FROM "alerts" WHERE "type" = 'overdue_installment';
    DROP TABLE "tenants_email_config_alerts_email_recipients" CASCADE;
   ALTER TABLE "alerts" ALTER COLUMN "type" SET DATA TYPE text;
   DROP TYPE "public"."enum_alerts_type";

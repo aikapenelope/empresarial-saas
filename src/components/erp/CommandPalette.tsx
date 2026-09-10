@@ -115,17 +115,24 @@ export function CommandPalette({
   // Búsqueda en vivo (debounce simple) — las rutas se filtran localmente; los
   // documentos van por REST con el tenant en la consulta (sesión + where
   // tenant, mismo aislamiento del sprint 17).
+  // Devin #81: AbortController por efecto — una respuesta lenta de una query
+  // anterior NUNCA sobreescribe los resultados de la query vigente (las
+  // respuestas pueden completar fuera de orden y Enter abriría el documento
+  // equivocado). El cleanup aborta el fetch huérfano y descarta su resultado.
   useEffect(() => {
     if (!open || query.trim().length < 2) return;
+    const controller = new AbortController();
     const timeout = setTimeout(async () => {
       try {
         const q = encodeURIComponent(query.trim());
+        const signal = controller.signal;
         const [custRes, prodRes, ordRes, quoteRes] = await Promise.all([
-          fetch(`/api/customers?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include' }),
-          fetch(`/api/products?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include' }),
-          fetch(`/api/orders?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[orderNumber][like]=${q}`, { credentials: 'include' }),
-          fetch(`/api/quotes?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[quoteNumber][like]=${q}`, { credentials: 'include' }),
+          fetch(`/api/customers?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include', signal }),
+          fetch(`/api/products?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[name][like]=${q}`, { credentials: 'include', signal }),
+          fetch(`/api/orders?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[orderNumber][like]=${q}`, { credentials: 'include', signal }),
+          fetch(`/api/quotes?depth=0&limit=5&where[tenant][equals]=${tenantId}&where[quoteNumber][like]=${q}`, { credentials: 'include', signal }),
         ]);
+        if (controller.signal.aborted) return;
         if (custRes.ok && prodRes.ok && ordRes.ok && quoteRes.ok) {
           const [cust, prod, ord, quote] = (await Promise.all([
             custRes.json(),
@@ -133,6 +140,7 @@ export function CommandPalette({
             ordRes.json(),
             quoteRes.json(),
           ])) as Array<{ docs?: Array<Record<string, unknown>> }>;
+          if (controller.signal.aborted) return;
           setResults({
             clientes: (cust.docs || []).slice(0, 5) as SearchResults['clientes'],
             productos: (prod.docs || []).slice(0, 5) as SearchResults['productos'],
@@ -141,10 +149,14 @@ export function CommandPalette({
           });
         }
       } catch {
-        // silencioso: la paleta es un atajo, no un flujo crítico
+        // silencioso: la paleta es un atajo, no un flujo crítico (incluye los
+        // AbortError del cleanup cuando la query cambia a mitad de vuelo)
       }
     }, 250);
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [query, open, tenantId]);
 
   const q = query.trim().toLowerCase();
@@ -252,7 +264,7 @@ export function CommandPalette({
           {entries.map((item, idx) => (
             <React.Fragment key={item.key}>
               {(idx === 0 || entries[idx - 1].section !== item.section) && (
-                <p className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase text-slate-500">
+                <p role="presentation" className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase text-slate-500">
                   {SECTION_LABELS[item.section]}
                 </p>
               )}
