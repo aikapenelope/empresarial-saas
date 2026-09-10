@@ -1,4 +1,6 @@
 import type { TaskConfig } from 'payload';
+import { sql } from '@payloadcms/db-postgres';
+import { getActiveDb } from '../utilities/inventoryLedger';
 
 /**
  * Digest anti-spam de alertas (IE-PR4): un solo email por ciclo con las
@@ -82,6 +84,10 @@ export const notifyAlertsEmailTask: TaskConfig<'notifyAlertsEmail'> = {
     // El digest no puede confiar en headers (no hay request): sólo la variable
     // de entorno pública, mismo criterio anti host-poisoning de shareActions.
     const appUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    // Escape HTML (Devin #80 🟥): tenant.name y los mensajes son datos de
+    // usuario — nunca van interpolados crudos al HTML del digest.
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const alertLines = pending.map(
       (a) => `• [${a.severity.toUpperCase()}] ${a.message}`,
     );
@@ -91,23 +97,29 @@ export const notifyAlertsEmailTask: TaskConfig<'notifyAlertsEmail'> = {
       to: recipients.join(', '),
       subject: `[ERP] ${pending.length} alerta(s) nueva(s) — ${tenant.name}`,
       html: `
-        <p>Hola, el inquilino <strong>${tenant.name}</strong> tiene <strong>${pending.length}</strong> alerta(s) nueva(s):</p>
-        <ul>${alertLines.map((line) => `<li style="margin-bottom:6px;">${line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</li>`).join('')}</ul>
+        <p>Hola, el inquilino <strong>${escapeHtml(tenant.name)}</strong> tiene <strong>${pending.length}</strong> alerta(s) nueva(s):</p>
+        <ul>${alertLines.map((line) => `<li style="margin-bottom:6px;">${escapeHtml(line)}</li>`).join('')}</ul>
         ${linkBlock}
       `,
       text: `${alertLines.join('\n')}${appUrl ? `\n\n${appUrl}/${tenant.slug}/erp/alerts` : ''}`,
     });
 
-    // Estampado POSTERIOR al envío: si el proceso muere a mitad, el reintento
-    // del job reprocesa sólo las que quedaron sin estampar.
-    for (const alert of pending) {
-      await req.payload.update({
-        collection: 'alerts',
-        id: alert.id,
-        data: { notifiedAt: new Date().toISOString() },
-        req,
-      });
-    }
+    // Estampado POSTERIOR al envío y ATÓMICO (Devin #80): una sola sentencia
+    // marca todas las alertas del digest — la ventana de crash entre el envío
+    // y el estampado queda reducida a un statement (el escenario de duplicado
+    // por updates secuenciales desaparece). Si el proceso muere justo en esa
+    // ventana, el reintento puede re-enviar el digest: se prefiere un duplicado
+    // a perder una alerta crítica (at-least-once); el outbox durable queda como
+    // hardening v2.
+    const db = getActiveDb(req);
+    await db.execute(sql`
+      UPDATE alerts
+      SET notified_at = now()
+      WHERE id IN (${sql.join(
+        pending.map((a) => sql`${a.id}`),
+        sql`, `,
+      )})
+    `);
 
     return { output: { sent: true, notified: pending.length } };
   },
