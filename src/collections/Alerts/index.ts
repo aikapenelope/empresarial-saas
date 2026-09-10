@@ -42,6 +42,7 @@ export const Alerts: CollectionConfig = {
         { label: 'Variación de Tasa', value: 'rate_change' },
         { label: 'Factura Vencida', value: 'overdue_invoice' },
         { label: 'Canal con Cartera Vencida', value: 'vendor_overdue' },
+        { label: 'Cuota Vencida', value: 'overdue_installment' },
       ],
     },
     {
@@ -79,6 +80,17 @@ export const Alerts: CollectionConfig = {
       index: true,
       admin: {
         description: 'ID del documento referido; 0 para alertas a nivel de inquilino.',
+      },
+    },
+    {
+      name: 'notifiedAt',
+      label: 'Notificada por Email En',
+      type: 'date',
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description:
+          'Estampado por el job notifyAlertsEmail tras incluir la alerta en un digest enviado. Vacía = pendiente de notificar (IE-PR4).',
       },
     },
     {

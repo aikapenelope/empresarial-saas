@@ -17,7 +17,8 @@ export type AlertType =
   | 'inventory_diff'
   | 'rate_change'
   | 'overdue_invoice'
-  | 'vendor_overdue';
+  | 'vendor_overdue'
+  | 'overdue_installment';
 
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 
@@ -33,6 +34,8 @@ export interface AlertEvaluationResult {
   created: number;
   updated: number;
   resolved: number;
+  /** Condiciones reactivadas tras haber estado resueltas: disparan notificación. */
+  reactivated: number;
 }
 
 /** Umbral de variación de tasa (en %) que dispara la alerta. */
@@ -138,6 +141,30 @@ export async function evaluateAlertsForTenant(
   const vendorOverdue = new Map<number, { count: number; totalUSD: number }>();
 
   for (const inv of invoicesRes.docs) {
+    // ── 3b. Cuotas vencidas (IE-PR4): la cuota impaga más antigua vencida de
+    // la factura genera su propia alerta (refId = factura; convive con
+    // overdue_invoice gracias al índice único tenant+type+refId).
+    const installments = Array.isArray(inv.installments) ? inv.installments : [];
+    const oldestOverdue = installments
+      .filter((it) => it.status !== 'paid')
+      .map((it) => ({ it, due: new Date(it.dueDate).getTime() }))
+      .filter(({ due }) => !Number.isNaN(due) && asOf - due > 0)
+      .sort((a, b) => a.due - b.due)[0];
+    if (oldestOverdue) {
+      const daysOver = Math.floor((asOf - oldestOverdue.due) / DAY_MS);
+      const pending = Math.max(
+        oldestOverdue.it.amountUSD - (Number(oldestOverdue.it.paidUSD) || 0),
+        0,
+      );
+      computed.set(keyOf('overdue_installment', inv.id), {
+        type: 'overdue_installment',
+        refCollection: 'invoices',
+        refId: inv.id,
+        severity: daysOver > 30 ? 'critical' : 'warning',
+        message: `Factura ${inv.invoiceNumber}: cuota ${oldestOverdue.it.number} vencida hace ${daysOver} día(s) con ${pending.toFixed(2)} USD pendientes.`,
+      });
+    }
+
     const balance = Number(inv.balanceUSD) || 0;
     if (balance <= 0 || !inv.dueDate) continue;
     const due = new Date(inv.dueDate).getTime();
@@ -227,6 +254,7 @@ export async function evaluateAlertsForTenant(
   let created = 0;
   let updated = 0;
   let resolved = 0;
+  let reactivated = 0;
 
   for (const [key, alert] of computed.entries()) {
     const existing = existingByKey.get(key);
@@ -259,6 +287,7 @@ export async function evaluateAlertsForTenant(
           req,
         });
         updated += 1;
+        if (isResolved) reactivated += 1;
       }
     }
   }
@@ -277,5 +306,5 @@ export async function evaluateAlertsForTenant(
     }
   }
 
-  return { created, updated, resolved };
+  return { created, updated, resolved, reactivated };
 }

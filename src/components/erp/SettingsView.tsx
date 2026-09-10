@@ -29,6 +29,8 @@ interface SettingsViewProps {
     emailConfig?: {
       autoSendQuoteEmail?: boolean | null;
       autoSendInvoiceEmail?: boolean | null;
+      alertsEmailEnabled?: boolean | null;
+      alertsEmailRecipients?: Array<{ email: string }> | null;
     } | null;
   };
   effectiveRate: number;
@@ -64,6 +66,16 @@ export function SettingsView({
   const [autoSendInvoiceEmail, setAutoSendInvoiceEmail] = useState<boolean>(
     tenant.emailConfig?.autoSendInvoiceEmail ?? false,
   );
+  // Alertas por email (IE-PR4): textarea con un email por línea — simple para
+  // el operador; el parseo/validación vive en el schema de la action.
+  const [alertsEmailEnabled, setAlertsEmailEnabled] = useState<boolean>(
+    tenant.emailConfig?.alertsEmailEnabled ?? false,
+  );
+  const [alertsRecipientsText, setAlertsRecipientsText] = useState<string>(
+    (tenant.emailConfig?.alertsEmailRecipients ?? [])
+      .map((r) => r.email)
+      .join('\n'),
+  );
   const [manualExchangeRate, setManualExchangeRate] = useState<number>(
     tenant.currencyConfig?.manualExchangeRate || 0,
   );
@@ -73,6 +85,11 @@ export function SettingsView({
     setLoading(true);
     setError(null);
     setSuccess(false);
+
+    const alertsEmailRecipients = alertsRecipientsText
+      .split(/[\n,;]+/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
 
     const res = await updateTenantSettingsAction({
       tenantId: tenant.id,
@@ -86,6 +103,8 @@ export function SettingsView({
       salesDocumentDefault,
       autoSendQuoteEmail,
       autoSendInvoiceEmail,
+      alertsEmailEnabled,
+      alertsEmailRecipients,
     });
 
     setLoading(false);
@@ -170,6 +189,42 @@ export function SettingsView({
                 Enviar la factura por email al emitirla (desactivado por defecto).
               </label>
             </div>
+          </div>
+
+          {/* Alertas por email (IE-PR4): digest anti-spam por ciclo del evaluador */}
+          <div className="border-t border-border pt-4 space-y-2">
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+              <input
+                id="alerts-email-enabled"
+                type="checkbox"
+                checked={alertsEmailEnabled}
+                onChange={(e) => setAlertsEmailEnabled(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[var(--color-primary,currentColor)]"
+              />
+              <span>
+                <strong className="text-foreground">Alertas nuevas por email</strong> — un
+                digest por ciclo del evaluador con las alertas warning/critical aún no
+                notificadas (requiere RESEND_API_KEY y dominio verificado).
+              </span>
+            </label>
+            {alertsEmailEnabled && (
+              <div>
+                <label
+                  htmlFor="alerts-recipients"
+                  className="block font-semibold text-foreground mb-1"
+                >
+                  Destinatarios (un email por línea — vacío = administradores del inquilino)
+                </label>
+                <textarea
+                  id="alerts-recipients"
+                  value={alertsRecipientsText}
+                  onChange={(e) => setAlertsRecipientsText(e.target.value)}
+                  rows={3}
+                  placeholder={'gerencia@empresa.com\ncontador@empresa.com'}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground font-mono text-xs focus:border-ring focus:outline-none"
+                />
+              </div>
+            )}
           </div>
         </Card>
 

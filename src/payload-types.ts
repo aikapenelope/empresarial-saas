@@ -161,6 +161,7 @@ export interface Config {
     tasks: {
       seedIndustryTemplate: TaskSeedIndustryTemplate;
       evaluateAlerts: TaskEvaluateAlerts;
+      notifyAlertsEmail: TaskNotifyAlertsEmail;
       createCollectionExport: TaskCreateCollectionExport;
       createCollectionImport: TaskCreateCollectionImport;
       inline: {
@@ -227,6 +228,19 @@ export interface Tenant {
      * Requiere RESEND_API_KEY. La factura viaja como enlace público al emitirla; sin email del cliente no hay envío.
      */
     autoSendInvoiceEmail?: boolean | null;
+    /**
+     * Digest anti-spam: un email por ciclo del evaluador con las alertas aún no notificadas. Requiere RESEND_API_KEY y dominio verificado. OFF hasta activarlo aquí.
+     */
+    alertsEmailEnabled?: boolean | null;
+    /**
+     * Si se deja vacío, el digest se envía a los emails de los administradores del inquilino (tenant-admin).
+     */
+    alertsEmailRecipients?:
+      | {
+          email: string;
+          id?: string | null;
+        }[]
+      | null;
   };
   updatedAt: string;
   createdAt: string;
@@ -945,7 +959,7 @@ export interface Quote {
 export interface Alert {
   id: number;
   tenant?: (number | null) | Tenant;
-  type: 'low_stock' | 'inventory_diff' | 'rate_change' | 'overdue_invoice' | 'vendor_overdue';
+  type: 'low_stock' | 'inventory_diff' | 'rate_change' | 'overdue_invoice' | 'vendor_overdue' | 'overdue_installment';
   severity: 'info' | 'warning' | 'critical';
   message: string;
   /**
@@ -956,6 +970,10 @@ export interface Alert {
    * ID del documento referido; 0 para alertas a nivel de inquilino.
    */
   refId: number;
+  /**
+   * Estampado por el job notifyAlertsEmail tras incluir la alerta en un digest enviado. Vacía = pendiente de notificar (IE-PR4).
+   */
+  notifiedAt?: string | null;
   acknowledgedAt?: string | null;
   acknowledgedBy?: (number | null) | User;
   /**
@@ -1200,7 +1218,12 @@ export interface PayloadJob {
         executedAt: string;
         completedAt: string;
         taskSlug:
-          'inline' | 'seedIndustryTemplate' | 'evaluateAlerts' | 'createCollectionExport' | 'createCollectionImport';
+          | 'inline'
+          | 'seedIndustryTemplate'
+          | 'evaluateAlerts'
+          | 'notifyAlertsEmail'
+          | 'createCollectionExport'
+          | 'createCollectionImport';
         taskID: string;
         input?:
           | {
@@ -1234,7 +1257,15 @@ export interface PayloadJob {
       }[]
     | null;
   taskSlug?:
-    ('inline' | 'seedIndustryTemplate' | 'evaluateAlerts' | 'createCollectionExport' | 'createCollectionImport') | null;
+    | (
+        | 'inline'
+        | 'seedIndustryTemplate'
+        | 'evaluateAlerts'
+        | 'notifyAlertsEmail'
+        | 'createCollectionExport'
+        | 'createCollectionImport'
+      )
+    | null;
   queue?: string | null;
   waitUntil?: string | null;
   processing?: boolean | null;
@@ -1432,6 +1463,13 @@ export interface TenantsSelect<T extends boolean = true> {
     | {
         autoSendQuoteEmail?: T;
         autoSendInvoiceEmail?: T;
+        alertsEmailEnabled?: T;
+        alertsEmailRecipients?:
+          | T
+          | {
+              email?: T;
+              id?: T;
+            };
       };
   updatedAt?: T;
   createdAt?: T;
@@ -2058,6 +2096,7 @@ export interface AlertsSelect<T extends boolean = true> {
   message?: T;
   refCollection?: T;
   refId?: T;
+  notifiedAt?: T;
   acknowledgedAt?: T;
   acknowledgedBy?: T;
   resolvedAt?: T;
@@ -2315,6 +2354,18 @@ export interface TaskEvaluateAlerts {
     created: number;
     updated: number;
     resolved: number;
+  };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskNotifyAlertsEmail".
+ */
+export interface TaskNotifyAlertsEmail {
+  input: {
+    tenantId: number;
+  };
+  output: {
+    notified: number;
   };
 }
 /**

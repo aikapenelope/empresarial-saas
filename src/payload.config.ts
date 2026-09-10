@@ -41,6 +41,7 @@ import { pricingPlugin } from './plugins/pricing';
 import { auditPlugin } from './plugins/audit';
 import { seedIndustryTemplateTask } from './jobs/seedIndustryTemplate';
 import { evaluateAlertsTask } from './jobs/evaluateAlerts';
+import { notifyAlertsEmailTask } from './jobs/notifyAlertsEmail';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 
@@ -121,7 +122,7 @@ export default buildConfig({
     InventoryCounts,
   ],
   jobs: {
-    tasks: [seedIndustryTemplateTask, evaluateAlertsTask],
+    tasks: [seedIndustryTemplateTask, evaluateAlertsTask, notifyAlertsEmailTask],
     // Sprint 22: el evaluador de alertas se encola cada 15 min y el autoRun
     // procesa la cola (schedule + autoRun del Jobs Queue oficial de Payload).
     autoRun: [
