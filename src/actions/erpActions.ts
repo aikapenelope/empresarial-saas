@@ -1230,15 +1230,40 @@ export async function rejectApprovalAction(input: ApproveApprovalInput) {
       );
     }
 
-    await payload.update({
-      collection: 'approvals',
-      id: approval.id,
-      data: {
-        status: 'rejected',
-        resolvedBy: user.id,
-        decisionNote: parsed.decisionNote,
-      },
-      overrideAccess: true,
+    // Devin #84 🟡: el rechazo es transaccional con advisory lock
+    // approval:{id} (mismo patrón que consumeApproval) — dos rechazos
+    // concurrentes serializan y el segundo ve el estado YA resuelto.
+    await withTransaction(payload, user, async (req) => {
+      const db = getActiveDb(req);
+      await db.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`approval:${parsed.approvalId}`}))`,
+      );
+      // Re-lectura POST-lock: el estado puede haber cambiado desde el check
+      // previo (otro resolver ganó la carrera).
+      const fresh = await payload.findByID({
+        collection: 'approvals',
+        id: parsed.approvalId,
+        depth: 0,
+        req,
+      });
+      if (!fresh || Number(fresh.tenant) !== parsed.tenantId) {
+        throw new Error('La aprobación no pertenece a este inquilino.');
+      }
+      if (fresh.status !== 'pending') {
+        throw new Error(
+          `La aprobación #${fresh.id} ya fue resuelta (estado: ${fresh.status}) — su decisión no se reescribe.`,
+        );
+      }
+      await payload.update({
+        collection: 'approvals',
+        id: fresh.id,
+        data: {
+          status: 'rejected',
+          resolvedBy: user.id,
+          decisionNote: parsed.decisionNote,
+        },
+        req,
+      });
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/approvals`);

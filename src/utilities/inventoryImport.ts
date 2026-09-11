@@ -70,6 +70,10 @@ export function aggregateStockRows(rows: StockImportRow[], mode: StockImportMode
 
     if (mode === 'adjust') {
       if (row.quantity === 0) {
+        // Devin #84: un agregado recién creado y rechazado no debe quedar en el
+        // mapa — decidiría un movimiento "sin cambio neto" contradictorio con
+        // el error del dry-run. Si ya tenía filas aceptadas, se conserva.
+        if (aggregate.rowNumbers.length === 0) aggregates.delete(sku);
         rowErrors.push({ sku, status: 'error', message: 'El delta no puede ser cero.' });
         return;
       }

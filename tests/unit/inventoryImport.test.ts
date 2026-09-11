@@ -58,6 +58,33 @@ describe('aggregateStockRows (agregación pura de la importación de inventario,
     expect(aggregates.get('PT-2')?.setTarget).toBe(0);
   });
 
+  it('un agregado dejado vacío por un delta cero se elimina del mapa (Devin #84)', () => {
+    const { aggregates, rowErrors } = aggregateStockRows(
+      [
+        { sku: 'A', quantity: 0 },
+        { sku: 'B', quantity: 3 },
+      ],
+      'adjust',
+    );
+    expect(rowErrors.map((e) => e.message)).toEqual(['El delta no puede ser cero.']);
+    // Sin el delete, el agregado vacío de A produciría un ok/none
+    // contradictorio con el error en el dry-run.
+    expect(aggregates.has('A')).toBe(false);
+    expect(aggregates.get('B')?.delta).toBe(3);
+  });
+
+  it('un agregado con filas aceptadas se conserva aunque otra fila sea cero', () => {
+    const { aggregates, rowErrors } = aggregateStockRows(
+      [
+        { sku: 'A', quantity: 5 },
+        { sku: 'A', quantity: 0 },
+      ],
+      'adjust',
+    );
+    expect(rowErrors).toHaveLength(1);
+    expect(aggregates.get('A')?.delta).toBe(5);
+  });
+
   it('rowNumbers son 1-based contando el encabezado (primera fila de datos = 2)', () => {
     const { aggregates } = aggregateStockRows(
       [
