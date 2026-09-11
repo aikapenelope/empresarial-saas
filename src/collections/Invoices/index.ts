@@ -517,6 +517,19 @@ export const Invoices: CollectionConfig = {
           'Token de capacidad para el enlace público de la factura (compartir/email). Server-generated; no editar.',
       },
     },
+    {
+      // Sprint R4 (hallazgo S1-1): caducidad del enlace público. El token es una
+      // CAPACIDAD: se emite con una ventana de validez y deja de resolver al
+      // vencer. Server-generated; no editable por la UI ni por REST.
+      name: 'shareTokenExpiresAt',
+      label: 'Caducidad del Enlace de Compartición',
+      type: 'date',
+      admin: {
+        readOnly: true,
+        hidden: true,
+        description: 'Momento en que el enlace público deja de resolver. Server-generated; no editar.',
+      },
+    },
   ],
   timestamps: true,
 };

@@ -16,6 +16,29 @@ export function generateShareToken(): string {
   return crypto.randomBytes(24).toString('base64url');
 }
 
+/**
+ * Ventana de validez del enlace público (Sprint R4 · hallazgo S1-1): el token es
+ * una CAPACIDAD con caducidad. 30 días cubre el ciclo comercial de una cotización
+ * sin dejar el enlace vivo indefinidamente.
+ */
+export const SHARE_TOKEN_TTL_DAYS = 30;
+
+/** Instante ISO de caducidad del enlace emitido `from` (por defecto, ahora). */
+export function shareTokenExpiry(from: Date = new Date()): string {
+  return new Date(from.getTime() + SHARE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * ¿El enlace público caducó? Un token LEGADO sin caducidad (null, emitido antes
+ * del Sprint R4) sigue vigente hasta que se comparta de nuevo —lo que le acuña la
+ * caducidad— o se revoque. Mismo contrato que `isApprovalExpired`.
+ */
+export function isShareTokenExpired(expiresAt?: string | null): boolean {
+  if (!expiresAt) return false;
+  const t = new Date(expiresAt).getTime();
+  return Number.isFinite(t) && t < Date.now();
+}
+
 export function shareUrlFor(baseUrl: string, collection: ShareableCollection, token: string): string {
   return `${baseUrl.replace(/\/$/, '')}${SHARE_PATH[collection]}/${token}`;
 }
@@ -182,7 +205,7 @@ export async function resolveSharedDocument(
     overrideAccess: true,
   });
   const quote = quoteRes.docs[0];
-  if (quote) {
+  if (quote && !isShareTokenExpired(quote.shareTokenExpiresAt)) {
     return {
       doc: quoteToSharedDoc(quote),
       shareUrl: `${base}/share/quote/${token}`,
@@ -197,7 +220,7 @@ export async function resolveSharedDocument(
     overrideAccess: true,
   });
   const invoice = invoiceRes.docs[0];
-  if (invoice) {
+  if (invoice && !isShareTokenExpired(invoice.shareTokenExpiresAt)) {
     return {
       doc: invoiceToSharedDoc(invoice),
       shareUrl: `${base}/share/invoice/${token}`,
@@ -212,7 +235,7 @@ export async function resolveSharedDocument(
     overrideAccess: true,
   });
   const note = noteRes.docs[0];
-  if (note) {
+  if (note && !isShareTokenExpired(note.shareTokenExpiresAt)) {
     return {
       doc: deliveryNoteToSharedDoc(note),
       shareUrl: `${base}/share/delivery-note/${token}`,

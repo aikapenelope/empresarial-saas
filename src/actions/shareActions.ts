@@ -14,6 +14,7 @@ import {
   deliveryNoteToSharedDoc,
   generateShareToken,
   quoteToSharedDoc,
+  shareTokenExpiry,
   shareUrlFor,
   type ShareableCollection,
   type SharedDoc,
@@ -82,38 +83,43 @@ async function resolveBaseUrl(): Promise<string> {
  * externa; la escritura es infraestructura de compartición (server-generated),
  * por lo que no pasa por los hooks de la colección.
  */
+/** Tabla física de una colección compartible (para las escrituras crudas). */
+function shareTable(collection: ShareableCollection): string {
+  return collection === 'quotes' ? 'quotes' : collection === 'invoices' ? 'invoices' : 'delivery_notes';
+}
+
 async function atomicEnsureShareToken(
-  payload: Awaited<ReturnType<typeof getPayload>>,
+  _payload: Awaited<ReturnType<typeof getPayload>>,
   collection: ShareableCollection,
   documentId: number,
 ): Promise<string> {
-  const table =
-    collection === 'quotes' ? 'quotes' : collection === 'invoices' ? 'invoices' : 'delivery_notes';
+  const table = shareTable(collection);
   const candidate = generateShareToken();
+  const expiresAt = shareTokenExpiry();
 
-  const dbAdapter = payload.db as unknown as {
+  const dbAdapter = _payload.db as unknown as {
     drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
   };
+
+  // Sprint R4: emisión + caducidad en UN solo UPDATE atómico.
+  //  - COALESCE(share_token, candidate): emite sólo si falta; la carrera la
+  //    serializa el row lock y el perdedor relee el token ya persistido.
+  //  - COALESCE(share_token_expires_at, expiresAt): acuña además la caducidad de
+  //    los tokens LEGADOS (emitidos antes del Sprint R4, sin caducidad), de modo
+  //    que un enlace viejo adquiere una ventana acotada al compartirse de nuevo.
   const result = await dbAdapter.drizzle.execute(
-    sql`UPDATE ${sql.identifier(table)} SET share_token = ${candidate} WHERE id = ${documentId} AND share_token IS NULL RETURNING share_token`,
+    sql`UPDATE ${sql.identifier(table)}
+        SET share_token = COALESCE(share_token, ${candidate}),
+            share_token_expires_at = COALESCE(share_token_expires_at, ${expiresAt})
+        WHERE id = ${documentId}
+        RETURNING share_token`,
   );
 
-  if (result.rows.length > 0) {
-    return String(result.rows[0].share_token);
-  }
-
-  // Perdimos la carrera (o ya existía): releer el token persistido.
-  const persisted = await payload.findByID({
-    collection,
-    id: documentId,
-    select: { shareToken: true },
-    overrideAccess: true,
-  });
-  const token = persisted?.shareToken;
+  const token = result.rows[0]?.share_token;
   if (!token) {
     throw new Error('No se pudo emitir el enlace de compartición. Intente nuevamente.');
   }
-  return token;
+  return String(token);
 }
 
 interface LoadedDoc {
@@ -262,6 +268,57 @@ export async function ensureShareUrlAction(input: unknown): Promise<{
     return { ok: true, shareUrl, whatsappText: buildWhatsAppText(doc, shareUrl) };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error al preparar el enlace.';
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * Sprint R4 (hallazgo S1-1): revoca el enlace público de un documento — el token
+ * deja de resolver de inmediato (se anula en BD). La escritura es cruda por la
+ * MISMA razón que la emisión: los campos `shareToken*` no son editables por
+ * hooks/REST. La autorización se verifica con requireErpTenantAccess + lectura
+ * overrideAccess:false antes de escribir.
+ */
+export async function revokeShareTokenAction(input: unknown): Promise<{ ok: boolean; error?: string }> {
+  const parsed = ensureShareSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message || 'Datos inválidos.' };
+  }
+
+  try {
+    const payload = await getPayload({ config });
+    const user = await requireErpTenantAccess(parsed.data.tenantId, [...SHARE_ROLES]);
+
+    // RBAC real: el documento debe pertenecer al inquilino verificado.
+    const res = await payload.find({
+      collection: parsed.data.collection,
+      where: {
+        and: [
+          { id: { equals: parsed.data.documentId } },
+          { tenant: { equals: parsed.data.tenantId } },
+        ],
+      },
+      depth: 0,
+      limit: 1,
+      user,
+      overrideAccess: false,
+    });
+    if (!res.docs[0]) {
+      throw new Error('Documento no encontrado en este inquilino.');
+    }
+
+    const dbAdapter = payload.db as unknown as {
+      drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
+    };
+    await dbAdapter.drizzle.execute(
+      sql`UPDATE ${sql.identifier(shareTable(parsed.data.collection))}
+          SET share_token = NULL, share_token_expires_at = NULL
+          WHERE id = ${parsed.data.documentId}`,
+    );
+
+    return { ok: true };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Error al revocar el enlace.';
     return { ok: false, error: message };
   }
 }
