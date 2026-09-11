@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   detectColumn,
+  looksLikeHeaderRow,
   parseCsvDocument,
   QTY_ALIASES,
   SKU_ALIASES,
@@ -96,8 +97,11 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>('file');
   const [fileName, setFileName] = useState<string | null>(null);
-  const [headers, setHeaders] = useState<string[] | null>(null);
   const [lines, setLines] = useState<string[][]>([]);
+  // Devin #84 2ª ronda: la primera fila es encabezado SOLO si el usuario lo
+  // confirma en el mapeo — el parser la expone como candidata y sin alias
+  // conocidos no bloquea el flujo como "fila inválida".
+  const [firstRowIsHeader, setFirstRowIsHeader] = useState(true);
   const [skuCol, setSkuCol] = useState(0);
   const [qtyCol, setQtyCol] = useState(1);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -111,16 +115,30 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
   const [result, setResult] = useState<ImportSummary | null>(null);
   const [driftCount, setDriftCount] = useState(0);
 
+  // Filas de DATOS: excluye la primera si el usuario la marcó como encabezado.
+  const dataLines = firstRowIsHeader ? lines.slice(1) : lines;
   const rows: ParsedRow[] = useMemo(
-    () => lines.map((cells) => toRow(cells, skuCol, qtyCol)),
-    [lines, skuCol, qtyCol],
+    () => dataLines.map((cells) => toRow(cells, skuCol, qtyCol)),
+    [dataLines, skuCol, qtyCol],
   );
   const localErrors = useMemo(
     () => rows.filter((r) => !r.sku || !Number.isFinite(r.quantity)),
     [rows],
   );
 
-  const columnOptions = headers ?? ['Columna 1', 'Columna 2'];
+  // Opciones de columna: nombres del encabezado cuando se confirma, o
+  // posicionales con muestra; el ancho real manda (Devin #84 2ª ronda).
+  const headerRow = firstRowIsHeader ? (lines[0] ?? null) : null;
+  const columnCount = Math.max(
+    headerRow?.length ?? 0,
+    ...lines.map((r) => r.length),
+    2,
+  );
+  const columnLabels = Array.from({ length: columnCount }, (_, i) => {
+    if (headerRow?.[i]) return headerRow[i].trim();
+    const sample = lines.find((r) => r.length > i)?.[i];
+    return sample ? `Columna ${i + 1} (${sample})` : `Columna ${i + 1}`;
+  });
 
   const handleFile = (file: File) => {
     setParseError(null);
@@ -132,15 +150,16 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
     reader.onload = () => {
       const text = String(reader.result || '');
       const parsed = parseCsvDocument(text);
-      if (parsed.lines.length === 0) {
+      if (parsed.rows.length === 0) {
         setParseError('El archivo no contiene filas. Formato esperado: sku,cantidad');
         setLines([]);
         return;
       }
-      setHeaders(parsed.headers);
-      setLines(parsed.lines);
-      setSkuCol(detectColumn(parsed.headers, SKU_ALIASES, 0));
-      setQtyCol(detectColumn(parsed.headers, QTY_ALIASES, 1));
+      const firstLooksHeader = looksLikeHeaderRow(parsed.rows[0] ?? []);
+      setFirstRowIsHeader(firstLooksHeader);
+      setLines(parsed.rows);
+      setSkuCol(detectColumn(firstLooksHeader ? (parsed.rows[0] ?? null) : null, SKU_ALIASES, 0));
+      setQtyCol(detectColumn(firstLooksHeader ? (parsed.rows[0] ?? null) : null, QTY_ALIASES, 1));
       setStep('mapping');
     };
     reader.onerror = () => setParseError('No se pudo leer el archivo.');
@@ -150,7 +169,7 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
   const resetAll = () => {
     setStep('file');
     setLines([]);
-    setHeaders(null);
+    setFirstRowIsHeader(true);
     setFileName(null);
     setPreviewPlan(null);
     setResult(null);
@@ -374,6 +393,22 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
 
           {step === 'mapping' && (
             <>
+              {/* Devin #84 2ª ronda: la primera fila puede ser encabezado o dato —
+                  decisión del usuario, no del parser. */}
+              <label className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={firstRowIsHeader}
+                  onChange={(e) => {
+                    setFirstRowIsHeader(e.target.checked);
+                    setSkuCol(detectColumn(e.target.checked ? (lines[0] ?? null) : null, SKU_ALIASES, 0));
+                    setQtyCol(detectColumn(e.target.checked ? (lines[0] ?? null) : null, QTY_ALIASES, 1));
+                  }}
+                  className="h-3.5 w-3.5 accent-[var(--color-primary,currentColor)]"
+                />
+                La primera fila contiene encabezados (desmarcar si el archivo empieza directo con datos).
+              </label>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="block font-semibold text-foreground mb-1" htmlFor="map-sku">
@@ -385,9 +420,9 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
                     onChange={(e) => setSkuCol(Number(e.target.value))}
                     className={selectClass}
                   >
-                    {columnOptions.map((h, i) => (
+                    {columnLabels.map((label, i) => (
                       <option key={i} value={i}>
-                        {headers ? h : `${h} (${lines[0]?.[i] ?? '—'})`}
+                        {label}
                       </option>
                     ))}
                   </select>
@@ -402,9 +437,9 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
                     onChange={(e) => setQtyCol(Number(e.target.value))}
                     className={selectClass}
                   >
-                    {columnOptions.map((h, i) => (
+                    {columnLabels.map((label, i) => (
                       <option key={i} value={i}>
-                        {headers ? h : `${h} (${lines[0]?.[i] ?? '—'})`}
+                        {label}
                       </option>
                     ))}
                   </select>
@@ -442,9 +477,10 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
                   </select>
                 </div>
               </div>
-              {headers && (
+              {firstRowIsHeader && headerRow && (
                 <p className="text-[10px] text-muted-foreground">
-                  Columnas no mapeadas se descartan: {headers.filter((_, i) => i !== skuCol && i !== qtyCol).join(', ') || 'ninguna'}.
+                  Columnas no mapeadas se descartan:{' '}
+                  {headerRow.filter((_, i) => i !== skuCol && i !== qtyCol).join(', ') || 'ninguna'}.
                 </p>
               )}
 
