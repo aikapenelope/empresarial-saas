@@ -1108,8 +1108,17 @@ export async function approveApprovalAction(input: ApproveApprovalInput) {
           if (!quote || Number(quote.tenant) !== parsed.tenantId) {
             throw new Error('La cotización de la aprobación no pertenece a este inquilino.');
           }
-          if (quote.status === 'converted') {
-            throw new Error(`La cotización ${quote.quoteNumber} ya fue convertida a factura.`);
+          // Devin #83 3ª ronda: MISMOS estados terminales que la conversión
+          // normal — una cotización rechazada/expirada tras la solicitud no se
+          // factura por la puerta de la aprobación.
+          if (
+            quote.status === 'converted' ||
+            quote.status === 'rejected' ||
+            quote.status === 'expired'
+          ) {
+            throw new Error(
+              `No se puede convertir la cotización ${quote.quoteNumber} en estado "${quote.status}".`,
+            );
           }
         }
 
