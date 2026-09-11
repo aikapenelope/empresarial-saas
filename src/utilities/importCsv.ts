@@ -3,11 +3,15 @@
  *
  * Funciones PURAS — sin React ni Payload, testeables en CI.
  *
- * Soporta:
- *  - Campos entre comillas con delimitador y comillas escapadas ("") dentro
- *    (RFC-4180 básico) — nombres de producto con comas ya no rompen filas.
- *  - Detección de delimitador CONSCIENTE de comillas (Devin #84 2ª ronda):
- *    los separadores dentro de campos citados son dato, no estructura.
+ * Soporta (RFC-4180 básico):
+ *  - Campos entre comillas con delimitador y comillas escapadas ("") dentro —
+ *    nombres de producto con comas ya no rompen filas.
+ *  - Campos MULTILÍNEA (Devin #84 4ª ronda): un salto de línea dentro de
+ *    comillas es dato — las filas sólo se cortan en saltos sin citar.
+ *  - Detección de delimitador por CONSISTENCIA de filas (Devin #84 4ª ronda):
+ *    gana el candidato que produce el documento más uniforme, no el carácter
+ *    con más apariciones — la puntuación del dato (`medida;;;;;`) no puede
+ *    escojer el delimitador.
  *  - UN delimitador por documento, no uno distinto por línea.
  *
  * La detección de encabezado es por IGUALDAD exacta (trim + lowercase) contra
@@ -21,10 +25,19 @@
 export const SKU_ALIASES = ['sku', 'codigo', 'código', 'code'];
 export const QTY_ALIASES = ['cantidad', 'quantity', 'qty', 'stock', 'existencia_total'];
 
-/** Detecta el delimitador del documento contando SÓLO fuera de campos citados. */
-export function detectDelimiter(text: string): string {
-  let commas = 0;
-  let semicolons = 0;
+/** Delimitadores soportados (los que emiten Excel/Sheets en exportaciones CSV). */
+const DELIMITER_CANDIDATES = [',', ';'] as const;
+
+/**
+ * Corta el documento en LÍNEAS LÓGICAS: un salto de línea (\n, o \r\n) sólo
+ * termina línea si está FUERA de un campo citado. Las comillas escapadas ("")
+ * atraviesan intactas para que `splitDelimitedLine` las desescape por celda.
+ * El \r suelto (sin \n a continuación) es dato, igual que en el corte físico
+ * anterior — no se inventan saltos que el archivo no trae.
+ */
+export function splitLogicalLines(text: string): string[] {
+  const lines: string[] = [];
+  let current = '';
   let inQuotes = false;
 
   for (let i = 0; i < text.length; i++) {
@@ -32,17 +45,101 @@ export function detectDelimiter(text: string): string {
     if (ch === '"') {
       // Comilla escapada ("") dentro de campo citado: no cambia el estado.
       if (inQuotes && text[i + 1] === '"') {
+        current += '""';
         i++;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      current += ch;
+      continue;
+    }
+    if (!inQuotes && ch === '\n') {
+      // CRLF: el \r quedó al final del búfer — se recorta del borde.
+      if (current.endsWith('\r')) current = current.slice(0, -1);
+      lines.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  lines.push(current);
+  return lines;
+}
+
+/** Filas no vacías del documento (las líneas en blanco no son datos). */
+function toRows(text: string, delimiter: string): string[][] {
+  return splitLogicalLines(text)
+    .filter((line) => line.trim() !== '')
+    .map((line) => splitDelimitedLine(line, delimiter));
+}
+
+/**
+ * Nº de campos de una línea por corte ESTRICTO RFC-4180 (un `"` cierra el
+ * campo sin mirar qué sigue, `""` es comilla literal). Es la métrica de
+ * detección, no el parser final: para CONTAR campos el cierre estricto es más
+ * fiel — el cierre permisivo de `splitDelimitedLine` (que exige delimitador
+ * a continuación) hace que con el delimitador EQUIVOCADO las comillas se
+ * traguen medio renglón y el conteo salga artificialmente uniforme.
+ */
+function countFieldsStrict(line: string, delimiter: string): number {
+  let count = 1;
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        i++; // "" escapada: comilla literal, no cambia el estado.
         continue;
       }
       inQuotes = !inQuotes;
       continue;
     }
-    if (inQuotes) continue;
-    if (ch === ',') commas++;
-    else if (ch === ';') semicolons++;
+    if (!inQuotes && ch === delimiter) count++;
   }
-  return semicolons > commas ? ';' : ',';
+  return count;
+}
+
+/**
+ * Elige el delimitador por CONSISTENCIA: gana el candidato con más filas
+ * calzando con el ancho modal (a igualdad, el ancho mayor — un delimitador
+ * real parte el encabezado en varias columnas). Un candidato que NUNCA parte
+ * una fila (ancho modal 1) no es estructura: se descarta aunque su "doc" sea
+ * uniforme. Así la puntuación del dato no escoje: `A-1,medida;;;;;,5` tiene
+ * cinco ';' de dato contra cuatro ',' de estructura y el documento es CSV de
+ * comas (Devin #84 4ª ronda: el conteo crudo de caracteres lo leía como
+ * punto-y-coma).
+ */
+export function detectDelimiter(text: string): string {
+  let best: string = DELIMITER_CANDIDATES[0];
+  let bestConsistent = -1;
+  let bestWidth = 0;
+
+  for (const candidate of DELIMITER_CANDIDATES) {
+    const fieldCounts = splitLogicalLines(text)
+      .filter((line) => line.trim() !== '')
+      .map((line) => countFieldsStrict(line, candidate));
+
+    const widths = new Map<number, number>();
+    for (const count of fieldCounts) widths.set(count, (widths.get(count) ?? 0) + 1);
+
+    let consistent = 0;
+    let width = 1;
+    for (const [len, rows] of widths) {
+      if (rows > consistent || (rows === consistent && len > width)) {
+        consistent = rows;
+        width = len;
+      }
+    }
+    // Nunca partió una fila: no hay estructura con este candidato.
+    if (width <= 1) continue;
+
+    if (consistent > bestConsistent || (consistent === bestConsistent && width > bestWidth)) {
+      best = candidate;
+      bestConsistent = consistent;
+      bestWidth = width;
+    }
+  }
+  return best;
 }
 
 /** Divide una línea respetando campos entre comillas (comillas escapadas = ""). */
@@ -105,11 +202,7 @@ export interface ParsedCsvDocument {
  */
 export function parseCsvDocument(text: string): ParsedCsvDocument {
   const delimiter = detectDelimiter(text);
-  const rows = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((l) => splitDelimitedLine(l, delimiter));
+  const rows = toRows(text, delimiter);
 
   const columnCount = rows.reduce((max, r) => Math.max(max, r.length), 0);
   return { columnCount, rows };

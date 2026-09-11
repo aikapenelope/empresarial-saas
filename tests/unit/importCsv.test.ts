@@ -60,6 +60,42 @@ describe('parseCsvDocument (parser CSV del wizard de importación, Devin #84)', 
     expect(detectDelimiter('sku;cantidad\nA-1;"x,y"\nB-1;2')).toBe(';');
   });
 
+  it('detectDelimiter NO se deja engañar por la puntuación del dato (4ª ronda)', () => {
+    // Devin #84 4ª ronda: cinco ';' como DATO vs cuatro ',' estructurales —
+    // el conteo crudo de caracteres viraba el parser a ';' y el archivo (CSV
+    // de comas válido) se parseaba roto. La consistencia de filas manda.
+    expect(detectDelimiter('sku,nombre,cantidad\nA-1,medida;;;;;,5')).toBe(',');
+    expect(parseCsvDocument('sku,nombre,cantidad\nA-1,medida;;;;;,5').rows[1]).toEqual([
+      'A-1',
+      'medida;;;;;',
+      '5',
+    ]);
+  });
+
+  it('los saltos de línea DENTRO de campos citados no parten la fila (RFC-4180)', () => {
+    // Devin #84 4ª ronda: partir por \n físico rompía `A-1,"Tornillo\ninoxidable",5`
+    // en dos filas inválidas — cada fragmento sin sus columnas mapeadas.
+    const doc = parseCsvDocument('sku,nombre,cantidad\nA-1,"Tornillo\ninoxidable",5');
+    expect(doc.rows).toHaveLength(2);
+    expect(doc.rows[1]).toEqual(['A-1', 'Tornillo\ninoxidable', '5']);
+    expect(doc.columnCount).toBe(3);
+  });
+
+  it('CRLF y campos multilínea conviven (export de Windows con descripciones largas)', () => {
+    const doc = parseCsvDocument('sku,descripcion,cantidad\r\nA-1,"lote\r\n2026",5\r\nMP-1,caja,10');
+    expect(doc.rows).toHaveLength(3);
+    // El CRLF INTERIOR a las comillas es dato y se preserva intacto; el de
+    // fin de fila corta la fila (fuera de comillas).
+    expect(doc.rows[1]).toEqual(['A-1', 'lote\r\n2026', '5']);
+    expect(doc.rows[2]).toEqual(['MP-1', 'caja', '10']);
+  });
+
+  it('un CSV de comas con filas disparejas no se rinde ante un ";" ausente', () => {
+    // Archivo de comas válido donde ';' sólo existe (o casi) como dato: el
+    // candidato ';' jamás parte una fila (ancho modal 1) y se descarta.
+    expect(detectDelimiter('sku,cantidad\nA-1,5\nMP-1;x,10\nPT-2,3')).toBe(',');
+  });
+
   it('detectDelimiter ignora separadores DENTRO de campos citados', () => {
     // Devin #84 3ª ronda: comas citadas no convierten un documento
     // punto-y-coma en coma-delimitado.

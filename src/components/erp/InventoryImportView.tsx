@@ -146,13 +146,20 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
     setResult(null);
     setPreviewPlan(null);
     setFileName(file.name);
+    // Devin #84 4ª ronda: un fallo de parseo/lectura deja el estado LIMPIO
+    // (sin filas huérfanas del archivo anterior ni su nombre) — el botón
+    // "Continuar al mapeo" no puede quedar activo con datos que no son.
+    const failParse = (message: string) => {
+      setParseError(message);
+      setLines([]);
+      setFileName(null);
+    };
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result || '');
       const parsed = parseCsvDocument(text);
       if (parsed.rows.length === 0) {
-        setParseError('El archivo no contiene filas. Formato esperado: sku,cantidad');
-        setLines([]);
+        failParse('El archivo no contiene filas. Formato esperado: sku,cantidad');
         return;
       }
       const firstLooksHeader = looksLikeHeaderRow(parsed.rows[0] ?? []);
@@ -162,7 +169,7 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
       setQtyCol(detectColumn(firstLooksHeader ? (parsed.rows[0] ?? null) : null, QTY_ALIASES, 1));
       setStep('mapping');
     };
-    reader.onerror = () => setParseError('No se pudo leer el archivo.');
+    reader.onerror = () => failParse('No se pudo leer el archivo.');
     reader.readAsText(file, 'utf-8');
   };
 
@@ -267,6 +274,17 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
 
   const selectClass = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground';
   const currentStepIndex = STEP_LIST.findIndex((s) => s.id === step);
+  // Devin #84 4ª ronda: el aviso de parseo se muestra TAMBIÉN en el paso
+  // Archivo — antes sólo existía en la tarjeta de los pasos 2-4, y un archivo
+  // vacío/ilegible dejaba al usuario sin explicación y con el botón muerto.
+  const parseErrorAlert = parseError ? (
+    <div
+      className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5 text-amber-600 dark:text-amber-400"
+      role="alert"
+    >
+      {parseError}
+    </div>
+  ) : null;
 
   return (
     <div className="space-y-6">
@@ -361,6 +379,8 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
             {fileName && <p className="text-[10px] text-muted-foreground mt-1">{fileName}</p>}
           </div>
 
+          {parseErrorAlert}
+
           <Button type="button" size="lg" disabled={lines.length === 0} onClick={() => setStep('mapping')}>
             Continuar al mapeo
           </Button>
@@ -385,11 +405,7 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
               {error}
             </div>
           )}
-          {parseError && (
-            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5 text-amber-600 dark:text-amber-400" role="alert">
-              {parseError}
-            </div>
-          )}
+          {parseErrorAlert}
 
           {step === 'mapping' && (
             <>
@@ -620,9 +636,13 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 flex items-start gap-2">
                 <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5" aria-hidden="true" />
                 <div className="text-[11px] text-amber-700 dark:text-amber-300 space-y-1">
+                  {/* Devin #84 4ª ronda: un preview sin movimientos no congela el
+                      commit — el plan se recalcula al confirmar y SÍ escribe si
+                      el stock se desvió del objetivo entre pasos. */}
                   <p className="font-bold text-amber-600 dark:text-amber-400">
-                    Estás por escribir {previewPlan.movements.length} movimiento(s) en el Kardex de{' '}
-                    {previewPlan.warehouse.name}.
+                    {previewPlan.movements.length > 0
+                      ? `Estás por escribir ${previewPlan.movements.length} movimiento(s) en el Kardex de ${previewPlan.warehouse.name}.`
+                      : `El dry-run no propuso movimientos en ${previewPlan.warehouse.name}. Al confirmar el plan se recalcula con el stock vigente: si cambió desde el preview, se crearán los movimientos necesarios.`}
                   </p>
                   <p>
                     El Kardex es inmutable: los movimientos creados no se pueden editar, sólo compensar. El plan se
@@ -638,7 +658,7 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
                   type="button"
                   size="lg"
                   onClick={handleConfirm}
-                  disabled={loading || previewPlan.movements.length === 0}
+                  disabled={loading}
                 >
                   {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                   <span>Confirmar e importar al Kardex</span>
