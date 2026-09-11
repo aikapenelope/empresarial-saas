@@ -27,6 +27,33 @@ export function isApprovalExpired(expiresAt?: string | null): boolean {
 }
 
 /**
+ * Igualdad estructural (Devin #83 2ª ronda): jsonb NO preserva el orden de
+ * claves — JSON.stringify de dos objetos iguales puede diferir y rechazar
+ * aprobaciones VÁLIDAS. Compara valores: objetos por claves ordenadas,
+ * arrays por posición.
+ */
+function isSameOperation(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((v, i) => isSameOperation(v, b[i]));
+  }
+  const ka = Object.keys(a).sort();
+  const kb = Object.keys(b).sort();
+  if (ka.length !== kb.length) return false;
+  return ka.every((k, i) => {
+    if (k !== kb[i]) return false;
+    return isSameOperation(
+      (a as Record<string, unknown>)[k],
+      (b as Record<string, unknown>)[kb[i]],
+    );
+  });
+}
+
+/**
  * Consume una aprobación APROBADA y NO expirada, verificando que corresponda
  * EXACTAMENTE a la operación que la invoca (Devin #83 🟥: sin este binding,
  * cualquier ID aprobado en contexto autorizaría datos de venta ajenos).
@@ -65,11 +92,12 @@ export async function consumeApproval(
       `La aprobación #${approvalId} expiró (${APPROVAL_TTL_HOURS} h). Solicite una nueva.`,
     );
   }
-  // Binding approval ↔ operación: el input guardado debe ser EXACTAMENTE el
-  // que se intenta ejecutar (comparación canónica por JSON estable). El
-  // payload guardado tiene la forma { workflow, sourceId, input }.
+  // Binding approval ↔ operación: el input guardado debe ser ESTRUCTURALMENTE
+  // igual al que se intenta ejecutar (jsonb reordena claves — nunca comparar
+  // por stringify). El payload guardado tiene la forma { workflow, sourceId,
+  // input }.
   const storedShape = (approval.payload ?? {}) as { input?: unknown };
-  if (JSON.stringify(storedShape.input ?? null) !== JSON.stringify(expected.input ?? null)) {
+  if (!isSameOperation(storedShape.input ?? null, expected.input ?? null)) {
     throw new Error(`La aprobación #${approvalId} no corresponde a la operación intentada.`);
   }
 

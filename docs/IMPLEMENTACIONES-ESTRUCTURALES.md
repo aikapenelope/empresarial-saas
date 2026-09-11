@@ -299,6 +299,34 @@ usuario con rol puede vender a crédito sin tope real. Patrón de referencia de 
 después del enforcement de crédito y limitado a un solo tipo. El camino de venta sin
 aprobación no cambia en absoluto (el check solo se activa cuando el límite se excede).
 
+**Reparaciones Devin #83 (2026-09-10, 11 hallazgos — 2 rondas):**
+1. 🟥 **Binding approval ↔ operación**: `consumeApproval` valida inquilino y que el
+   input guardado sea estructuralmente IGUAL al ejecutado (igualdad profunda —
+   jsonb reordena claves, nunca comparar por stringify). La aprobación solo
+   autoriza SU operación.
+2. 🟥 **Payload con workflow/origen**: `{ workflow: direct|quote|order, sourceId,
+   input }` — el replay cierra la cotización (converted) o el pedido (invoiced)
+   EN la transacción de la factura, con lock de fila del origen y revalidación
+   de estado (sin factura huérfana duplicada); la conversión normal también
+   lockea la cotización.
+3. 🟥 **Tenant forzado al replay**: `invoiceParsed.tenantId = approval.tenant`.
+4. 🔴 `credit_disabled` = rechazo duro con código máquina en
+   `evaluateCreditSale`; sólo `limit_exceeded` genera solicitud.
+5. 🔴 Replay respeta `creditAllowed`: el lock + re-lectura del cliente aplican a
+   AMBOS caminos — una aprobación excusa sólo el límite, nunca el flag.
+6. 🔴 Replay con lock del origen ANTES de facturar (`lockOrderRow` / `FOR
+   UPDATE` de quotes) + revalidación de estado — la facturación normal y el
+   replay serializan (sin factura huérfana).
+7. 🔴/🟡 F4 con `submitLockRef` síncrono en `handleSubmit` (finally) además del
+   guard del atajo; y `pending_approval` es TERMINAL en los 3 modales (aviso
+   con ID, sin re-envío ni cierre silencioso).
+8. 🟡 `approveApprovalAction` llama `maybeAutoSendInvoice` post-commit; página
+   de aprobaciones en dos consultas (accionables + histórico); alerta
+   reactivada limpia notifiedAt; F4/heredados resueltos vía merge de pila.
+9. 🟨 Job de alertas sin revalidación de usuario: SUSTENTADO — patrón
+   sistema/overrideAccess idéntico a `evaluateAlerts` (tarea confiable del
+   servidor); añadir rehidratación de usuario contradiría el diseño.
+
 ### Item 7 — Wizard de importación (dry-run + mapeo de columnas)
 
 **Estado verificado:** `inventoryImport.ts` ya consolida por SKU, ordena locks

@@ -689,25 +689,29 @@ async function createInvoiceCore(
   //    rechazo duro: una aprobación nunca autoriza lo que el admin deshabilitó
   //    explícitamente (Devin #83).
   if (!isCash) {
+    // Devin #83 2ª ronda 🔴: el lock + re-lectura aplican a AMBOS caminos — la
+    // aprobación excusa SOLO limit_exceeded; creditAllowed=false sigue siendo
+    // rechazo duro aunque exista una solicitud aprobada (el admin puede
+    // deshabilitar el crédito durante la ventana de 24 h de la solicitud).
+    const db = getActiveDb(req);
+    await db.execute(sql`SELECT id FROM customers WHERE id = ${parsed.customerId} FOR UPDATE`);
+    const fresh = await payload.findByID({
+      collection: 'customers',
+      id: parsed.customerId,
+      depth: 0,
+      req,
+    });
+    if (fresh.creditAllowed === false) {
+      throw new Error(
+        `El cliente "${fresh.name}" no tiene crédito habilitado. Registre la venta de contado o habilite su línea de crédito.`,
+      );
+    }
     const approvalId = (req.context as { approvalId?: number } | undefined)?.approvalId;
     if (approvalId) {
       // Puerta de aprobación: consume atómicamente validando que la aprobación
       // corresponda EXACTAMENTE a esta operación (inquilino + input).
       await consumeApproval(req, approvalId, { tenantId: parsed.tenantId, input: parsed });
     } else {
-      // Devin #81 🔴: lock de fila del cliente ANTES de leer la deuda — dos
-      // ventas a crédito concurrentes serializan sobre el mismo cliente y la
-      // segunda ve la deuda YA actualizada por la primera (check-then-act
-      // atómico; mismo patrón que lockOrderRow de pedidos).
-      const db = getActiveDb(req);
-      await db.execute(sql`SELECT id FROM customers WHERE id = ${parsed.customerId} FOR UPDATE`);
-      // Re-lectura POST-lock: el snapshot de arriba puede estar obsoleto.
-      const fresh = await payload.findByID({
-        collection: 'customers',
-        id: parsed.customerId,
-        depth: 0,
-        req,
-      });
       const creditCheck = evaluateCreditSale({
         creditAllowed: fresh.creditAllowed,
         creditLimitUSD: fresh.creditLimitUSD,
@@ -1071,44 +1075,65 @@ export async function approveApprovalAction(input: ApproveApprovalInput) {
       payload,
       user,
       async (req) => {
-        const doc = await createInvoiceCore(payload, user, invoiceParsed, req);
-        if ('pendingApproval' in doc) {
-          throw new Error(
-            'La venta re-ejecutada volvió a requerir aprobación (input inconsistente).',
-          );
+        // Devin #83 2ª ronda 🔴: lock + re-lectura del origen ANTES de facturar
+        // — la facturación normal y el replay serializan sobre el mismo
+        // documento y un origen cerrado aborta la transacción completa (el
+        // consumo de la aprobación revierte con ella).
+        if (workflow === 'order' && sourceId) {
+          await lockOrderRow(sourceId, req);
+        } else if (workflow === 'quote' && sourceId) {
+          const db = getActiveDb(req);
+          await db.execute(sql`SELECT id FROM quotes WHERE id = ${sourceId} FOR UPDATE`);
         }
-        // Devin #83 🔴: cierre del documento origen en la MISMA transacción —
-        // sin esto la cotización/pedido queda facturable y se duplica la venta.
-        if (workflow === 'quote' && sourceId) {
-          const quote = await payload.findByID({
-            collection: 'quotes',
-            id: sourceId,
-            depth: 0,
-            req,
-          });
-          if (quote && Number(quote.tenant) === parsed.tenantId && quote.status !== 'converted') {
-            await payload.update({
-              collection: 'quotes',
-              id: sourceId,
-              data: { status: 'converted', convertedInvoice: doc.id },
-              req,
-            });
-          }
-        } else if (workflow === 'order' && sourceId) {
+        if (workflow === 'order' && sourceId) {
           const order = await payload.findByID({
             collection: 'orders',
             id: sourceId,
             depth: 0,
             req,
           });
-          if (order && Number(order.tenant) === parsed.tenantId && order.status !== 'invoiced') {
-            await payload.update({
-              collection: 'orders',
-              id: sourceId,
-              data: { status: 'invoiced', issuedInvoice: doc.id },
-              req,
-            });
+          if (!order || Number(order.tenant) !== parsed.tenantId) {
+            throw new Error('El pedido de la aprobación no pertenece a este inquilino.');
           }
+          if (order.status === 'invoiced' || order.status === 'canceled') {
+            throw new Error(`El pedido ${order.orderNumber} ya fue facturado o cancelado.`);
+          }
+        } else if (workflow === 'quote' && sourceId) {
+          const quote = await payload.findByID({
+            collection: 'quotes',
+            id: sourceId,
+            depth: 0,
+            req,
+          });
+          if (!quote || Number(quote.tenant) !== parsed.tenantId) {
+            throw new Error('La cotización de la aprobación no pertenece a este inquilino.');
+          }
+          if (quote.status === 'converted') {
+            throw new Error(`La cotización ${quote.quoteNumber} ya fue convertida a factura.`);
+          }
+        }
+
+        const doc = await createInvoiceCore(payload, user, invoiceParsed, req);
+        if ('pendingApproval' in doc) {
+          throw new Error(
+            'La venta re-ejecutada volvió a requerir aprobación (input inconsistente).',
+          );
+        }
+        // Cierre del origen: seguro bajo el lock adquirido arriba.
+        if (workflow === 'order' && sourceId) {
+          await payload.update({
+            collection: 'orders',
+            id: sourceId,
+            data: { status: 'invoiced', issuedInvoice: doc.id },
+            req,
+          });
+        } else if (workflow === 'quote' && sourceId) {
+          await payload.update({
+            collection: 'quotes',
+            id: sourceId,
+            data: { status: 'converted', convertedInvoice: doc.id },
+            req,
+          });
         }
         return doc;
       },
@@ -1356,6 +1381,10 @@ export async function convertQuoteToInvoiceAction(input: ConvertQuoteInput) {
       // workflow y el origen para que el replay cierre ESTA cotización.
       req.context.approvalWorkflow = 'quote';
       req.context.approvalSourceId = parsed.quoteId;
+      // Devin #83 2ª ronda: lock de fila — serializa con el replay de una
+      // aprobación sobre la misma cotización (sin factura duplicada).
+      const db = getActiveDb(req);
+      await db.execute(sql`SELECT id FROM quotes WHERE id = ${parsed.quoteId} FOR UPDATE`);
       const quote = await payload.findByID({
         collection: 'quotes',
         id: parsed.quoteId,
