@@ -213,7 +213,8 @@ export async function revertSaleFromInventory(
 
   // Vendido por (producto, almacén de salida)
   const soldRes = await db.execute(
-    sql`SELECT product_id, source_warehouse_id, SUM(quantity) AS qty
+    sql`SELECT product_id, source_warehouse_id, SUM(quantity) AS qty,
+               SUM(quantity * unit_cost_u_s_d) AS cost
         FROM stock_movements
         WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_out'
         GROUP BY product_id, source_warehouse_id`,
@@ -259,11 +260,17 @@ export async function revertSaleFromInventory(
     }
 
     const soldQty = Number(row.qty) || 0;
+    const soldCost = Number(row.cost) || 0;
     const alreadyReturned = returnedByKey.get(`${productId}:${warehouseId}`) || 0;
     const remaining = Number((soldQty - alreadyReturned).toFixed(4));
     if (remaining <= 0.0001) {
       continue; // Ya devuelto completamente (devoluciones parciales previas)
     }
+
+    // Preserva el costo de la venta: el reingreso se valúa al costo promedio
+    // ponderado de los `sale_out` originales (antes iba en 0 y subvaluaba el
+    // Kardex). Hallazgo S4-1.
+    const unitReturnCostUSD = soldQty > 0 ? Number((soldCost / soldQty).toFixed(4)) : 0;
 
     await runIsolatedContext(req, () =>
     req.payload.create({
@@ -274,8 +281,8 @@ export async function revertSaleFromInventory(
         product: productId,
         targetWarehouse: warehouseId,
         quantity: remaining,
-        unitCostUSD: 0,
-        totalCostUSD: 0,
+        unitCostUSD: unitReturnCostUSD,
+        totalCostUSD: Number((remaining * unitReturnCostUSD).toFixed(2)),
         invoice: invoice.id,
         tenant: tenantId as number,
         reason: `Reversión total por anulación de la factura ${invoice.invoiceNumber}`,
@@ -334,18 +341,32 @@ export async function returnSaleLines({
 
   // Vendido y devuelto por (producto, almacén)
   const soldRes = await db.execute(
-    sql`SELECT product_id, source_warehouse_id, SUM(quantity) AS qty
+    sql`SELECT product_id, source_warehouse_id, SUM(quantity) AS qty,
+               SUM(quantity * unit_cost_u_s_d) AS cost
         FROM stock_movements
         WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_out'
         GROUP BY product_id, source_warehouse_id
         ORDER BY id ASC`,
   );
   const soldByKey = new Map<string, number>();
-  const saleOrder: Array<{ key: string; productId: number; warehouseId: number }> = [];
+  const saleOrder: Array<{
+    key: string;
+    productId: number;
+    warehouseId: number;
+    unitCostUSD: number;
+  }> = [];
   for (const row of soldRes.rows || []) {
     const key = `${row.product_id}:${row.source_warehouse_id}`;
-    soldByKey.set(key, (soldByKey.get(key) || 0) + (Number(row.qty) || 0));
-    saleOrder.push({ key, productId: Number(row.product_id), warehouseId: Number(row.source_warehouse_id) });
+    const qty = Number(row.qty) || 0;
+    soldByKey.set(key, (soldByKey.get(key) || 0) + qty);
+    saleOrder.push({
+      key,
+      productId: Number(row.product_id),
+      warehouseId: Number(row.source_warehouse_id),
+      // Costo promedio ponderado de la salida original: el reingreso lo preserva
+      // (antes se reingresaba en 0 y subvaluaba el Kardex). Hallazgo S4-1.
+      unitCostUSD: qty > 0 ? Number((Number(row.cost) || 0) / qty) : 0,
+    });
   }
 
   const returnedRes = await db.execute(
@@ -406,8 +427,8 @@ export async function returnSaleLines({
           product: productId,
           targetWarehouse: sale.warehouseId,
           quantity: toReturn,
-          unitCostUSD: 0,
-          totalCostUSD: 0,
+          unitCostUSD: Number(sale.unitCostUSD.toFixed(4)),
+          totalCostUSD: Number((toReturn * sale.unitCostUSD).toFixed(2)),
           invoice: invoice.id,
           tenant: tenantId as number,
           reason:
