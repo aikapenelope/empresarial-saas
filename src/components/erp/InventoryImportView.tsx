@@ -84,8 +84,12 @@ function parseCsvFile(text: string): { headers: string[] | null; lines: string[]
   if (all.length === 0) return { headers: null, lines: [] };
 
   const firstCells = splitCsvLine(all[0]);
-  const isHeader = firstCells.some((c) =>
-    [...SKU_ALIASES, ...QTY_ALIASES].some((alias) => c.toLowerCase().includes(alias)),
+  // Devin #84: detección por IGUALDAD exacta (trim + lowercase) — con
+  // substring, un SKU de datos que contenga un alias (p. ej. "STOCK-MASTER")
+  // se confundía con encabezado y la importación perdía su primera fila.
+  const normalizedFirstCells = firstCells.map((cell) => cell.trim().toLowerCase());
+  const isHeader = normalizedFirstCells.some((cell) =>
+    [...SKU_ALIASES, ...QTY_ALIASES].includes(cell),
   );
   if (isHeader) {
     return { headers: firstCells, lines: all.slice(1).map(splitCsvLine) };

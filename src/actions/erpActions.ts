@@ -1221,8 +1221,13 @@ export async function rejectApprovalAction(input: ApproveApprovalInput) {
     if (!approval || Number(approval.tenant) !== parsed.tenantId) {
       throw new Error('La aprobación no pertenece a este inquilino.');
     }
-    if (approval.status === 'consumed') {
-      throw new Error('La aprobación ya fue consumida por una venta exitosa.');
+    // Devin #84 🟥: las decisiones firmadas son INMUTABLES — sólo una
+    // solicitud pendiente puede rechazarse (reemplazar la decisión de otro
+    // resolver corrompería la identidad de auditoría).
+    if (approval.status !== 'pending') {
+      throw new Error(
+        `La aprobación #${approval.id} ya fue resuelta (estado: ${approval.status}) — su decisión no se reescribe.`,
+      );
     }
 
     await payload.update({

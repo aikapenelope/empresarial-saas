@@ -216,16 +216,47 @@ async function buildImportBlueprint({
 async function decideStockMovements(
   blueprint: ImportBlueprint,
   {
+    tenantId,
     warehouseId,
     mode,
     req,
-  }: { warehouseId: number; mode: StockImportMode; req: PayloadRequest },
+  }: {
+    tenantId: number;
+    warehouseId: number;
+    mode: StockImportMode;
+    req: PayloadRequest;
+  },
 ): Promise<PlannedStockMovement[]> {
   const movements: PlannedStockMovement[] = [];
 
   for (const aggregate of blueprint.aggregates.values()) {
     const product = blueprint.productsBySku.get(aggregate.sku);
-    if (!product) continue;
+    if (!product) {
+      // Devin #84: los SKUs desconocidos NUNCA se omiten en silencio — fila de
+      // error explícita (regresión introducida por la extracción del planeador).
+      blueprint.results.push({
+        sku: aggregate.sku,
+        status: 'error',
+        message: 'SKU no encontrado en el catálogo del inquilino.',
+      });
+      continue;
+    }
+    if (product.productType === 'service' || product.trackInventory === false) {
+      blueprint.results.push({
+        sku: aggregate.sku,
+        status: 'error',
+        message: `"${product.name}" no controla existencias (servicio o sin kardex).`,
+      });
+      continue;
+    }
+    if (String(extractId(product.tenant)) !== String(tenantId)) {
+      blueprint.results.push({
+        sku: aggregate.sku,
+        status: 'error',
+        message: 'Violación de multi-inquilino en el producto.',
+      });
+      continue;
+    }
 
     const currentStock = await getProductWarehouseStock(product.id, warehouseId, req);
 
@@ -300,7 +331,12 @@ export async function planStockImport({
   req: PayloadRequest;
 }): Promise<StockImportPlan> {
   const blueprint = await buildImportBlueprint({ tenantId, warehouseId, mode, rows, req });
-  const movements = await decideStockMovements(blueprint, { warehouseId, mode, req });
+  const movements = await decideStockMovements(blueprint, {
+    tenantId,
+    warehouseId,
+    mode,
+    req,
+  });
 
   const productIds: number[] = [];
   for (const aggregate of blueprint.aggregates.values()) {
@@ -355,6 +391,7 @@ export async function importStockToWarehouse({
   );
 
   const movements = await decideStockMovements(blueprint, {
+    tenantId,
     warehouseId,
     mode,
     req,
