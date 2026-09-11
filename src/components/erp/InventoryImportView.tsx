@@ -95,6 +95,14 @@ function downloadErrorsCsv(errors: Array<{ sku: string; message: string }>) {
  */
 export function InventoryImportView({ tenantId, tenantSlug, warehouses }: InventoryImportViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Devin #84 5ª ronda 🟡: identidad de la LECTURA en curso. Cada selección de
+  // archivo emite un token monótono y aborta el lector anterior: los callbacks
+  // (onload/onerror) de una lectura cuya selección ya fue reemplazada se
+  // ignoran — sin esto, un CSV grande que termina de leerse TARDE pisaba
+  // `lines` del archivo recién elegido (la tabla de mapeo mostraba el
+  // contenido de un archivo y el badge el nombre del otro).
+  const fileReadTokenRef = useRef(0);
+  const activeReaderRef = useRef<FileReader | null>(null);
   const [step, setStep] = useState<Step>('file');
   const [fileName, setFileName] = useState<string | null>(null);
   const [lines, setLines] = useState<string[][]>([]);
@@ -141,6 +149,14 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
   });
 
   const handleFile = (file: File) => {
+    // Nueva selección: invalida cualquier lectura en curso (ver refs arriba).
+    fileReadTokenRef.current += 1;
+    const token = fileReadTokenRef.current;
+    // Abort es no-op sobre un lector ya terminado; si estaba a mitad de
+    // lectura, su onload nunca dispara — y si llegara a disparar por carrera,
+    // el guard por token lo bloquea igual.
+    activeReaderRef.current?.abort();
+
     setParseError(null);
     setError(null);
     setResult(null);
@@ -149,13 +165,18 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
     // Devin #84 4ª ronda: un fallo de parseo/lectura deja el estado LIMPIO
     // (sin filas huérfanas del archivo anterior ni su nombre) — el botón
     // "Continuar al mapeo" no puede quedar activo con datos que no son.
+    // Devin #84 5ª ronda: los callbacks con token vencido no tocan estado —
+    // una selección más nueva es la única dueña de la UI.
     const failParse = (message: string) => {
+      if (fileReadTokenRef.current !== token) return;
       setParseError(message);
       setLines([]);
       setFileName(null);
     };
     const reader = new FileReader();
+    activeReaderRef.current = reader;
     reader.onload = () => {
+      if (fileReadTokenRef.current !== token) return;
       const text = String(reader.result || '');
       const parsed = parseCsvDocument(text);
       if (parsed.rows.length === 0) {
@@ -174,6 +195,10 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
   };
 
   const resetAll = () => {
+    // Arranque limpio: también invalida una lectura en vuelo — su callback
+    // tardío no debe resucitar estado sobre la importación que recién empieza.
+    fileReadTokenRef.current += 1;
+    activeReaderRef.current?.abort();
     setStep('file');
     setLines([]);
     setFirstRowIsHeader(true);
@@ -228,6 +253,14 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
       setError('Selecciona un almacén de destino.');
       return;
     }
+    // Devin #84 5ª ronda 🔴: el commit exige un dry-run VIVO. Sin este guard,
+    // reconfirmar sobre estado consumido (o huérfano) dependría de que las
+    // capas de UI no fallaran — el Kardex es inmutable y el modo Ajustar
+    // aplica DELTAS: un segundo commit duplica existencias, no se corrige solo.
+    if (!previewPlan) {
+      setError('Ejecuta el dry-run antes de confirmar.');
+      return;
+    }
     const targetWarehouseId = warehouseId;
     setLoading(true);
     const res = await importStockAction({
@@ -261,6 +294,12 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
       });
       setDriftCount(drift);
       setResult(summary);
+      // Devin #84 5ª ronda 🔴: la corrida confirmada se CONSUME — sin preview
+      // ni filas vivas, las tarjetas de dry-run/confirmación quedan sin
+      // contenido (sus guards exigen previewPlan) y repetir exige archivo y
+      // dry-run nuevos. El drift ya se calculó arriba con la copia local.
+      setPreviewPlan(null);
+      setLines([]);
       setStep('result');
     } else {
       setError(res.error || 'Error al importar el inventario.');
@@ -298,29 +337,37 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
 
       {/* Stepper (tablist accesible) */}
       <div role="tablist" aria-label="Pasos de la importación" className="flex flex-wrap gap-2">
-        {STEP_LIST.map((s, idx) => (
-          <button
-            key={s.id}
-            role="tab"
-            type="button"
-            aria-selected={s.id === step}
-            disabled={idx > currentStepIndex}
-            onClick={() => {
-              // Sólo retroceder libremente; avanzar lo hacen los botones de cada paso.
-              if (idx < currentStepIndex) setStep(s.id);
-            }}
-            className={cn(
-              'px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-colors',
-              s.id === step
-                ? 'border-primary bg-primary text-primary-foreground'
-                : idx < currentStepIndex
-                  ? 'border-border bg-muted text-foreground cursor-pointer'
-                  : 'border-border bg-card text-muted-foreground cursor-not-allowed',
-            )}
-          >
-            {s.label}
-          </button>
-        ))}
+        {STEP_LIST.map((s, idx) => {
+          // Devin #84 5ª ronda 🔴: el RESULTADO es terminal — no se navega
+          // hacia atrás desde él. Volver re-habilitaría "Confirmar" con el
+          // preview de la corrida YA aplicada y un segundo commit duplicaría
+          // los deltas del modo Ajustar (recalcular no hace idempotente la
+          // operación: cada cantidad es un delta sobre el stock vigente).
+          const navigable = idx < currentStepIndex && step !== 'result';
+          return (
+            <button
+              key={s.id}
+              role="tab"
+              type="button"
+              aria-selected={s.id === step}
+              disabled={idx > currentStepIndex || !navigable}
+              onClick={() => {
+                // Sólo retroceder libremente; avanzar lo hacen los botones de cada paso.
+                if (navigable) setStep(s.id);
+              }}
+              className={cn(
+                'px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-colors',
+                s.id === step
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : navigable
+                    ? 'border-border bg-muted text-foreground cursor-pointer'
+                    : 'border-border bg-card text-muted-foreground cursor-not-allowed',
+              )}
+            >
+              {s.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Paso 1: Archivo */}
