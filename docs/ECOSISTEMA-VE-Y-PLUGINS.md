@@ -4,7 +4,8 @@
 > adaptando a Payload lo que el ecosistema venezolano ya validó. Complementa a
 > [`FASE-13-INVESTIGACION.md`](./FASE-13-INVESTIGACION.md) (infraestructura) y
 > [`IMPLEMENTACIONES-ESTRUCTURALES.md`](./IMPLEMENTACIONES-ESTRUCTURALES.md) (7 PRs
-> aprobados). Solo documentación — cero código de producción.
+> fusionados, sep-2026 — ver su banner de cierre). Solo documentación — cero código de
+> producción.
 
 ---
 
@@ -129,7 +130,10 @@ time-off; **cero cálculos**. `hrPlugin({ enabled })`:
 
 **Honestidad arquitectónica**: SÍ respetamos la constitución (AGENTS.md §2.1) — el acoplamiento cruz de dominios (venta→inventario) es plugin; la lógica de un solo dominio vive en sus colecciones + utilities puras (`cashLedger`, `financeLedger`, `inventoryLedger` en `src/utilities/`). Lo que viene (fiscal, treasury, HR) NACE como plugin desde el día uno. Con Payload 4 en camino (admin redesign, adaptador TanStack, MCP — plugins siguen siendo el contrato central), mantener todo a nivel config/hooks garantiza migración barata.
 
-**Roadmap de plugins del sistema**: 3 existentes + `treasuryPlugin` (siguiente) + `hrPlugin` + `fiscalPlugin` (luego) + futuro `storefrontPlugin` (ver §6) + futuro `payrollPlugin` (si el mercado lo pide).
+**Roadmap de plugins del sistema**: 3 existentes + `treasuryPlugin` (**SIGUIENTE**) +
+`hrPlugin` + `fiscalPlugin` (luego) + futuro `storefrontPlugin` (ver §6/§8) + futuro
+`inboxPlugin` con Composio (ver §6/§7) + futuro `payrollPlugin` (si el mercado lo pide).
+El orden y el esfuerzo estimado de cada uno están en §9.
 
 ---
 
@@ -297,11 +301,23 @@ mínima → precio/descuento, campo `min_quantity`); la adaptación sería un ca
 
 ## 9. Orden sugerido de ejecución (después de los 7 PRs aprobados)
 
+> **ESTADO (2026-09-11): los 7 PRs del bloque de Implementaciones Estructurales están
+> fusionados** (#77–#81, #83, #84 + auditoría #82, ver banner en
+> [`IMPLEMENTACIONES-ESTRUCTURALES.md`](./IMPLEMENTACIONES-ESTRUCTURALES.md)) — **este
+> §9 es el roadmap ACTIVO.** Nada de los 6 puntos ha empezado. Regla de proceso
+> aprendida con #83/#84: cada PR con migración termina con el contraste
+> `payload_migrations` (Supabase) vs repo — migración aplicada el mismo día del merge.
+
 1. **TreasuryPlugin v1** — MacroDroid + matching (2-3 sprints, más valor inmediato).
 2. **StorefrontPlugin** — vitrina B2B de presupuesto (§8, ~1-1.5 sprints; puede
-   avanzar en paralelo porque la base existe).
+   avanzar en paralelo porque la base existe). *Decisión pendiente del usuario: v1
+   solo-URL vs v1 con subida al bucket propio + BYO por tenant en fase 2 (§8).*
 3. **HrPlugin** — Expediente de Personal (1.5-2 sprints).
 4. **InboxPlugin v1** — previo: PoC de 1 día de Composio (§7) (3 sprints).
 5. **FiscalPlugin v1** — previo: sprint de investigación (formatos 99035/XML reales +
    contador) (3-4 sprints).
 6. Inbox v2 (Instagram) / Fiscal v2+ / Payroll — según demanda de clientes.
+
+**Fuera de este orden pero abiertos**: los Lotes 2–4 del pulido de modales (Fase 12 del
+ROADMAP.md) como pulido continuo; y los gates de go-live de
+[`FASE-13-INVESTIGACION.md`](./FASE-13-INVESTIGACION.md) antes del primer tenant real.

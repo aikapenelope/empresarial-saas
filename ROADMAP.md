@@ -732,6 +732,37 @@ Equivalencias UOM (comprar por caja / vender por unidad) · módulo de aprobacio
 
 ---
 
+# 🏗️ Bloque de Implementaciones Estructurales (sep-2026) — EJECUTADO
+
+> El plan detallado vive en [`docs/IMPLEMENTACIONES-ESTRUCTURALES.md`](./docs/IMPLEMENTACIONES-ESTRUCTURALES.md)
+> (brechas vs. Cendaro, 8 items → 7 PRs). Esta sección registra la ejecución: **los 7 PRs
+> del bloque están fusionados** junto con el sprint de auditoría de seguridad.
+
+| PR | Items | Contenido | Fusión |
+|---|---|---|---|
+| [#77](https://github.com/aikapenelope/empresarial-saas/pull/77) | 14, 15 | Skeletons isomórficos + EmptyState estándar | 2026-09-10 |
+| [#78](https://github.com/aikapenelope/empresarial-saas/pull/78) | 18 | POS keyboard-first: escáner de barras + F2/F4 + vuelto bimonetario | 2026-09-10 |
+| [#79](https://github.com/aikapenelope/empresarial-saas/pull/79) | 17 | Command palette con teclado, keywords y filtro por rol | 2026-09-10 |
+| [#80](https://github.com/aikapenelope/empresarial-saas/pull/80) | 25 + 6 parcial | Digest de alertas por email + alerta de cuota vencida (migración) | 2026-09-10 |
+| [#81](https://github.com/aikapenelope/empresarial-saas/pull/81) | 6 | Enforcement de crédito como utility pura + test CI + cuotas en el modal | 2026-09-10 |
+| [#83](https://github.com/aikapenelope/empresarial-saas/pull/83) | 1 | Aprobaciones con firma para crédito sobre el límite (migración `approvals`) | 2026-09-11 |
+| [#84](https://github.com/aikapenelope/empresarial-saas/pull/84) | 7 | Wizard de importación de stock con dry-run y mapeo de columnas | 2026-09-11 |
+| [#82](https://github.com/aikapenelope/empresarial-saas/pull/82) | — | Sprint R1 de auditoría: blindaje de seguridad y BD | 2026-09-10 |
+
+**Esquema de producción al día (2026-09-11):** las 25 migraciones del repo aplicadas en
+Supabase — incluida `20260910_195507_add_approvals`, que había quedado sin aplicar tras
+el merge de #83 y se detectó en la verificación post-merge de #84 (lección: contrastar
+`payload_migrations` vs repo después de cada PR con migración).
+
+**Lo que sigue:** el roadmap de plugins del ecosistema VE
+([`docs/ECOSISTEMA-VE-Y-PLUGINS.md` §9](./docs/ECOSISTEMA-VE-Y-PLUGINS.md): Treasury →
+Storefront → HR → Inbox → Fiscal) y la infraestructura de escala
+([`docs/FASE-13-INVESTIGACION.md`](./docs/FASE-13-INVESTIGACION.md): Render, 10k SKUs,
+PWA de vendedores). Los Lotes 2–4 del pulido de modales (Fase 12) continúan abiertos
+como trabajo de pulido continuo.
+
+---
+
 ## 🔒 Estándares No Negociables de Calidad y Seguridad
 - **Cero `any`:** Código estrictamente tipado contra `payload-types.ts`.
 - **Transacciones Atómicas:** `req` propagado en cada mutación interna de hooks.
