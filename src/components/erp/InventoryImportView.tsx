@@ -25,6 +25,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import {
+  detectColumn,
+  parseCsvDocument,
+  QTY_ALIASES,
+  SKU_ALIASES,
+} from '@/utilities/importCsv';
 
 interface InventoryImportViewProps {
   tenantId: number;
@@ -62,47 +68,6 @@ const STEP_LIST: Array<{ id: Step; label: string }> = [
 ];
 
 /** Alias de columnas (misma filosofía que import.hooks.before del plugin oficial). */
-const SKU_ALIASES = ['sku', 'codigo', 'código', 'code'];
-const QTY_ALIASES = ['cantidad', 'quantity', 'qty', 'stock'];
-
-function splitCsvLine(line: string): string[] {
-  const delimiter = (line.match(/;/g)?.length || 0) > (line.match(/,/g)?.length || 0) ? ';' : ',';
-  return line.split(delimiter).map((c) => c.trim());
-}
-
-/**
- * Parseo con encabezados para el mapeo del wizard: la primera línea es
- * encabezado si alguna celda calza con un alias conocido (sku/cantidad/…);
- * si no, se trata como dato con mapeo posicional por defecto (col 1 = SKU,
- * col 2 = cantidad — comportamiento del flujo previo a IE-PR7).
- */
-function parseCsvFile(text: string): { headers: string[] | null; lines: string[][] } {
-  const all = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (all.length === 0) return { headers: null, lines: [] };
-
-  const firstCells = splitCsvLine(all[0]);
-  // Devin #84: detección por IGUALDAD exacta (trim + lowercase) — con
-  // substring, un SKU de datos que contenga un alias (p. ej. "STOCK-MASTER")
-  // se confundía con encabezado y la importación perdía su primera fila.
-  const normalizedFirstCells = firstCells.map((cell) => cell.trim().toLowerCase());
-  const isHeader = normalizedFirstCells.some((cell) =>
-    [...SKU_ALIASES, ...QTY_ALIASES].includes(cell),
-  );
-  if (isHeader) {
-    return { headers: firstCells, lines: all.slice(1).map(splitCsvLine) };
-  }
-  return { headers: null, lines: all.map(splitCsvLine) };
-}
-
-function detectColumn(headers: string[] | null, aliases: string[], fallback: number): number {
-  if (!headers) return fallback;
-  const idx = headers.findIndex((h) => aliases.some((alias) => h.toLowerCase().includes(alias)));
-  return idx >= 0 ? idx : fallback;
-}
-
 function toRow(cells: string[], skuCol: number, qtyCol: number): ParsedRow {
   const raw = cells.join(',');
   const sku = (cells[skuCol] ?? '').trim();
@@ -166,7 +131,7 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result || '');
-      const parsed = parseCsvFile(text);
+      const parsed = parseCsvDocument(text);
       if (parsed.lines.length === 0) {
         setParseError('El archivo no contiene filas. Formato esperado: sku,cantidad');
         setLines([]);
@@ -254,9 +219,19 @@ export function InventoryImportView({ tenantId, tenantSlug, warehouses }: Invent
       // commit recalculó — marcamos cuántas filas difieren del preview.
       const preview = previewPlan?.results ?? [];
       let drift = 0;
+      // Devin #84: el drift compara TAMBIÉN el tipo de movimiento — un set
+      // cuyo stock cruzó el objetivo invierte entrada↔salida con la misma
+      // cantidad absoluta, y sin esto se reportaba como "sin drift".
       summary.results.forEach((r, i) => {
         const p = preview[i];
-        if (!p || p.status !== r.status || (p.quantity ?? 0) !== (r.quantity ?? 0)) drift += 1;
+        if (
+          !p ||
+          p.status !== r.status ||
+          p.movement !== r.movement ||
+          (p.quantity ?? 0) !== (r.quantity ?? 0)
+        ) {
+          drift += 1;
+        }
       });
       setDriftCount(drift);
       setResult(summary);
