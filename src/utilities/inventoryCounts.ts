@@ -57,23 +57,62 @@ export async function snapshotWarehouseStock({
  * el conteo como completado. Todo en la transacción del llamador (req propagado).
  */
 export async function completeInventoryCount({
-  count,
+  countId,
+  expectedTenantId,
   completedBy,
   req,
 }: {
-  count: InventoryCount;
+  countId: number | string;
+  /** Inquilino esperado; si se pasa, se revalida contra el conteo fresco. */
+  expectedTenantId?: number | string | null;
   completedBy: number;
   req: PayloadRequest;
 }): Promise<number> {
+  const id = extractId(countId);
+  if (!id) {
+    throw new Error('El conteo no tiene un identificador válido.');
+  }
+
+  const db = getActiveDb(req);
+
+  // Advisory lock transaccional POR CONTEO: serializa finalizaciones
+  // concurrentes del MISMO documento (dos pestañas / doble submit). Sin él,
+  // ambas transacciones leen `status: in_progress` y aplican los ajustes DOS
+  // veces sobre el Kardex (movimientos duplicados → stock corrupto). El lock se
+  // libera en el commit/rollback de la transacción del llamador. Patrón de la
+  // casa (consumeApproval / nextDocumentNumber).
+  await db.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`inventorycount:${id}`}))`,
+  );
+
+  // Relectura FRESCA bajo el lock: el estado pudo cambiar entre la lectura del
+  // llamador y la adquisición del lock. Ya bloqueados, el valor es estable y la
+  // validación de "ya completado" es definitiva (no la del objeto del llamador).
+  const count = (await req.payload.findByID({
+    collection: 'inventory-counts',
+    id: Number(id),
+    depth: 0,
+    req,
+    overrideAccess: true,
+  })) as InventoryCount | undefined;
+
+  if (!count) {
+    throw new Error(`El conteo #${id} no existe.`);
+  }
+
+  if (expectedTenantId != null && Number(extractId(count.tenant)) !== Number(expectedTenantId)) {
+    throw new Error('El conteo no pertenece a este inquilino.');
+  }
+
+  if (count.status === 'completed') {
+    throw new Error('El conteo ya está completado.');
+  }
+
   const warehouseIdRaw = extractId(count.warehouse);
   if (!warehouseIdRaw) {
     throw new Error('El conteo no tiene un almacén válido.');
   }
   const warehouseId = Number(warehouseIdRaw);
-
-  if (count.status === 'completed') {
-    throw new Error('El conteo ya está completado.');
-  }
 
   const items = (Array.isArray(count.items) ? count.items : []) as Array<{
     product?: unknown;

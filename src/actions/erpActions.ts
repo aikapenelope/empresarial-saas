@@ -2646,24 +2646,18 @@ export async function completeInventoryCountAction(input: CompleteInventoryCount
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
-      const count = await payload.findByID({
-        collection: 'inventory-counts',
-        id: parsed.countId,
-        depth: 0,
-        req,
-      });
-
-      if (!count || Number(count.tenant) !== Number(parsed.tenantId)) {
-        throw new Error('El conteo no pertenece a este inquilino.');
-      }
-
+      // La relectura del conteo, la validación de inquilino y la de estado viven
+      // AHORA dentro de la utility, bajo el advisory lock por conteo: eso evita
+      // la doble finalización concurrente (dos pestañas aplicando los ajustes dos
+      // veces sobre el Kardex). Ver completeInventoryCount.
       const adjusted = await completeInventoryCount({
-        count,
+        countId: parsed.countId,
+        expectedTenantId: parsed.tenantId,
         completedBy: user.id,
         req,
       });
 
-      return { countId: count.id, adjustedProducts: adjusted };
+      return { countId: parsed.countId, adjustedProducts: adjusted };
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/inventory/counts`);
