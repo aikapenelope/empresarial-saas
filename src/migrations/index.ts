@@ -22,6 +22,7 @@ import * as migration_20260909_010000_add_invoice_share_token from './20260909_0
 import * as migration_20260909_024148_add_auto_send_invoice_email from './20260909_024148_add_auto_send_invoice_email';
 import * as migration_20260910_120000_quote_closure_number_uniques from './20260910_120000_quote_closure_number_uniques';
 import * as migration_20260910_185508_add_alert_notifications from './20260910_185508_add_alert_notifications';
+import * as migration_20260910_195507_add_approvals from './20260910_195507_add_approvals';
 
 export const migrations = [
   {
@@ -142,6 +143,11 @@ export const migrations = [
   {
     up: migration_20260910_185508_add_alert_notifications.up,
     down: migration_20260910_185508_add_alert_notifications.down,
-    name: '20260910_185508_add_alert_notifications'
+    name: '20260910_185508_add_alert_notifications',
+  },
+  {
+    up: migration_20260910_195507_add_approvals.up,
+    down: migration_20260910_195507_add_approvals.down,
+    name: '20260910_195507_add_approvals'
   },
 ];

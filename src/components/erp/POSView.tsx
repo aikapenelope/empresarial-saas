@@ -116,6 +116,9 @@ export function POSView({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastInvoiceNumber, setLastInvoiceNumber] = useState<string | null>(null);
+  // IE-PR6: la venta a crédito sobre el límite no se rechaza — queda pendiente
+  // de autorización y el cajero ve el aviso con el ID de la solicitud.
+  const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
 
   // Tier de precio: mostrador = retail; cliente registrado = su tier asignado
   const activeTier =
@@ -352,7 +355,22 @@ export function POSView({
     setCart((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const submitLockRef = useRef(false);
+
+  /** Único camino de cobro (botón y F4): lock SÍNCRONO anti-re-entrada. */
   const handleSubmit = async () => {
+    // Devin #83: el estado `loading` no es un lock — dos F4 en el mismo tick
+    // entraban antes del re-render. La ref se setea/limpia sincrónicamente.
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    try {
+      await runCheckout();
+    } finally {
+      submitLockRef.current = false;
+    }
+  };
+
+  const runCheckout = async () => {
     setError(null);
 
     if (cart.length === 0) {
@@ -404,6 +422,16 @@ export function POSView({
 
     setLoading(false);
 
+    if (res.success && 'status' in res && res.status === 'pending_approval') {
+      setCart([]);
+      setQuantity(1);
+      setAmountGiven('');
+      setApprovalNotice(
+        `Solicitud #${res.approvalId} enviada a supervisión — la venta espera autorización en "Aprobaciones".`,
+      );
+      return;
+    }
+
     if (res.success) {
       setLastInvoiceNumber((res.data as { invoiceNumber: string }).invoiceNumber);
       setCart([]);
@@ -427,7 +455,8 @@ export function POSView({
   const loadingRef = useRef(false);
 
   // Closure fresca: la ref se reasigna en cada render (dentro de un efecto, como
-  // exige la regla react-hooks/refs), así F4 ejecuta siempre la versión vigente.
+  // exige la regla react-hooks/refs), así F4 ejecuta siempre la versión vigente
+  // — que internamente además lleva el lock síncrono anti-re-entrada.
   useEffect(() => {
     submitRef.current = handleSubmit;
     loadingRef.current = loading;
@@ -465,6 +494,17 @@ export function POSView({
           </div>
           <Button variant="outline" size="sm" onClick={() => setLastInvoiceNumber(null)}>
             Nueva venta
+          </Button>
+        </div>
+      )}
+
+      {/* Aviso de solicitud pendiente de autorización (IE-PR6) */}
+      {approvalNotice && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <p className="flex-1 text-sm font-semibold text-amber-600 dark:text-amber-400">{approvalNotice}</p>
+          <Button variant="outline" size="sm" onClick={() => setApprovalNotice(null)}>
+            Entendido
           </Button>
         </div>
       )}

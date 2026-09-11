@@ -1,9 +1,10 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  getTenantBySlug,
-  getAllTenants,
-  getActiveAlertCount,
+	getTenantBySlug,
+	getAllTenants,
+	getActiveAlertCount,
+	getPendingApprovalsCount,
 } from '@/utilities/erpData';
 import { getLiveExchangeRates, resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { requireErpTenantAccess, ErpAccessError } from '@/utilities/erpAuth';
@@ -93,19 +94,21 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
     throw error;
   }
 
-  const [fetchedTenants, liveRates, effectiveRateData, activeAlertCount] = await Promise.all([
-    getAllTenants(),
-    getLiveExchangeRates(),
-    resolveEffectiveRate(
-      tenant.currencyConfig
-        ? {
-            manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
-            autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
-          }
-        : undefined,
-    ),
-    getActiveAlertCount(tenant.id),
-  ]);
+  const [fetchedTenants, liveRates, effectiveRateData, activeAlertCount, approvalsPendingCount] =
+    await Promise.all([
+      getAllTenants(),
+      getLiveExchangeRates(),
+      resolveEffectiveRate(
+        tenant.currencyConfig
+          ? {
+              manualExchangeRate: tenant.currencyConfig.manualExchangeRate ?? undefined,
+              autoSyncRate: tenant.currencyConfig.autoSyncRate ?? undefined,
+            }
+          : undefined,
+      ),
+      getActiveAlertCount(tenant.id),
+      getPendingApprovalsCount(tenant.id),
+    ]);
   availableTenants = fetchedTenants;
 
   const rates = {
@@ -127,6 +130,7 @@ export default async function ErpLayout({ children, params }: LayoutProps) {
       userName={actor?.name ?? 'Usuario'}
       userEmail={actor?.email ?? ''}
       activeAlertCount={activeAlertCount}
+      approvalsPendingCount={approvalsPendingCount}
     >
       {children}
     </AppShell>

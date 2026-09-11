@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
 	BellRing,
 	ClipboardList,
+	ClipboardCheck,
 	FileText,
 	History,
 	LayoutDashboard,
@@ -48,6 +49,7 @@ const NAV_ITEMS: Array<{
 	{ routeKey: "invoices", title: "Facturación & Ventas", segment: "invoices", icon: Receipt, keywords: "facturas facturar ventas cobrar emitir" },
 	{ routeKey: "customers", title: "Clientes & Cartera", segment: "customers", icon: Users, keywords: "clientes crm rif deuda estado de cuenta" },
 	{ routeKey: "alerts", title: "Alertas", segment: "alerts", icon: BellRing, keywords: "alertas notificaciones avisos" },
+	{ routeKey: "approvals", title: "Aprobaciones", segment: "approvals", icon: ClipboardCheck, keywords: "aprobaciones autorizar crédito supervisión pendientes firmar" },
 	// Devin #80: la paleta anterior tenía "Auditoría Global" y al consumir
 	// NAV_ITEMS desapareció. La auditoría es EXCLUSIVA de super-admin/
 	// tenant-admin (getAuditLogData lo revalida con 403), así que la ruta va al
@@ -87,7 +89,7 @@ const NAV_GROUPS: Array<{ label: string; routeKeys: string[] }> = [
 	},
 	{
 		label: "Administración",
-		routeKeys: ["alerts", "templates", "settings"],
+		routeKeys: ["alerts", "approvals", "templates", "settings"],
 	},
 ];
 
@@ -100,7 +102,7 @@ const ROLE_NAV: Record<string, string[]> = {
 	employee: ["dashboard", "alerts", "invoices", "customers", "inventory", "quotes", "quotes-quick", "orders", "delivery-notes"],
 	supervisor: [
 		"dashboard", "pos", "invoices", "customers", "inventory", "quotes", "quotes-quick",
-		"orders", "delivery-notes", "alerts", "receivables", "cash-registers", "purchases", "vendors",
+		"orders", "delivery-notes", "alerts", "approvals", "receivables", "cash-registers", "purchases", "vendors",
 	],
 };
 
@@ -135,6 +137,7 @@ export function buildNavGroups(
 	tenantSlug: string,
 	userRole?: string | null,
 	activeAlertCount?: number,
+	approvalsPendingCount?: number,
 ): SidebarNavGroup[] {
 	const allowed = userRole ? ROLE_NAV[userRole] ?? ALL_NAV : ALL_NAV;
 	const byKey = new Map(NAV_ITEMS.map((item) => [item.routeKey, item]));
@@ -151,7 +154,12 @@ export function buildNavGroups(
 					path: `/${tenantSlug}/erp${item.segment ? `/${item.segment}` : ""}`,
 					icon: item.icon,
 					exact: item.exact,
-					badgeCount: key === "alerts" ? activeAlertCount : undefined,
+					badgeCount:
+						key === "alerts"
+							? activeAlertCount
+							: key === "approvals"
+								? approvalsPendingCount
+								: undefined,
 				};
 			})
 			.filter((item): item is SidebarNavItem => item !== null),

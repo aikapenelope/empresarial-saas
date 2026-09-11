@@ -26,7 +26,11 @@ export interface CreditSaleInput {
   customerName?: string;
 }
 
-export type CreditSaleEvaluation = { ok: true } | { ok: false; reason: string };
+export type CreditFailureCode = 'credit_disabled' | 'limit_exceeded';
+
+export type CreditSaleEvaluation =
+  | { ok: true }
+  | { ok: false; code: CreditFailureCode; reason: string };
 
 /** Tolerancia de redondeo (centavos) para no rechazar por floating point. */
 const CREDIT_TOLERANCE_USD = 0.005;
@@ -38,6 +42,9 @@ export function evaluateCreditSale(input: CreditSaleInput): CreditSaleEvaluation
   if (input.creditAllowed === false) {
     return {
       ok: false,
+      // Devin #83: código legible por máquina — el crédito deshabilitado es
+      // rechazo DURO y nunca se convierte en solicitud de aprobación.
+      code: 'credit_disabled',
       reason: `El cliente "${name}" no tiene crédito habilitado. Registre la venta de contado o habilite su línea de crédito.`,
     };
   }
@@ -48,6 +55,7 @@ export function evaluateCreditSale(input: CreditSaleInput): CreditSaleEvaluation
   if (total > available + CREDIT_TOLERANCE_USD) {
     return {
       ok: false,
+      code: 'limit_exceeded',
       reason: `Límite de crédito insuficiente para "${name}": disponible ${Math.max(available, 0).toFixed(2)} USD, requerido ${total.toFixed(2)} USD.`,
     };
   }

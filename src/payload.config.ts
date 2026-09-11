@@ -35,6 +35,7 @@ import { Quotes } from './collections/Quotes';
 import { Orders } from './collections/Orders';
 import { DeliveryNotes } from './collections/DeliveryNotes';
 import { Alerts } from './collections/Alerts';
+import { Approvals } from './collections/Approvals';
 import { InventoryCounts } from './collections/InventoryCounts';
 import { salesInventoryPlugin } from './plugins/salesInventory';
 import { pricingPlugin } from './plugins/pricing';
@@ -119,6 +120,7 @@ export default buildConfig({
     Orders,
     DeliveryNotes,
     Alerts,
+    Approvals,
     InventoryCounts,
   ],
   jobs: {
@@ -223,6 +225,7 @@ export default buildConfig({
         'delivery-notes': {},
         alerts: {},
         'price-history': {},
+        approvals: {},
         // audit-log NO es multi-tenant: es la bitácora GLOBAL de la plataforma y
         // registra también operaciones sin inquilino (p. ej. la creación de
         // empresas por el super-admin). El plugin inyecta aquí un campo tenant

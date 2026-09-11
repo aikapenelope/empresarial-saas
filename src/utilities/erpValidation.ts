@@ -442,6 +442,24 @@ export const createSupplierSchema = z.object({
   creditLimitUSD: positiveMoney.optional(),
 });
 
+export const approveApprovalSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  approvalId: idLike,
+  decisionNote: z.string().trim().max(500).optional(),
+});
+
+export const rejectApprovalSchema = z.object({
+  tenantId: idLike,
+  tenantSlug: z.string().min(1).max(120),
+  approvalId: idLike,
+  decisionNote: z
+    .string()
+    .trim()
+    .min(4, 'Indica el motivo del rechazo (mínimo 4 caracteres).')
+    .max(500),
+});
+
 export const updateTenantSettingsSchema = z.object({
   tenantId: idLike,
   tenantSlug: z.string().min(1).max(120),
