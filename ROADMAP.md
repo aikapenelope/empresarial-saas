@@ -754,12 +754,62 @@ Supabase — incluida `20260910_195507_add_approvals`, que había quedado sin ap
 el merge de #83 y se detectó en la verificación post-merge de #84 (lección: contrastar
 `payload_migrations` vs repo después de cada PR con migración).
 
-**Lo que sigue:** el roadmap de plugins del ecosistema VE
-([`docs/ECOSISTEMA-VE-Y-PLUGINS.md` §9](./docs/ECOSISTEMA-VE-Y-PLUGINS.md): Treasury →
-Storefront → HR → Inbox → Fiscal) y la infraestructura de escala
-([`docs/FASE-13-INVESTIGACION.md`](./docs/FASE-13-INVESTIGACION.md): Render, 10k SKUs,
-PWA de vendedores). Los Lotes 2–4 del pulido de modales (Fase 12) continúan abiertos
-como trabajo de pulido continuo.
+---
+
+# 🧭 Roadmap activo — lo que queda (post-wizard, 2026-09-11)
+
+> **ÚNICA sección consolidada de pendientes.** El wizard de importación (#84) cerró el
+> bloque de producto Cendaro. Todo lo que sigue vive con su detalle en los docs de
+> `docs/`; aquí está el índice unificado con estado y esfuerzo. Nada de esta lista ha
+> empezado salvo donde se indica.
+
+## 1. Producto — plugins del ecosistema VE (orden acordado, `docs/ECOSISTEMA-VE-Y-PLUGINS.md` §2–§9)
+
+| # | Plugin | Alcance v1 | Esfuerzo | Previo |
+|---|---|---|---|---|
+| 1 | `treasuryPlugin` | BankAccounts/BankMovements + webhook MacroDroid (pago móvil/Zelle concilia solo) + motor de matching puro que propone y el humano confirma | 2–3 sprints | — |
+| 2 | `storefrontPlugin` | Vitrina B2B de presupuesto: `/t/[slug]` con stock disponible → "Solicitar Presupuesto" cae como `Order` canal `web` (§8) | 1–1.5 sprints | ⚠️ Decisión del dueño: v1 solo-URL vs subida al bucket propio + BYO por tenant en fase 2 |
+| 3 | `hrPlugin` | Expediente de Personal (empleados, eventos, documentos) — cero cálculos de nómina | 1.5–2 sprints | — |
+| 4 | `inboxPlugin` v1 | WhatsApp vía Composio (un proyecto por tenant, conexión global de la empresa, webhook firmado → Jobs Queue) | 3 sprints | PoC Composio de 1 día |
+| 5 | `fiscalPlugin` v1 | Retenciones IVA + base fiscal (checklist validado §2, norma PA SNAT/2025/000054) | 3–4 sprints | Sprint de investigación de formatos + sesión con contador |
+
+Después, según demanda de clientes: Inbox v2 (Instagram), Fiscal v2 (ISLR + IGTF
+ampliado), Fiscal v3, `payrollPlugin`. Fuera de plugins pero del mismo origen: **Phase B
+del wizard** (alta de catálogo desde CSV con matching fuzzy `pg_trgm` — PR separado,
+sujeto a decisión).
+
+## 2. Pulido continuo — Fase 12, Lotes 2–4 de modales (detalle en Sprint 45, arriba)
+
+- [ ] **Lote 2:** CashClosure (26) · Payment (21) · SupplierPayment (14) · OpenShift (12) · CashRegister (8)
+- [ ] **Lote 3:** Product (25) · Customer (23) · Supplier (17) · StockMovement (16) · Production (14)
+- [ ] **Lote 4:** PurchaseInvoice (23) · OrderInvoice (11) · IssueDelivery (11) · ConvertQuote (10) · Return (10) · TenantCreate (11) · ReceiveWarehouse (4) · ManualRate (4)
+
+## 3. Gates de go-live — antes del primer tenant que pague (`docs/FASE-13-INVESTIGACION.md` §8)
+
+| # | Gate | Estado |
+|---|---|---|
+| 1 | Tests financieros de ledgers en CI (ampliar a cash/finance/AP) | 🟡 Parcial (108 tests) |
+| 2 | PITR + restore **probado** en Supabase | 🔴 |
+| 3 | Observabilidad (Sentry u equivalente) | 🔴 |
+| 4 | Runner de cron para las alertas | 🔴 (se resuelve con Render, §1.2 de FASE-13) |
+| 5 | Disciplina de migraciones (chequeo `payload_migrations` vs repo post-merge) | 🟡 Proceso definido |
+
+## 4. Infraestructura de escala — Fase 13 (`docs/FASE-13-INVESTIGACION.md`, SIN EJECUTAR)
+
+1. **Migración a Render** (+ `prodMigrations` + Jobs Queue re-activable + cron de
+   alertas) — prerrequisito de escala y mata el gate 4.
+2. **Sprint de escala**: typeahead server-side + `pg_trgm` + dashboard SQL (10k SKUs).
+3. **PWA de vendedores online-first** (3 pantallas + shell).
+4. **RLS de Postgres** (defensa en profundidad, opcional).
+5. **E2E + monitoreo** (cubre el gate 3).
+
+## 5. Decisiones que esperan al dueño
+
+1. Storefront: imágenes v1 solo-URL vs bucket propio + BYO (ECOSISTEMA §8).
+2. ¿Dominios propios por inquilino? (FASE-13 §7 — define CORS/multi-dominio).
+3. ¿El POS de mostrador necesita "nota" impresa? (FASE-13 §7 — S41.2-residual).
+4. Plan de Render: tier de Postgres e instancias (FASE-13 §7).
+5. Wizard Phase B (alta de catálogo desde CSV): sí/no y cuándo.
 
 ---
 

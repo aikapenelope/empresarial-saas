@@ -123,9 +123,11 @@ Lo que los docs oficiales recomiendan y nuestro estado:
 
 ## 8. Gates de go-live antes del primer tenant real (centralizado 2026-09-11)
 
-> Requisitos acordados en el análisis comparativo de plataforma (2026-09-11). El bloque
-> de producto ya cumple el suyo (ledgers con tests en CI); esto es lo que falta para
-> **cobrar por el sistema con datos de un cliente real**:
+> Resumen unificado de todo lo pendiente del proyecto en
+> [`ROADMAP.md` → «Roadmap activo»](../ROADMAP.md). Requisitos acordados en el análisis
+> comparativo de plataforma (2026-09-11). El bloque de producto ya cumple el suyo
+> (ledgers con tests en CI); esto es lo que falta para **cobrar por el sistema con datos
+> de un cliente real**:
 
 | # | Gate | Estado | Notas |
 |---|---|---|---|

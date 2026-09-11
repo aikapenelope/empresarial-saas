@@ -304,7 +304,9 @@ mínima → precio/descuento, campo `min_quantity`); la adaptación sería un ca
 > **ESTADO (2026-09-11): los 7 PRs del bloque de Implementaciones Estructurales están
 > fusionados** (#77–#81, #83, #84 + auditoría #82, ver banner en
 > [`IMPLEMENTACIONES-ESTRUCTURALES.md`](./IMPLEMENTACIONES-ESTRUCTURALES.md)) — **este
-> §9 es el roadmap ACTIVO.** Nada de los 6 puntos ha empezado. Regla de proceso
+> §9 es el roadmap ACTIVO.** Nada de los 6 puntos ha empezado. Resumen unificado de
+> TODO lo pendiente (plugins + pulido + gates + Fase 13 + decisiones) en
+> [`ROADMAP.md` → «Roadmap activo»](../ROADMAP.md). Regla de proceso
 > aprendida con #83/#84: cada PR con migración termina con el contraste
 > `payload_migrations` (Supabase) vs repo — migración aplicada el mismo día del merge.
 
