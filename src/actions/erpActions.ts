@@ -62,7 +62,10 @@ import {
   updateQuoteStatusSchema,
   updateTenantSettingsSchema,
 } from '@/utilities/erpValidation';
-import { importStockToWarehouse } from '@/utilities/inventoryImport';
+import {
+  importStockToWarehouse,
+  planStockImport,
+} from '@/utilities/inventoryImport';
 import {
   completeInventoryCount,
   snapshotWarehouseStock,
@@ -303,6 +306,37 @@ export interface ImportStockInput {
  * Toda la importación corre en UNA transacción: válido se crea, inválido se
  * rechaza por fila con mensaje; el stock resultante nunca puede quedar negativo.
  */
+/**
+ * Dry-run read-only de la carga masiva (IE-PR7): corre el planeador completo
+ * (validaciones + stock vigente por SKU) SIN locks NI escrituras. El wizard lo
+ * usa en el paso 3; el commit real (importStockAction) recalcula el plan en el
+ * momento, así que el resultado aplicado siempre refleja el stock al confirmar.
+ */
+export async function previewStockImportAction(input: ImportStockInput) {
+  try {
+    const parsed = importStockSchema.parse(input);
+    const user = await requireErpTenantAccess(parsed.tenantId, ERP_OPERATOR_ROLES);
+    const payload = await getPayload({ config });
+
+    const plan = await withTransaction(payload, user, (req) =>
+      planStockImport({
+        tenantId: parsed.tenantId,
+        warehouseId: parsed.warehouseId,
+        mode: parsed.mode,
+        rows: parsed.rows,
+        req,
+      }),
+    );
+
+    return { success: true as const, data: plan };
+  } catch (error: unknown) {
+    return {
+      success: false as const,
+      error: toSafeActionError(error, 'No se pudo previsualizar la importación.'),
+    };
+  }
+}
+
 export async function importStockAction(input: ImportStockInput) {
   try {
     const parsed = importStockSchema.parse(input);
@@ -1187,19 +1221,49 @@ export async function rejectApprovalAction(input: ApproveApprovalInput) {
     if (!approval || Number(approval.tenant) !== parsed.tenantId) {
       throw new Error('La aprobación no pertenece a este inquilino.');
     }
-    if (approval.status === 'consumed') {
-      throw new Error('La aprobación ya fue consumida por una venta exitosa.');
+    // Devin #84 🟥: las decisiones firmadas son INMUTABLES — sólo una
+    // solicitud pendiente puede rechazarse (reemplazar la decisión de otro
+    // resolver corrompería la identidad de auditoría).
+    if (approval.status !== 'pending') {
+      throw new Error(
+        `La aprobación #${approval.id} ya fue resuelta (estado: ${approval.status}) — su decisión no se reescribe.`,
+      );
     }
 
-    await payload.update({
-      collection: 'approvals',
-      id: approval.id,
-      data: {
-        status: 'rejected',
-        resolvedBy: user.id,
-        decisionNote: parsed.decisionNote,
-      },
-      overrideAccess: true,
+    // Devin #84 🟡: el rechazo es transaccional con advisory lock
+    // approval:{id} (mismo patrón que consumeApproval) — dos rechazos
+    // concurrentes serializan y el segundo ve el estado YA resuelto.
+    await withTransaction(payload, user, async (req) => {
+      const db = getActiveDb(req);
+      await db.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`approval:${parsed.approvalId}`}))`,
+      );
+      // Re-lectura POST-lock: el estado puede haber cambiado desde el check
+      // previo (otro resolver ganó la carrera).
+      const fresh = await payload.findByID({
+        collection: 'approvals',
+        id: parsed.approvalId,
+        depth: 0,
+        req,
+      });
+      if (!fresh || Number(fresh.tenant) !== parsed.tenantId) {
+        throw new Error('La aprobación no pertenece a este inquilino.');
+      }
+      if (fresh.status !== 'pending') {
+        throw new Error(
+          `La aprobación #${fresh.id} ya fue resuelta (estado: ${fresh.status}) — su decisión no se reescribe.`,
+        );
+      }
+      await payload.update({
+        collection: 'approvals',
+        id: fresh.id,
+        data: {
+          status: 'rejected',
+          resolvedBy: user.id,
+          decisionNote: parsed.decisionNote,
+        },
+        req,
+      });
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/approvals`);

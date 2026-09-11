@@ -357,6 +357,29 @@ sin previsualización** — un CSV con errores se ejecuta y solo después se ven
 **Migración:** no. **Riesgo:** el más alto del lote (refactor de la ruta de carga
 masiva) — por eso va último y el commit conserva el camino exacto de hoy.
 
+**Notas de implementación (2026-09-10, tras investigación con Context7):**
+1. **Veredicto de herramienta**: se investigó si el plugin oficial
+   `@payloadcms/plugin-import-export` (ya en uso para products/customers/
+   categories/suppliers en el admin) cubría este flujo. NO: no tiene dry-run
+   (importa mientras valida — justo el dolor), no puede consolidar por SKU,
+   ni calcular el modo `set` (lee stock vigente), ni rechazar stock negativo;
+   y su UI vive en el admin de Payload que los inquilinos no usan. El stock es
+   una operación de LEDGER transaccional — pertenece al motor propio. El
+   plugin se queda para datos con forma de documento.
+2. **Mapeo de columnas con la semántica del plugin**: el paso 2 remapea claves
+   del CSV → campos canónicos (`sku`, `quantity`) con alias auto-detectados y
+   editables; **columnas no mapeadas se descartan con aviso** — mismo contrato
+   que `import.hooks.before`.
+3. **Estructura final**: `aggregateStockRows` (función PURA, test CI) →
+   `buildImportBlueprint` (almacén + catálogo) → `decideStockMovements` (lee
+   stock y decide) → `planStockImport` (dry-run, sin locks ni escrituras) y
+   `importStockToWarehouse` (commit con el ORDEN EXACTO original: locks de
+   saldo → lectura → decisiones → creación — atomicidad check-then-write
+   preservada).
+4. **Drift preview↔confirm**: el commit recalcula el plan con el stock vigente;
+   el paso 5 compara el resultado contra el dry-run y marca las filas que
+   difirieron ("stock cambió entre pasos").
+
 **Alcance v1:** solo import de **stock**. El alta de catálogo desde CSV (equivalente
 del killer-feature de Cendaro: matching fuzzy de categorías con `pg_trgm`, creación de
 productos draft) queda como **Phase B** en un PR separado de tamaño doble, sujeto a
