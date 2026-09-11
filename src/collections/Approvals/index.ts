@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload';
+import { getUserTenantIds } from '../../utilities/inventoryLedger';
 
 /**
  * ─── Aprobaciones con firma (IE-PR6) ─────────────────────────────────────────
@@ -14,8 +15,9 @@ import type { CollectionConfig } from 'payload';
  *
  * Las filas las escriben EXCLUSIVAMENTE las Server Actions (RBAC propio con
  * `requireErpTenantAccess` + roles), así que la colección cierra el acceso
- * directo de escritura (patrón `price-history`); la lectura exige sesión y el
- * scoping por inquilino lo inyecta multiTenantPlugin.
+ * directo de escritura (patrón `price-history`); la lectura exige sesión y
+ * queda ATADA al inquilino por constraint explícito — el payload guarda
+ * inputs de venta completos y es sensible (Devin #83 2ª ronda 🟥).
  */
 export const Approvals: CollectionConfig = {
   slug: 'approvals',
@@ -31,11 +33,28 @@ export const Approvals: CollectionConfig = {
       'Solicitudes de autorización (venta a crédito sobre el límite). Se crean desde el punto de venta y se resuelven aquí.',
   },
   access: {
-    read: ({ req: { user } }) => Boolean(user),
+    // Lectura atada al inquilino por constraint explícito (defensa en
+    // profundidad además del base filter del plugin): el payload JSON guarda
+    // inputs de venta completos.
+    read: ({ req: { user } }) => {
+      if (!user) return false;
+      if (user.role === 'super-admin') return true;
+      const tenantIds = getUserTenantIds(user);
+      if (tenantIds.length === 0) return false;
+      return { tenant: { in: tenantIds } };
+    },
     create: () => false,
     update: () => false,
-    delete: ({ req: { user } }) =>
-      Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),
+    // Devin #83 2ª ronda 🟥: el booleano global dejaba a un tenant-admin
+    // borrar aprobaciones de OTRO inquilino por API directa. Super-admin
+    // borra libre; tenant-admin sólo dentro de SUS inquilinos.
+    delete: ({ req: { user } }) => {
+      if (user?.role === 'super-admin') return true;
+      if (user?.role !== 'tenant-admin') return false;
+      const tenantIds = getUserTenantIds(user);
+      if (tenantIds.length === 0) return false;
+      return { tenant: { in: tenantIds } };
+    },
   },
   indexes: [{ fields: ['tenant', 'status'] }],
   fields: [

@@ -118,6 +118,16 @@ es aditivo.
    limpia al completar la venta. Verificación contable: el cobro registrado es
    SIEMPRE el total de la factura, así que el arqueo (físico vs. sistema) cuadra sin
    registrar el vuelto.
+6. **Fix Devin #78 (🔴 F4 duplicaba ventas)**: el atajo ignora key-repeat
+   (`e.repeat`) y el estado `loading` (vía `loadingRef` reasignada en efecto,
+   misma técnica de `submitRef`) — mantener F4 o pulsarlo durante un envío ya no
+   dispara una segunda venta.
+7. **Fix Devin #78 (🟡 exactas múltiples, 2 rondas)**: el reconocimiento de la
+   ambigüedad es INDEPENDIENTE de la visibilidad del dropdown (`ambiguousPending`,
+   reseteado al cambiar la búsqueda) — mientras el escáner escribe los dígitos el
+   dropdown ya está abierto, así que fiarse de `scanOpen` auto-seleccionaba el
+   índice 0. Ahora: primer Enter marca la ambigüedad y muestra las opciones (con
+   aviso visible); el cajero elige con ↑↓ y confirma con un Enter posterior.
 
 ### Item 17 — Command palette extendida
 
@@ -193,6 +203,28 @@ verifica su dominio en Resend.
 idempotente). **Riesgo:** bajo (el evaluador actual no se toca salvo añadir la sección y
 el queue final).
 
+**Reparaciones Devin #80 (2026-09-10, 6 hallazgos):**
+1. 🟡 Alerta REACTIVADA no llegaba por email: conservaba el `notifiedAt` previo y el
+   digest la omitía → la reactivación limpia `resolvedAt` **y** `notifiedAt`.
+2. 🔴 F4 duplicaba ventas (POSView heredado del PR2): resuelto vía merge de la pila
+   (`loadingRef` + `e.repeat` del fix #78).
+3. 🟡 Crash entre `sendEmail` y los N updates duplicaba el digest → estampado
+   **atómico en un solo statement** (`UPDATE alerts ... WHERE id IN (...)`): la
+   ventana de crash queda en un statement; at-least-once deliberado (un duplicado
+   es mejor que perder una alerta crítica) — outbox durable = hardening v2.
+4. 🟡 El `down()` de la migración fallaba con filas usando los valores nuevos →
+   borra `overdue_installment` y los jobs del digest ANTES de estrechar los enums.
+5. 🟡 "Auditoría Global" desapareció de la paleta (NAV_ITEMS no la tenía) →
+   añadida al catálogo SOLO para super-admin/tenant-admin: la auditoría es
+   exclusiva de administradores (getAuditLogData revalida con 403 — error de
+   verificación mío pensar que era para todos los roles). NO va a NAV_GROUPS:
+   el sidebar queda byte-idéntico.
+6. 🟥 **Inyección HTML del nombre del inquilino** en el digest → `escapeHtml`
+   aplicado a tenant.name y a las líneas de alerta.
+7. 🟡 Estampado atómico extendido: `SET notified_at = now(), updated_at = now()`
+   — el SQL crudo bypassa el mantenimiento de timestamps de Payload y los
+   consumidores que sincronicen por `updatedAt` perderían el cambio.
+
 ### Item 6 — Crédito: enforcement del límite + UI del plan de cuotas
 
 **Estado CORREGIDO al implementar (2026-09-10):** el enforcement del límite **YA EXISTÍA**
@@ -266,6 +298,34 @@ usuario con rol puede vender a crédito sin tope real. Patrón de referencia de 
 **Migración:** sí (tabla nueva + índices tenant+status). **Riesgo:** medio — por eso va
 después del enforcement de crédito y limitado a un solo tipo. El camino de venta sin
 aprobación no cambia en absoluto (el check solo se activa cuando el límite se excede).
+
+**Reparaciones Devin #83 (2026-09-10, 11 hallazgos — 2 rondas):**
+1. 🟥 **Binding approval ↔ operación**: `consumeApproval` valida inquilino y que el
+   input guardado sea estructuralmente IGUAL al ejecutado (igualdad profunda —
+   jsonb reordena claves, nunca comparar por stringify). La aprobación solo
+   autoriza SU operación.
+2. 🟥 **Payload con workflow/origen**: `{ workflow: direct|quote|order, sourceId,
+   input }` — el replay cierra la cotización (converted) o el pedido (invoiced)
+   EN la transacción de la factura, con lock de fila del origen y revalidación
+   de estado (sin factura huérfana duplicada); la conversión normal también
+   lockea la cotización.
+3. 🟥 **Tenant forzado al replay**: `invoiceParsed.tenantId = approval.tenant`.
+4. 🔴 `credit_disabled` = rechazo duro con código máquina en
+   `evaluateCreditSale`; sólo `limit_exceeded` genera solicitud.
+5. 🔴 Replay respeta `creditAllowed`: el lock + re-lectura del cliente aplican a
+   AMBOS caminos — una aprobación excusa sólo el límite, nunca el flag.
+6. 🔴 Replay con lock del origen ANTES de facturar (`lockOrderRow` / `FOR
+   UPDATE` de quotes) + revalidación de estado — la facturación normal y el
+   replay serializan (sin factura huérfana).
+7. 🔴/🟡 F4 con `submitLockRef` síncrono en `handleSubmit` (finally) además del
+   guard del atajo; y `pending_approval` es TERMINAL en los 3 modales (aviso
+   con ID, sin re-envío ni cierre silencioso).
+8. 🟡 `approveApprovalAction` llama `maybeAutoSendInvoice` post-commit; página
+   de aprobaciones en dos consultas (accionables + histórico); alerta
+   reactivada limpia notifiedAt; F4/heredados resueltos vía merge de pila.
+9. 🟨 Job de alertas sin revalidación de usuario: SUSTENTADO — patrón
+   sistema/overrideAccess idéntico a `evaluateAlerts` (tarea confiable del
+   servidor); añadir rehidratación de usuario contradiría el diseño.
 
 ### Item 7 — Wizard de importación (dry-run + mapeo de columnas)
 

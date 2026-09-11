@@ -66,3 +66,18 @@ jobs:
 
       - name: Suite de tests (unit + integración)
         run: pnpm test
+
+      # ── Gates de seguridad y compilación (Sprint R1 · P2-S5-01/02) ──
+      # Audit en modo NO bloqueante durante 1 semana de estabilización:
+      # las 9 vulns conocidas (2 high sharp + 5 moderate + 2 low, todas
+      # transitivas de plugins oficiales de Payload) no deben trap-block
+      # PRs legítimos. Al cerrarlas (bumps upstream), se cambia
+      # continue-on-error a false y el gate vuelve bloqueante.
+      - name: Auditoría de dependencias (pnpm audit)
+        run: pnpm audit --audit-level high
+        continue-on-error: true
+
+      # Build ANTES de Vercel: detecta errores de compilación sin gastar la
+      # cuota diaria de builds del plan gratuito (AGENTS.md §5.2).
+      - name: Build de producción (payload build)
+        run: pnpm build

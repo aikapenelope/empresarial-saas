@@ -663,7 +663,11 @@ async function createInvoiceCore(
 
   let subtotalUSD = 0;
   const formattedItems = parsed.items.map((it) => {
-    const totalItem = it.quantity * it.unitPriceUSD;
+    // Redondeo canónico por línea (Devin #81 🟡): DEBE coincidir con
+    // beforeValidateInvoice — el chequeo de crédito y el balance se derivan de
+    // esta representación, no de la suma cruda (200 × $0.005 = $1 crudo pero
+    // $2 persistido con líneas redondeadas al centavo).
+    const totalItem = Number((it.quantity * it.unitPriceUSD).toFixed(2));
     subtotalUSD += totalItem;
     return {
       product: it.productId || undefined,
@@ -675,7 +679,7 @@ async function createInvoiceCore(
     };
   });
 
-  const totalUSD = subtotalUSD;
+  const totalUSD = Number(subtotalUSD.toFixed(2));
 
   // Desglose fiscal (Sprint 42): el IVA se clasifica por el `taxRate` del
   // producto del catálogo (exempt/reduced/general — la alícuota general es
@@ -699,37 +703,66 @@ async function createInvoiceCore(
   }
   const generalRatePct = Number(tenant?.taxConfig?.generalRatePct ?? 16);
   const taxBreakdown = computeInvoiceTax(
-    parsed.items.map((it) => ({
-      totalUSD: it.quantity * it.unitPriceUSD,
-      taxRate: it.productId ? taxRateByProduct.get(it.productId) : 'exempt',
+    formattedItems.map((it) => ({
+      totalUSD: it.totalUSD,
+      taxRate: it.product ? taxRateByProduct.get(it.product) : 'exempt',
     })),
     generalRatePct,
   );
   const totalVES = totalUSD * rate;
   const isCash = parsed.paymentTerms === 'cash';
 
-  // Venta a crédito (IE-PR6): tres caminos en el punto del límite.
+  // Venta a crédito (IE-PR6 + Devin #81/#83): tres caminos en el punto del límite.
   // 1. req.context.approvalId presente → la solicitud ya fue autorizada: se
-  //    CONSUME atómicamente (single-use) y la venta continúa; el resto de las
-  //    validaciones (stock, precios, kardex) corren igual.
+  //    CONSUME atómicamente (single-use, atada a tenant + input) y la venta
+  //    continúa; el resto de las validaciones (stock, precios, kardex) corren igual.
   // 2. Sin approval y dentro del límite → sigue el flujo normal.
-  // 3. Sin approval y sobre el límite → NO se rechaza: se crea la solicitud
-  //    pendiente con el input parseado completo y se devuelve el marcador
-  //    pending_approval. No hay escrituras previas en la transacción, así que
-  //    el commit deja únicamente la fila de approval.
+  // 3. Sin approval y SOBRE el límite (limit_exceeded) → NO se rechaza: se crea
+  //    la solicitud pendiente con workflow/origen + input parseado y se devuelve
+  //    el marcador pending_approval. Crédito DESHABILITADO (credit_disabled) es
+  //    rechazo duro: una aprobación nunca autoriza lo que el admin deshabilitó
+  //    explícitamente (Devin #83).
   if (!isCash) {
+    // Devin #83 2ª ronda 🔴: el lock + re-lectura aplican a AMBOS caminos — la
+    // aprobación excusa SOLO limit_exceeded; creditAllowed=false sigue siendo
+    // rechazo duro aunque exista una solicitud aprobada (el admin puede
+    // deshabilitar el crédito durante la ventana de 24 h de la solicitud).
+    const db = getActiveDb(req);
+    await db.execute(sql`SELECT id FROM customers WHERE id = ${parsed.customerId} FOR UPDATE`);
+    const fresh = await payload.findByID({
+      collection: 'customers',
+      id: parsed.customerId,
+      depth: 0,
+      req,
+    });
+    if (fresh.creditAllowed === false) {
+      throw new Error(
+        `El cliente "${fresh.name}" no tiene crédito habilitado. Registre la venta de contado o habilite su línea de crédito.`,
+      );
+    }
     const approvalId = (req.context as { approvalId?: number } | undefined)?.approvalId;
     if (approvalId) {
-      await consumeApproval(req, approvalId);
+      // Puerta de aprobación: consume atómicamente validando que la aprobación
+      // corresponda EXACTAMENTE a esta operación (inquilino + input).
+      await consumeApproval(req, approvalId, { tenantId: parsed.tenantId, input: parsed });
     } else {
       const creditCheck = evaluateCreditSale({
-        creditAllowed: customer.creditAllowed,
-        creditLimitUSD: customer.creditLimitUSD,
-        currentDebtUSD: customer.currentDebtUSD,
+        creditAllowed: fresh.creditAllowed,
+        creditLimitUSD: fresh.creditLimitUSD,
+        currentDebtUSD: fresh.currentDebtUSD,
         totalUSD,
-        customerName: customer.name,
+        customerName: fresh.name,
       });
       if (!creditCheck.ok) {
+        if (creditCheck.code !== 'limit_exceeded') {
+          throw new Error(creditCheck.reason);
+        }
+        const ctx = req.context as {
+          approvalWorkflow?: 'direct' | 'quote' | 'order';
+          approvalSourceId?: number;
+        } | undefined;
+        const workflow = ctx?.approvalWorkflow ?? 'direct';
+        const sourceId = ctx?.approvalSourceId ?? null;
         const approval = await req.payload.create({
           collection: 'approvals',
           data: {
@@ -739,13 +772,17 @@ async function createInvoiceCore(
             requestedBy: user.id,
             refCollection: 'customers',
             refId: parsed.customerId,
-            payload: parsed,
+            payload: { workflow, sourceId, input: parsed },
             expiresAt: approvalExpiry(),
           },
           req,
           overrideAccess: true,
         });
-        return { pendingApproval: true as const, approvalId: approval.id as number };
+        return {
+          pendingApproval: true as const,
+          approvalId: approval.id as number,
+          workflow,
+        };
       }
     }
   }
@@ -1048,19 +1085,111 @@ export async function approveApprovalAction(input: ApproveApprovalInput) {
       });
     }
 
+    // Input guardado con su workflow y origen (Devin #83 🔴: la aprobación ya
+    // no es un input genérico — sabe QUÉ flujo debe re-ejecutarse y qué
+    // documento origen cerrar para que no quede facturable por duplicado).
+    const stored = (approval.payload ?? {}) as {
+      workflow?: 'direct' | 'quote' | 'order';
+      sourceId?: number | null;
+      input?: Record<string, unknown>;
+    };
+    const invoiceParsed = createInvoiceSchema.parse(stored.input ?? approval.payload);
+    // Devin #83 🟥 (tenant): el replay SIEMPRE corre en el inquilino de la
+    // aprobación — el input guardado no puede nombrar otro inquilino. El
+    // chequeo de pertenencia del cliente lo revalida createInvoiceCore.
+    invoiceParsed.tenantId = parsed.tenantId;
+
+    const workflow = stored.workflow ?? 'direct';
+    const sourceId = stored.sourceId ?? null;
+
     // Re-ejecución con el input guardado: createInvoiceCore revalida TODO
     // (stock, precios, kardex, cliente) de forma natural. El consumo es
     // transaccional: sólo queda consumed si la venta completa tuvo éxito.
-    const invoiceParsed = createInvoiceSchema.parse(approval.payload);
     const result = await withTransaction(
       payload,
       user,
-      (req) => createInvoiceCore(payload, user, invoiceParsed, req),
+      async (req) => {
+        // Devin #83 2ª ronda 🔴: lock + re-lectura del origen ANTES de facturar
+        // — la facturación normal y el replay serializan sobre el mismo
+        // documento y un origen cerrado aborta la transacción completa (el
+        // consumo de la aprobación revierte con ella).
+        if (workflow === 'order' && sourceId) {
+          await lockOrderRow(sourceId, req);
+        } else if (workflow === 'quote' && sourceId) {
+          const db = getActiveDb(req);
+          await db.execute(sql`SELECT id FROM quotes WHERE id = ${sourceId} FOR UPDATE`);
+        }
+        if (workflow === 'order' && sourceId) {
+          const order = await payload.findByID({
+            collection: 'orders',
+            id: sourceId,
+            depth: 0,
+            req,
+          });
+          if (!order || Number(order.tenant) !== parsed.tenantId) {
+            throw new Error('El pedido de la aprobación no pertenece a este inquilino.');
+          }
+          if (order.status === 'invoiced' || order.status === 'canceled') {
+            throw new Error(`El pedido ${order.orderNumber} ya fue facturado o cancelado.`);
+          }
+        } else if (workflow === 'quote' && sourceId) {
+          const quote = await payload.findByID({
+            collection: 'quotes',
+            id: sourceId,
+            depth: 0,
+            req,
+          });
+          if (!quote || Number(quote.tenant) !== parsed.tenantId) {
+            throw new Error('La cotización de la aprobación no pertenece a este inquilino.');
+          }
+          // Devin #83 3ª ronda: MISMOS estados terminales que la conversión
+          // normal — una cotización rechazada/expirada tras la solicitud no se
+          // factura por la puerta de la aprobación.
+          if (
+            quote.status === 'converted' ||
+            quote.status === 'rejected' ||
+            quote.status === 'expired'
+          ) {
+            throw new Error(
+              `No se puede convertir la cotización ${quote.quoteNumber} en estado "${quote.status}".`,
+            );
+          }
+        }
+
+        const doc = await createInvoiceCore(payload, user, invoiceParsed, req);
+        if ('pendingApproval' in doc) {
+          throw new Error(
+            'La venta re-ejecutada volvió a requerir aprobación (input inconsistente).',
+          );
+        }
+        // Cierre del origen: seguro bajo el lock adquirido arriba.
+        if (workflow === 'order' && sourceId) {
+          await payload.update({
+            collection: 'orders',
+            id: sourceId,
+            data: { status: 'invoiced', issuedInvoice: doc.id },
+            req,
+          });
+        } else if (workflow === 'quote' && sourceId) {
+          await payload.update({
+            collection: 'quotes',
+            id: sourceId,
+            data: { status: 'converted', convertedInvoice: doc.id },
+            req,
+          });
+        }
+        return doc;
+      },
       { approvalId: approval.id },
     );
-    if ('pendingApproval' in result) {
-      throw new Error('La venta re-ejecutada volvió a requerir aprobación (input inconsistente).');
-    }
+
+    // Auto-envío (Devin #83 🟡): la venta aprobada es idéntica a una venta
+    // directa — el cliente con auto-envío configurado recibe SU email.
+    await maybeAutoSendInvoice(payload, parsed.tenantId, invoiceParsed.customerId, {
+      id: result.id,
+      status: result.status,
+      totalUSD: Number(result.totalUSD) || 0,
+    });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/approvals`);
     revalidatePath(`/${parsed.tenantSlug}/erp/invoices`);
@@ -1291,6 +1420,14 @@ export async function convertQuoteToInvoiceAction(input: ConvertQuoteInput) {
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      // IE-PR6: si la conversión requiere aprobación, la solicitud guarda el
+      // workflow y el origen para que el replay cierre ESTA cotización.
+      req.context.approvalWorkflow = 'quote';
+      req.context.approvalSourceId = parsed.quoteId;
+      // Devin #83 2ª ronda: lock de fila — serializa con el replay de una
+      // aprobación sobre la misma cotización (sin factura duplicada).
+      const db = getActiveDb(req);
+      await db.execute(sql`SELECT id FROM quotes WHERE id = ${parsed.quoteId} FOR UPDATE`);
       const quote = await payload.findByID({
         collection: 'quotes',
         id: parsed.quoteId,
@@ -1684,6 +1821,10 @@ export async function issueInvoiceFromOrderAction(input: {
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      // IE-PR6: si la facturación requiere aprobación, la solicitud guarda el
+      // workflow y el origen para que el replay cierre ESTE pedido.
+      req.context.approvalWorkflow = 'order';
+      req.context.approvalSourceId = parsed.orderId;
       // Lock de fila: serializa facturaciones concurrentes — el segundo request
       // lee el estado YA facturado y aborta (doble facturación imposible).
       await lockOrderRow(parsed.orderId, req);

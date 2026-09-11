@@ -41,18 +41,42 @@ export default async function ApprovalsPage({ params }: PageProps) {
   }
 
   const payload = await getPayload({ config });
-  const res = await payload.find({
-    collection: 'approvals',
-    where: { tenant: { equals: tenant.id } },
-    sort: '-createdAt',
-    limit: 50,
-    depth: 1,
-    user: actor,
-    overrideAccess: false,
-  });
 
+  // Devin #83: dos consultas — las ACCIONABLES (pending/approved) primero y
+  // completas aunque el histórico sea enorme; el histórico reciente aparte.
+  // Una sola consulta de 50 mezclaba estados y escondía pendientes viejos.
+  const [actionableRes, historyRes] = await Promise.all([
+    payload.find({
+      collection: 'approvals',
+      where: {
+        and: [
+          { tenant: { equals: tenant.id } },
+          { status: { in: ['pending', 'approved'] } },
+        ],
+      },
+      sort: '-createdAt',
+      limit: 50,
+      depth: 1,
+      user: actor,
+      overrideAccess: false,
+    }),
+    payload.find({
+      collection: 'approvals',
+      where: {
+        and: [
+          { tenant: { equals: tenant.id } },
+          { status: { in: ['consumed', 'rejected', 'expired'] } },
+        ],
+      },
+      sort: '-createdAt',
+      limit: 25,
+      depth: 1,
+      user: actor,
+      overrideAccess: false,
+    }),
+  ]);
   // Nombre del cliente para cada solicitud: el input guardado trae customerId.
-  const entries: ApprovalEntry[] = res.docs.map((a) => {
+  const toEntry = (a: (typeof actionableRes.docs)[number]): ApprovalEntry => {
     const input = (a.payload ?? {}) as {
       customerId?: number;
       customerName?: string;
@@ -78,7 +102,12 @@ export default async function ApprovalsPage({ params }: PageProps) {
       expiresAt: a.expiresAt ?? null,
       createdAt: a.createdAt,
     };
-  });
+  };
+
+  const entries: ApprovalEntry[] = [
+    ...actionableRes.docs.map(toEntry),
+    ...historyRes.docs.map(toEntry),
+  ];
 
   return (
     <div className="space-y-6">

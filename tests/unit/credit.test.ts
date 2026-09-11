@@ -11,7 +11,12 @@ describe('evaluateCreditSale (enforcement de crédito a crédito, IE-PR5)', () =
       customerName: 'Comercial Delta',
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toContain('no tiene crédito habilitado');
+    if (!r.ok) {
+      // Devin #83: código de máquina — credit_disabled es rechazo duro que
+      // nunca se convierte en solicitud de aprobación.
+      expect(r.code).toBe('credit_disabled');
+      expect(r.reason).toContain('no tiene crédito habilitado');
+    }
   });
 
   it('acepta cuando el total cabe en la capacidad disponible', () => {
@@ -35,6 +40,7 @@ describe('evaluateCreditSale (enforcement de crédito a crédito, IE-PR5)', () =
     });
     expect(r.ok).toBe(false);
     if (!r.ok) {
+      expect(r.code).toBe('limit_exceeded');
       expect(r.reason).toContain('Límite de crédito insuficiente');
       expect(r.reason).toContain('disponible 200.00 USD');
       expect(r.reason).toContain('requerido 250.00 USD');
