@@ -64,4 +64,29 @@ describe('cabeceras de seguridad (R7)', () => {
       if (original !== undefined) process.env.S3_ENDPOINT = original;
     }
   });
+
+  it('`upgrade-insecure-requests` sólo con despliegue HTTPS confirmado (Devin #92)', async () => {
+    const origPublic = process.env.PUBLIC_BASE_URL;
+    const origVercel = process.env.VERCEL;
+    try {
+      // `pnpm start` local: build de producción servido por HTTP → NO forzar https.
+      process.env.PUBLIC_BASE_URL = 'http://localhost:3000';
+      delete process.env.VERCEL;
+      expect(cspFrom(await nextConfig.headers?.())).not.toContain('upgrade-insecure-requests');
+
+      // URL pública https → HTTPS confirmado.
+      process.env.PUBLIC_BASE_URL = 'https://erp.midominio.com';
+      expect(cspFrom(await nextConfig.headers?.())).toContain('upgrade-insecure-requests');
+
+      // Vercel marca HTTPS aunque la URL pública sea local.
+      process.env.PUBLIC_BASE_URL = 'http://localhost:3000';
+      process.env.VERCEL = '1';
+      expect(cspFrom(await nextConfig.headers?.())).toContain('upgrade-insecure-requests');
+    } finally {
+      if (origPublic === undefined) delete process.env.PUBLIC_BASE_URL;
+      else process.env.PUBLIC_BASE_URL = origPublic;
+      if (origVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = origVercel;
+    }
+  });
 });

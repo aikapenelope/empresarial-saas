@@ -40,6 +40,22 @@ describe('computeCsrfOrigins (R7 · Devin #92)', () => {
     expect(origins).toEqual(['https://erp.midominio.com', 'https://otro.example.com']);
   });
 
+  it('canonicaliza cada valor a su ORIGEN: descarta path, slash y espacios (Devin #92)', () => {
+    const origins = computeCsrfOrigins({
+      PUBLIC_BASE_URL: 'https://erp.midominio.com/erp/',
+      PAYLOAD_CSRF_ORIGINS:
+        '  https://otro.example.com/path?x=1 , app.example.com , https://tercero.example.com:8443/',
+    });
+
+    expect(origins).toEqual([
+      'https://erp.midominio.com',
+      'https://otro.example.com',
+      'https://tercero.example.com:8443',
+    ]);
+    // Un valor SIN esquema es inválido (nunca coincidiría con el header Origin).
+    expect(origins).not.toContain('app.example.com');
+  });
+
   it('sin ninguna variable devuelve vacío (sólo entornos sin configuración)', () => {
     expect(computeCsrfOrigins({})).toEqual([]);
   });

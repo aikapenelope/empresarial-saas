@@ -40,6 +40,14 @@ const nextConfig: NextConfig = {
 
     const imgSrc = ["'self'", 'blob:', 'data:', ...(mediaOrigin ? [mediaOrigin] : [])].join(' ');
 
+    // `upgrade-insecure-requests` SOLO con despliegue HTTPS CONFIRMADO: `NODE_ENV`
+    // no distingue HTTPS de HTTP — `pnpm start` sirve un build de producción en
+    // http://localhost y la directiva forzaría el upgrade de los assets a HTTPS,
+    // inutilizando el servidor local (reporte Devin #92). Señal explícita: Vercel
+    // (`VERCEL=1`) o una URL pública https.
+    const appUrl = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || '';
+    const isHttpsDeployment = process.env.VERCEL === '1' || appUrl.startsWith('https://');
+
     const cspHeader = [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
@@ -51,8 +59,7 @@ const nextConfig: NextConfig = {
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'none'",
-      // Sólo en producción: en dev (http://localhost) forzaría https en subrecursos.
-      ...(isDev ? [] : ['upgrade-insecure-requests']),
+      ...(isHttpsDeployment ? ['upgrade-insecure-requests'] : []),
     ].join('; ');
 
     return [
