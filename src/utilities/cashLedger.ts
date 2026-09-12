@@ -109,6 +109,12 @@ async function fetchAllShiftDocs(
     const res = await req.payload.find({
       collection,
       where,
+      // `sort: 'id'` es OBLIGATORIO con paginación por offset: da un orden único y
+      // estable entre páginas. Sin él, el orden por defecto (timestamp) tiene
+      // empates y una fila puede repetirse en una página y omitirse en otra,
+      // corrompiendo el total del turno (reporte Devin #88). Mismo patrón que
+      // `dashboardData.findAllMatching`.
+      sort: 'id',
       limit: SHIFT_QUERY_PAGE_SIZE,
       page,
       depth: 0,

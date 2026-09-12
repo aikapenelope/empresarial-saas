@@ -102,6 +102,10 @@ async function createConfirmedPayment(index: number, paymentDate: string): Promi
 
 describe('arqueo de caja — paginación completa (S2-2)', () => {
   it('consolida TODOS los cobros del turno, más allá de una página', async () => {
+    // Deliberado: los 105 cobros comparten el MISMO `paymentDate` → el orden por
+    // defecto (timestamp) tiene 105 empates, exactamente el escenario que devin
+    // señaló en #88. Con `sort: 'id'` el orden es único y estable entre páginas,
+    // así que ningún cobro se duplica ni se omite (y el total es exacto).
     const paymentDate = new Date().toISOString();
     for (let i = 0; i < PAYMENT_COUNT; i += 1) {
       await createConfirmedPayment(i, paymentDate);
