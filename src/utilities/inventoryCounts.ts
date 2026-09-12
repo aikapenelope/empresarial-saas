@@ -52,6 +52,26 @@ export async function snapshotWarehouseStock({
 }
 
 /**
+ * Advisory lock transaccional POR CONTEO. Serializa TODA mutación de un conteo
+ * (guardar cantidades y finalizar): sin él, un guardado que leyó `in_progress`
+ * puede escribir sus cantidades DESPUÉS de que la finalización ya creó los
+ * movimientos de Kardex, dejando un conteo "completado" que no concuerda con el
+ * Kardex (reporte Devin #86). Debe tomarse SIEMPRE dentro de la transacción del
+ * llamador y ANTES de leer el conteo. Devuelve el id normalizado, o null si no
+ * es válido.
+ */
+export async function lockInventoryCount(
+  countIdRaw: unknown,
+  req: PayloadRequest,
+): Promise<number | string | null> {
+  const id = extractId(countIdRaw);
+  if (!id) return null;
+  const db = getActiveDb(req);
+  await db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`inventorycount:${id}`}))`);
+  return id;
+}
+
+/**
  * Completa un conteo: valida que esté en progreso, crea un movimiento de ajuste
  * por cada línea con diferencia distinta de cero (agregada por producto) y marca
  * el conteo como completado. Todo en la transacción del llamador (req propagado).
@@ -73,17 +93,12 @@ export async function completeInventoryCount({
     throw new Error('El conteo no tiene un identificador válido.');
   }
 
-  const db = getActiveDb(req);
-
-  // Advisory lock transaccional POR CONTEO: serializa finalizaciones
-  // concurrentes del MISMO documento (dos pestañas / doble submit). Sin él,
-  // ambas transacciones leen `status: in_progress` y aplican los ajustes DOS
-  // veces sobre el Kardex (movimientos duplicados → stock corrupto). El lock se
-  // libera en el commit/rollback de la transacción del llamador. Patrón de la
-  // casa (consumeApproval / nextDocumentNumber).
-  await db.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${`inventorycount:${id}`}))`,
-  );
+  // Advisory lock transaccional POR CONTEO (helper compartido con el guardado de
+  // cantidades): serializa finalizaciones concurrentes del MISMO documento. Sin
+  // él, ambas transacciones leen `status: in_progress` y aplican los ajustes DOS
+  // veces sobre el Kardex (movimientos duplicados → stock corrupto). Se libera en
+  // el commit/rollback del llamador. Patrón de la casa (consumeApproval / nextDocumentNumber).
+  await lockInventoryCount(id, req);
 
   // Relectura FRESCA bajo el lock: el estado pudo cambiar entre la lectura del
   // llamador y la adquisición del lock. Ya bloqueados, el valor es estable y la

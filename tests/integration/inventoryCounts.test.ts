@@ -3,7 +3,7 @@ import { getPayload } from 'payload';
 import type { Payload, PayloadRequest } from 'payload';
 import config from '@payload-config';
 import type { InventoryCount, Product, StockMovement, User, Warehouse } from '@/payload-types';
-import { completeInventoryCount } from '@/utilities/inventoryCounts';
+import { completeInventoryCount, lockInventoryCount } from '@/utilities/inventoryCounts';
 
 /**
  * ─── Integración: finalización de conteos de inventario (Sprint R1) ─────────
@@ -194,6 +194,71 @@ describe('conteos de inventario — finalización (regresión P1 / S2-1)', () =>
     // El Kardex quedó con UN solo movimiento y el stock con UNA sola aplicación.
     expect(await adjustmentsFor(count.id)).toHaveLength(1);
     expect(await currentStock(product)).toBe(7);
+  });
+
+  it('un guardado de cantidades concurrente se serializa con la finalización (Devin #86)', async () => {
+    const product = await createPhysicalProduct('save-race');
+    const count = await createCount(product, 5);
+
+    // Réplica del protocolo de `saveCountedItemsAction`: lock por conteo → relee
+    // el estado bajo el lock → (si sigue en progreso) escribe las cantidades.
+    const saveTask = (async () => {
+      const transactionID = await payload.db.beginTransaction();
+      const req = {
+        payload,
+        user: userDoc,
+        context: {},
+        transactionID,
+      } as unknown as PayloadRequest;
+      try {
+        const lockedId = await lockInventoryCount(count.id, req);
+        if (!lockedId) return { ok: false as const };
+
+        const fresh = (await payload.findByID({
+          collection: 'inventory-counts',
+          id: count.id,
+          depth: 0,
+          req,
+          overrideAccess: true,
+        })) as unknown as InventoryCount;
+        if (fresh.status === 'completed') {
+          await payload.db.rollbackTransaction(transactionID as string | number);
+          return { ok: false as const };
+        }
+
+        await payload.update({
+          collection: 'inventory-counts',
+          id: count.id,
+          data: { items: [{ product, systemQty: 0, countedQty: 8 }] as never },
+          req,
+          overrideAccess: true,
+        });
+        if (transactionID) await payload.db.commitTransaction(transactionID);
+        return { ok: true as const };
+      } catch {
+        if (transactionID) await payload.db.rollbackTransaction(transactionID);
+        return { ok: false as const };
+      }
+    })();
+
+    await Promise.all([saveTask, completeInTransaction(count.id)]);
+
+    // INVARIANTE (independiente del orden que gane el lock): un conteo completado
+    // debe concordar con su Kardex. Sin el lock compartido, el guardado podía
+    // persistir 8 unidades DESPUÉS de que la finalización aplicara 5 → divergencia.
+    const finalCount = (await payload.findByID({
+      collection: 'inventory-counts',
+      id: count.id,
+      depth: 0,
+      overrideAccess: true,
+    })) as unknown as InventoryCount;
+    const persistedCountedQty = Number(
+      (finalCount.items?.[0] as { countedQty?: number } | undefined)?.countedQty,
+    );
+
+    expect(finalCount.status).toBe('completed');
+    expect(await adjustmentsFor(count.id)).toHaveLength(1);
+    expect(await currentStock(product)).toBe(persistedCountedQty);
   });
 });
 

@@ -68,6 +68,7 @@ import {
 } from '@/utilities/inventoryImport';
 import {
   completeInventoryCount,
+  lockInventoryCount,
   snapshotWarehouseStock,
 } from '@/utilities/inventoryCounts';
 import { returnSaleLines } from '@/utilities/salesLedger';
@@ -2579,9 +2580,19 @@ export async function saveCountedItemsAction(input: SaveCountedItemsInput) {
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      // Mismo protocolo de lock que completeInventoryCount: guardado y
+      // finalización se serializan POR CONTEO, de modo que no se puedan escribir
+      // cantidades sobre un conteo ya completado (reporte Devin #86: una carrera
+      // check-then-write dejaba el conteo completado en desacuerdo con el Kardex).
+      // La lectura del estado ocurre DESPUÉS de tomar el lock: es el estado estable.
+      const lockedId = await lockInventoryCount(parsed.countId, req);
+      if (!lockedId) {
+        throw new Error('El conteo no tiene un identificador válido.');
+      }
+
       const count = await payload.findByID({
         collection: 'inventory-counts',
-        id: parsed.countId,
+        id: Number(lockedId),
         depth: 0,
         req,
       });
