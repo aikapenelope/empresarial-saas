@@ -27,7 +27,15 @@ export type DocumentNumberCollection =
   | 'purchase-invoices'
   | 'supplier-payments';
 
-const DOC_NUMBER_TABLES: Record<DocumentNumberCollection, { table: string; column: string }> = {
+/**
+ * Colecciones numeradas y su tabla/columna física. Exportado como fuente de
+ * verdad para que la guarda de esquema (`tests/integration/schemaMirror.test.ts`)
+ * verifique los índices únicos (tenant, número) sin duplicar la lista.
+ */
+export const DOC_NUMBER_TABLES: Record<
+  DocumentNumberCollection,
+  { table: string; column: string }
+> = {
   invoices: { table: 'invoices', column: 'invoice_number' },
   'customer-payments': { table: 'customer_payments', column: 'payment_number' },
   'production-orders': { table: 'production_orders', column: 'order_number' },
