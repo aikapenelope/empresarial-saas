@@ -68,14 +68,13 @@ jobs:
         run: pnpm test
 
       # ── Gates de seguridad y compilación (Sprint R1 · P2-S5-01/02) ──
-      # Audit en modo NO bloqueante durante 1 semana de estabilización:
-      # las 9 vulns conocidas (2 high sharp + 5 moderate + 2 low, todas
-      # transitivas de plugins oficiales de Payload) no deben trap-block
-      # PRs legítimos. Al cerrarlas (bumps upstream), se cambia
-      # continue-on-error a false y el gate vuelve bloqueante.
+      # Sprint R7: gate BLOQUEANTE. Las 2 vulns HIGH (sharp: libheif/libvips) se
+      # cerraron con el bump OFICIAL de la dependencia DIRECTA sharp 0.34.2 ->
+      # 0.35.4 (triage: bump directo > lockfile > override). Restan 5 moderate +
+      # 2 low, todas transitivas de plugins oficiales de Payload, por DEBAJO del
+      # umbral --audit-level high.
       - name: Auditoría de dependencias (pnpm audit)
         run: pnpm audit --audit-level high
-        continue-on-error: true
 
       # Build ANTES de Vercel: detecta errores de compilación sin gastar la
       # cuota diaria de builds del plan gratuito (AGENTS.md §5.2).

@@ -56,6 +56,20 @@ if (!payloadSecret) {
   );
 }
 
+/**
+ * Orígenes de confianza para CSRF (Sprint R7 · auditoría S0-2). OPT-IN: Payload
+ * NO aplica allowlist cuando `csrf` está vacío (default, ver
+ * payload/dist/auth/extractJWT.js), así que dejarlo vacío conserva el
+ * comportamiento actual. Se expone por entorno porque un allowlist fijo
+ * rompería los despliegues PREVIEW de Vercel (dominios dinámicos) y el login
+ * del admin: quien despliegue en un dominio estable puede listar sus orígenes
+ * (coma-separados) en `PAYLOAD_CSRF_ORIGINS` para exigirlos.
+ */
+const csrfOrigins = (process.env.PAYLOAD_CSRF_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 // Route migration CLI operations through DATABASE_DIRECT_URL while retaining DATABASE_URI for Serverless runtime
 const isMigration =
   process.env.IS_PAYLOAD_MIGRATION === 'true' ||
@@ -139,6 +153,8 @@ export default buildConfig({
   },
   editor: lexicalEditor(),
   secret: payloadSecret,
+  // CORS/CSRF explícitos y opt-in (Sprint R7 · auditoría S0-2): ver `csrfOrigins`.
+  csrf: csrfOrigins,
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
