@@ -46,6 +46,7 @@ import { notifyAlertsEmailTask } from './jobs/notifyAlertsEmail';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 import { canRunScheduledJobs } from './utilities/cronAuth';
+import { computeCsrfOrigins } from './utilities/csrfOrigins';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -56,6 +57,14 @@ if (!payloadSecret) {
     'PAYLOAD_SECRET environment variable is missing. A secure 32+ character secret is required.',
   );
 }
+
+/**
+ * Orígenes de confianza para CSRF (Sprint R7 · auditoría S0-2). Se derivan de
+ * forma SEGURA por defecto (dominios de la app + el propio deployment de Vercel)
+ * para que un despliegue quede protegido sin configuración manual y sin romper
+ * los previews — ver `computeCsrfOrigins`. Reporte Devin #92.
+ */
+const csrfOrigins = computeCsrfOrigins();
 
 // Route migration CLI operations through DATABASE_DIRECT_URL while retaining DATABASE_URI for Serverless runtime
 const isMigration =
@@ -143,6 +152,8 @@ export default buildConfig({
   },
   editor: lexicalEditor(),
   secret: payloadSecret,
+  // CORS/CSRF explícitos y opt-in (Sprint R7 · auditoría S0-2): ver `csrfOrigins`.
+  csrf: csrfOrigins,
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },

@@ -11,11 +11,57 @@ const nextConfig: NextConfig = {
   // sólo afecta al modo dev (doble render para detectar efectos impuros).
   reactStrictMode: true,
   // Cabeceras de seguridad (Sprint R1 · auditoría 2026-09-10 · P2-S1-05):
-  // mitigan clickjacking, MIME-sniffing y fugas de referrer. La CSP se
-  // pospone deliberadamente: requiere inventario de scripts del admin panel
-  // de Payload y una CSP a ciegas rompería /admin (documentado en
-  // AUDIT-20260910/SPRINTS-REPARACION.md, sprint R4).
+  // mitigan clickjacking, MIME-sniffing y fugas de referrer.
+  // Sprint R7 (S1-2): se añade Content-Security-Policy por la vía OFICIAL de
+  // Next.js (docs/app/guides/content-security-policy, variante sin nonce vía
+  // `headers()`). Se elige esa variante — y no la de nonce con `proxy.ts` —
+  // porque: (a) el admin de Payload y React usan `style` inline (requieren
+  // `style-src 'unsafe-inline'` de todos modos), (b) la variante con nonce
+  // fuerza renderizado dinámico y afecta a TODAS las rutas, y (c) no se puede
+  // verificar el admin en navegador desde este entorno. Aun así endurece:
+  // bloquea orígenes de script externos, <object>, `base-uri`, framing
+  // (`frame-ancestors`) y el envío de formularios a terceros.
   async headers() {
+    const isDev = process.env.NODE_ENV === 'development';
+
+    // Origen público del almacenamiento de medios (S3 / R2 / Supabase Storage):
+    // con `S3_ENDPOINT` configurado, el plugin de storage genera la `url` de cada
+    // media contra ESE origen, así que el admin carga las miniaturas desde ahí.
+    // Sin este origen en `img-src`, el navegador bloquea los previews y el admin
+    // muestra iconos genéricos (reporte Devin #92). Se añade SÓLO el origen.
+    let mediaOrigin = '';
+    if (process.env.S3_ENDPOINT) {
+      try {
+        mediaOrigin = new URL(process.env.S3_ENDPOINT).origin;
+      } catch {
+        mediaOrigin = '';
+      }
+    }
+
+    const imgSrc = ["'self'", 'blob:', 'data:', ...(mediaOrigin ? [mediaOrigin] : [])].join(' ');
+
+    // `upgrade-insecure-requests` SOLO con despliegue HTTPS CONFIRMADO: `NODE_ENV`
+    // no distingue HTTPS de HTTP — `pnpm start` sirve un build de producción en
+    // http://localhost y la directiva forzaría el upgrade de los assets a HTTPS,
+    // inutilizando el servidor local (reporte Devin #92). Señal explícita: Vercel
+    // (`VERCEL=1`) o una URL pública https.
+    const appUrl = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || '';
+    const isHttpsDeployment = process.env.VERCEL === '1' || appUrl.startsWith('https://');
+
+    const cspHeader = [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+      "style-src 'self' 'unsafe-inline'",
+      `img-src ${imgSrc}`,
+      "font-src 'self'",
+      `connect-src 'self'${isDev ? ' ws:' : ''}`,
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      ...(isHttpsDeployment ? ['upgrade-insecure-requests'] : []),
+    ].join('; ');
+
     return [
       {
         source: '/:path*',
@@ -27,6 +73,7 @@ const nextConfig: NextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
           },
+          { key: 'Content-Security-Policy', value: cspHeader },
         ],
       },
     ];
