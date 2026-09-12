@@ -21,7 +21,7 @@ export async function GET(
       return Response.json({ error: 'Inquilino no encontrado.' }, { status: 404 });
     }
 
-    await requireErpTenantAccess(tenant.id);
+    const user = await requireErpTenantAccess(tenant.id);
 
     const products = await payload.find({
       collection: 'products',
@@ -29,6 +29,11 @@ export async function GET(
       pagination: false,
       depth: 0,
       sort: 'sku',
+      // El usuario verificado DEBE viajar a la Local API: con
+      // `overrideAccess: false` y sin `user` el access `Boolean(user)` de
+      // `products` evalúa como anónimo y el find devolvía CERO filas (la
+      // plantilla salía vacía). Mismo patrón que sales-book/export.
+      user,
       overrideAccess: false,
     });
 

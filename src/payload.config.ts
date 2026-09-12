@@ -45,6 +45,7 @@ import { evaluateAlertsTask } from './jobs/evaluateAlerts';
 import { notifyAlertsEmailTask } from './jobs/notifyAlertsEmail';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
+import { canRunScheduledJobs } from './utilities/cronAuth';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -139,15 +140,18 @@ export default buildConfig({
   ],
   jobs: {
     tasks: [seedIndustryTemplateTask, evaluateAlertsTask, notifyAlertsEmailTask],
-    // Sprint 22: el evaluador de alertas se encola cada 15 min y el autoRun
-    // procesa la cola (schedule + autoRun del Jobs Queue oficial de Payload).
-    autoRun: [
-      {
-        cron: '*/15 * * * *',
-        queue: 'alerts',
-        limit: 10,
-      },
-    ],
+    // Sprint R5: nada de `autoRun` (cron in-process, no fiable en Vercel
+    // serverless). El `schedule` declarativo de las tareas habilita el scheduling
+    // NATIVO de Payload; un cron externo (Vercel Cron) invoca
+    // `GET /api/payload-jobs/run?queue=alerts`, que encola lo vencido
+    // (handleSchedules) y ejecuta la cola. El parámetro `queue=alerts` es
+    // OBLIGATORIO: sin él Payload opera sobre la cola `default` y la tarea
+    // `evaluateAlerts` (agendada en `alerts`) nunca se encolaría (reporte Devin
+    // #90). `run` queda protegido: sólo el cron (Bearer CRON_SECRET) o un
+    // super-admin — ver src/utilities/cronAuth.ts.
+    access: {
+      run: canRunScheduledJobs,
+    },
     // Conservar los registros de jobs (éxitos y errores) como pista de auditoría del onboarding
     deleteJobOnComplete: false,
   },

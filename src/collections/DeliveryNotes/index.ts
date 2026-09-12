@@ -229,6 +229,19 @@ export const DeliveryNotes: CollectionConfig = {
         update: () => false,
       },
     },
+    {
+      // Sprint R4 (hallazgo S1-1): caducidad del enlace público. El token es una
+      // CAPACIDAD: se emite con una ventana de validez y deja de resolver al
+      // vencer. Server-generated; no editable por la UI ni por REST.
+      name: 'shareTokenExpiresAt',
+      label: 'Caducidad del Enlace de Compartición',
+      type: 'date',
+      hidden: true,
+      access: {
+        create: () => false,
+        update: () => false,
+      },
+    },
   ],
   timestamps: true,
 };

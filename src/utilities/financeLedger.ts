@@ -2,6 +2,12 @@ import type { PayloadRequest } from 'payload';
 import { sql } from '@payloadcms/db-postgres';
 import { runIsolatedContext } from './requestContext';
 
+// Sprint R6: helpers de acceso a Payload/BD compartidos (antes duplicados aquí,
+// en purchasesLedger y cashLedger). El hogar canónico es inventoryLedger; se
+// importan para uso local y se re-exportan para los importadores del módulo.
+import { extractId, getActiveDb } from './inventoryLedger';
+export { extractId, getActiveDb };
+
 export interface RecalculateBalanceResult {
   currentDebtUSD: number;
   currentDebtVES: number;
@@ -16,41 +22,6 @@ export interface PaymentAllocation {
 export interface AllocationScopeOptions {
   customerId?: number | string | null;
   tenantId?: number | string | null;
-}
-
-/**
- * Extracts a numeric or string ID from a potentially populated relationship field.
- */
-export function extractId(value: unknown): number | string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'object' && 'id' in (value as Record<string, unknown>)) {
-    return (value as { id: number | string }).id;
-  }
-  if (typeof value === 'number' || typeof value === 'string') {
-    return value;
-  }
-  return null;
-}
-
-/**
- * Resolves the active database or transaction handle from Payload request.
- */
-export function getActiveDb(req: PayloadRequest): {
-  execute: (query: unknown) => Promise<{ rows: Array<Record<string, unknown>> }>;
-} {
-  const dbAdapter = req.payload.db as unknown as {
-    sessions?: Record<
-      string,
-      { db: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> } }
-    >;
-    drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
-  };
-
-  if (req.transactionID && dbAdapter.sessions?.[req.transactionID as string]?.db) {
-    return dbAdapter.sessions[req.transactionID as string].db;
-  }
-
-  return dbAdapter.drizzle;
 }
 
 /**
@@ -87,6 +58,13 @@ export async function fetchAllCustomerOpenInvoices(
       },
       limit: 250,
       page,
+      // `sort: 'id'` es OBLIGATORIO con paginación por offset: garantiza un orden
+      // único y estable entre páginas (con el orden por defecto, los empates de
+      // timestamp pueden repetir una fila en una página y omitirla en otra →
+      // saldo/antigüedad incorrectos). Misma clase de bug que reportó Devin en
+      // #88 (cashLedger.fetchAllShiftDocs); mismo patrón que
+      // `dashboardData.findAllMatching`.
+      sort: 'id',
       depth: 0,
       req,
     });

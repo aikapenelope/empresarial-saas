@@ -4,8 +4,13 @@ import { evaluateAlertsForTenant } from '../utilities/alertsEvaluator';
 /**
  * Evaluador programado del centro de alertas (Sprint 22). Tarea de SISTEMA:
  * corre sin usuario y con overrideAccess (patrón oficial del Jobs Queue para
- * tareas confiables del servidor). El schedule/autoRun vive en
- * payload.config.ts (`jobs.tasks[].schedule` + `jobs.autoRun`).
+ * tareas confiables del servidor).
+ *
+ * Sprint R5: se conserva el `schedule` declarativo — es lo que habilita el
+ * scheduling NATIVO de Payload (`jobs.scheduling` + global de stats + el endpoint
+ * `/api/payload-jobs/handle-schedules`). Lo que NO se usa es `jobs.autoRun` (cron
+ * in-process, no fiable en Vercel serverless): el disparo real lo hace un cron
+ * externo (Vercel Cron) contra `GET /api/payload-jobs/run`.
  */
 export const evaluateAlertsTask: TaskConfig<'evaluateAlerts'> = {
   slug: 'evaluateAlerts',
