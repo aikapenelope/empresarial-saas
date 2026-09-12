@@ -506,13 +506,19 @@ export const Invoices: CollectionConfig = {
       type: 'textarea',
     },
     {
+      // Server-generated: bloqueado a nivel de CAMPO (`access`), no sólo con
+      // `admin.readOnly` (que es UI). Sin este access, un escritor autenticado
+      // podía fijar o rotar el token por la API. Reporte Devin #89.
       name: 'shareToken',
       type: 'text',
       index: true,
       unique: true,
+      hidden: true,
+      access: {
+        create: () => false,
+        update: () => false,
+      },
       admin: {
-        readOnly: true,
-        hidden: true,
         description:
           'Token de capacidad para el enlace público de la factura (compartir/email). Server-generated; no editar.',
       },
@@ -520,13 +526,17 @@ export const Invoices: CollectionConfig = {
     {
       // Sprint R4 (hallazgo S1-1): caducidad del enlace público. El token es una
       // CAPACIDAD: se emite con una ventana de validez y deja de resolver al
-      // vencer. Server-generated; no editable por la UI ni por REST.
+      // vencer. Bloqueado a nivel de campo: `admin.readOnly` es sólo UI y permitía
+      // extender/desactivar la caducidad por API. Reporte Devin #89.
       name: 'shareTokenExpiresAt',
       label: 'Caducidad del Enlace de Compartición',
       type: 'date',
+      hidden: true,
+      access: {
+        create: () => false,
+        update: () => false,
+      },
       admin: {
-        readOnly: true,
-        hidden: true,
         description: 'Momento en que el enlace público deja de resolver. Server-generated; no editar.',
       },
     },

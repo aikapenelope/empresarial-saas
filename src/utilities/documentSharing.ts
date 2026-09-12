@@ -190,6 +190,13 @@ export function invoiceToSharedDoc(invoice: Invoice): SharedDoc {
  * Resuelve el documento compartido por token. Capacidad sin sesión: el token
  * (192 bits del CSPRND) ES el secreto; la búsqueda corre con overrideAccess
  * intencional, ya que la página pública no tiene usuario autenticado.
+ *
+ * `showHiddenFields: true` es OBLIGATORIO: `shareTokenExpiresAt` está declarado
+ * con `hidden: true` (secreto fuera de las respuestas de la API) y Payload
+ * ELIMINA los campos `hidden` de las respuestas incluso con `overrideAccess`
+ * (fields/hooks/afterRead). Sin esta opción la caducidad llegaba `undefined` y un
+ * enlace vencido seguía resolviendo (bug latente en quotes/remisiones). Reporte
+ * Devin #89.
  */
 export async function resolveSharedDocument(
   token: string,
@@ -203,6 +210,7 @@ export async function resolveSharedDocument(
     depth: 1,
     limit: 1,
     overrideAccess: true,
+    showHiddenFields: true,
   });
   const quote = quoteRes.docs[0];
   if (quote && !isShareTokenExpired(quote.shareTokenExpiresAt)) {
@@ -218,6 +226,7 @@ export async function resolveSharedDocument(
     depth: 1,
     limit: 1,
     overrideAccess: true,
+    showHiddenFields: true,
   });
   const invoice = invoiceRes.docs[0];
   if (invoice && !isShareTokenExpired(invoice.shareTokenExpiresAt)) {
@@ -233,6 +242,7 @@ export async function resolveSharedDocument(
     depth: 1,
     limit: 1,
     overrideAccess: true,
+    showHiddenFields: true,
   });
   const note = noteRes.docs[0];
   if (note && !isShareTokenExpired(note.shareTokenExpiresAt)) {

@@ -12,14 +12,13 @@ import {
   buildDocumentEmailHtml,
   buildWhatsAppText,
   deliveryNoteToSharedDoc,
-  generateShareToken,
   quoteToSharedDoc,
-  shareTokenExpiry,
   shareUrlFor,
   type ShareableCollection,
   type SharedDoc,
   invoiceToSharedDoc,
 } from '@/utilities/documentSharing';
+import { ensureShareToken, shareTableFor } from '@/utilities/shareTokens';
 import type { Invoice } from '@/payload-types';
 
 /**
@@ -76,52 +75,6 @@ async function resolveBaseUrl(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-/**
- * Compare-and-set atómico del token: escribe sólo si la columna sigue NULL.
- * Devuelve el token definitivo (el ganado o el ya persistido por otra carrera).
- * UPDATE ... WHERE ... IS NULL RETURNING es atómico en Postgres sin transacción
- * externa; la escritura es infraestructura de compartición (server-generated),
- * por lo que no pasa por los hooks de la colección.
- */
-/** Tabla física de una colección compartible (para las escrituras crudas). */
-function shareTable(collection: ShareableCollection): string {
-  return collection === 'quotes' ? 'quotes' : collection === 'invoices' ? 'invoices' : 'delivery_notes';
-}
-
-async function atomicEnsureShareToken(
-  _payload: Awaited<ReturnType<typeof getPayload>>,
-  collection: ShareableCollection,
-  documentId: number,
-): Promise<string> {
-  const table = shareTable(collection);
-  const candidate = generateShareToken();
-  const expiresAt = shareTokenExpiry();
-
-  const dbAdapter = _payload.db as unknown as {
-    drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
-  };
-
-  // Sprint R4: emisión + caducidad en UN solo UPDATE atómico.
-  //  - COALESCE(share_token, candidate): emite sólo si falta; la carrera la
-  //    serializa el row lock y el perdedor relee el token ya persistido.
-  //  - COALESCE(share_token_expires_at, expiresAt): acuña además la caducidad de
-  //    los tokens LEGADOS (emitidos antes del Sprint R4, sin caducidad), de modo
-  //    que un enlace viejo adquiere una ventana acotada al compartirse de nuevo.
-  const result = await dbAdapter.drizzle.execute(
-    sql`UPDATE ${sql.identifier(table)}
-        SET share_token = COALESCE(share_token, ${candidate}),
-            share_token_expires_at = COALESCE(share_token_expires_at, ${expiresAt})
-        WHERE id = ${documentId}
-        RETURNING share_token`,
-  );
-
-  const token = result.rows[0]?.share_token;
-  if (!token) {
-    throw new Error('No se pudo emitir el enlace de compartición. Intente nuevamente.');
-  }
-  return String(token);
-}
-
 interface LoadedDoc {
   doc: SharedDoc;
   shareUrl: string;
@@ -153,19 +106,24 @@ async function loadAndEnsureShare(
       throw new Error('Cotización no encontrada en este inquilino.');
     }
 
-    let token = quote.shareToken || '';
-    if (!token) {
-      if (QUOTE_FINAL_STATUSES.has(quote.status)) {
+    if (QUOTE_FINAL_STATUSES.has(quote.status)) {
+      if (!quote.shareToken) {
         throw new Error(
           quote.status === 'converted'
             ? 'Una cotización convertida a factura ya no puede compartirse.'
             : 'Una cotización rechazada ya no puede compartirse.',
         );
       }
-      token = await atomicEnsureShareToken(payload, 'quotes', quote.id);
-    } else if (!options.allowFinalWithToken && QUOTE_FINAL_STATUSES.has(quote.status)) {
-      throw new Error('La cotización alcanzó un estado final y no puede volver a compartirse.');
+      if (!options.allowFinalWithToken) {
+        throw new Error('La cotización alcanzó un estado final y no puede volver a compartirse.');
+      }
     }
+
+    // SIEMPRE se garantiza un token VIGENTE: emite si falta, acuña caducidad a los
+    // tokens legados o rota el vencido. Antes sólo se invocaba si faltaba el token,
+    // así que los legados quedaban eternos y un enlace vencido se devolvía muerto
+    // (404 al destinatario). Reporte Devin #89.
+    const token = await ensureShareToken(payload, 'quotes', quote.id);
 
     // Releer con el token definitivo para que el doc compartido sea consistente.
     const fresh = token === quote.shareToken ? quote : await payload.findByID({
@@ -193,10 +151,8 @@ async function loadAndEnsureShare(
     if (!invoice) {
       throw new Error('Factura no encontrada en este inquilino.');
     }
-    let token = invoice.shareToken || '';
-    if (!token) {
-      token = await atomicEnsureShareToken(payload, 'invoices', invoice.id);
-    }
+    // Facturas: ninguna está bloqueada para compartir → se garantiza token vigente.
+    const token = await ensureShareToken(payload, 'invoices', invoice.id);
     const fresh = token === invoice.shareToken ? invoice : await payload.findByID({
       collection: 'invoices',
       id: invoice.id,
@@ -222,15 +178,16 @@ async function loadAndEnsureShare(
     throw new Error('Remisión no encontrada en este inquilino.');
   }
 
-  let token = note.shareToken || '';
-  if (!token) {
-    if (DELIVERY_NOTE_FINAL_STATUSES.has(note.status)) {
+  if (DELIVERY_NOTE_FINAL_STATUSES.has(note.status)) {
+    if (!note.shareToken) {
       throw new Error('Una remisión anulada ya no puede compartirse.');
     }
-    token = await atomicEnsureShareToken(payload, 'delivery-notes', note.id);
-  } else if (!options.allowFinalWithToken && DELIVERY_NOTE_FINAL_STATUSES.has(note.status)) {
-    throw new Error('La remisión fue anulada y no puede volver a compartirse.');
+    if (!options.allowFinalWithToken) {
+      throw new Error('La remisión fue anulada y no puede volver a compartirse.');
+    }
   }
+
+  const token = await ensureShareToken(payload, 'delivery-notes', note.id);
 
   const fresh = token === note.shareToken ? note : await payload.findByID({
     collection: 'delivery-notes',
@@ -311,7 +268,7 @@ export async function revokeShareTokenAction(input: unknown): Promise<{ ok: bool
       drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
     };
     await dbAdapter.drizzle.execute(
-      sql`UPDATE ${sql.identifier(shareTable(parsed.data.collection))}
+      sql`UPDATE ${sql.identifier(shareTableFor(parsed.data.collection))}
           SET share_token = NULL, share_token_expires_at = NULL
           WHERE id = ${parsed.data.documentId}`,
     );

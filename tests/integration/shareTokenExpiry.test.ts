@@ -2,8 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getPayload } from 'payload';
 import type { Payload } from 'payload';
 import config from '@payload-config';
-import type { Customer, Invoice } from '@/payload-types';
+import type { Customer, Invoice, User } from '@/payload-types';
 import { resolveSharedDocument, shareTokenExpiry } from '@/utilities/documentSharing';
+import { ensureShareToken } from '@/utilities/shareTokens';
 
 /**
  * ─── Integración: resolución del enlace público y revocación (R4 · S1-1) ────
@@ -18,6 +19,7 @@ const RUN = Date.now().toString(36);
 let payload: Payload;
 let tenantId: number;
 let customerId: number;
+let userDoc: User;
 
 beforeAll(async () => {
   payload = await getPayload({ config });
@@ -40,6 +42,13 @@ beforeAll(async () => {
     overrideAccess: true,
   })) as unknown as Customer;
   customerId = customer.id;
+
+  // Usuario real para probar el RBAC de campo (access) con overrideAccess:false.
+  userDoc = (await payload.create({
+    collection: 'users',
+    data: { email: `qa-share-${RUN}@example.com`, name: 'QA Share', role: 'super-admin', password: 'test-12345678' },
+    overrideAccess: true,
+  })) as unknown as User;
 });
 
 afterAll(async () => {
@@ -108,6 +117,84 @@ describe('enlace público — caducidad y revocación (S1-1)', () => {
     });
 
     expect(await resolveSharedDocument(token)).toBeNull();
+  });
+});
+
+describe('emisión y renovación del token (Devin #89)', () => {
+  it('acuña caducidad a un token LEGADO sin romper el enlace ya distribuido', async () => {
+    const token = `leg-${RUN}-dddddddddddddddddddddddd`;
+    const invoice = await createSharedInvoice(token, null); // legado: token sin caducidad
+
+    const ensured = await ensureShareToken(payload, 'invoices', invoice.id);
+    expect(ensured).toBe(token); // NO rota: conserva el enlace ya entregado
+
+    const after = (await payload.findByID({
+      collection: 'invoices',
+      id: invoice.id,
+      depth: 0,
+      overrideAccess: true,
+      // Los campos shareToken* son `hidden`: se piden explícitamente (opción oficial).
+      showHiddenFields: true,
+    })) as unknown as Invoice;
+
+    expect(after.shareTokenExpiresAt).toBeTruthy();
+    expect(new Date(String(after.shareTokenExpiresAt)).getTime()).toBeGreaterThan(Date.now());
+    // El enlace legado sigue resolviendo mientras esté vigente.
+    expect(await resolveSharedDocument(token)).not.toBeNull();
+  });
+
+  it('rota el token VENCIDO y entrega uno vigente (no un enlace muerto)', async () => {
+    const oldToken = `old-${RUN}-eeeeeeeeeeeeeeeeeeeeeeee`;
+    const invoice = await createSharedInvoice(oldToken, new Date(Date.now() - 60_000).toISOString());
+    expect(await resolveSharedDocument(oldToken)).toBeNull(); // vencido → no resuelve
+
+    const ensured = await ensureShareToken(payload, 'invoices', invoice.id);
+    expect(ensured).not.toBe(oldToken); // rotado
+
+    expect(await resolveSharedDocument(ensured)).not.toBeNull(); // el nuevo SÍ resuelve
+    expect(await resolveSharedDocument(oldToken)).toBeNull(); // el viejo queda muerto
+  });
+
+  it('dos emisiones concurrentes sobre un token vencido devuelven el MISMO token', async () => {
+    const oldToken = `con-${RUN}-ffffffffffffffffffffffff`;
+    const invoice = await createSharedInvoice(oldToken, new Date(Date.now() - 60_000).toISOString());
+
+    const [a, b] = await Promise.all([
+      ensureShareToken(payload, 'invoices', invoice.id),
+      ensureShareToken(payload, 'invoices', invoice.id),
+    ]);
+
+    expect(a).toBe(b);
+    expect(a).not.toBe(oldToken);
+  });
+
+  it('un escritor autenticado NO puede fijar ni extender la caducidad por API (Devin #89)', async () => {
+    const token = `sec-${RUN}-999999999999999999999999`;
+    const originalExpiry = shareTokenExpiry();
+    const invoice = await createSharedInvoice(token, originalExpiry);
+
+    // Access de CAMPO (no admin.readOnly): con RBAC real el intento no surte efecto.
+    await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: { shareToken: 'attacker-token', shareTokenExpiresAt: null },
+      draft: false,
+      user: userDoc,
+      overrideAccess: false,
+    });
+
+    const after = (await payload.findByID({
+      collection: 'invoices',
+      id: invoice.id,
+      depth: 0,
+      overrideAccess: true,
+      showHiddenFields: true,
+    })) as unknown as Invoice;
+
+    expect(after.shareToken).toBe(token); // intacto
+    expect(new Date(String(after.shareTokenExpiresAt)).toISOString()).toBe(
+      new Date(originalExpiry).toISOString(),
+    ); // intacta
   });
 });
 
