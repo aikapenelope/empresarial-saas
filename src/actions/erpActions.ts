@@ -68,6 +68,7 @@ import {
 } from '@/utilities/inventoryImport';
 import {
   completeInventoryCount,
+  lockInventoryCount,
   snapshotWarehouseStock,
 } from '@/utilities/inventoryCounts';
 import { returnSaleLines } from '@/utilities/salesLedger';
@@ -2579,9 +2580,19 @@ export async function saveCountedItemsAction(input: SaveCountedItemsInput) {
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
+      // Mismo protocolo de lock que completeInventoryCount: guardado y
+      // finalización se serializan POR CONTEO, de modo que no se puedan escribir
+      // cantidades sobre un conteo ya completado (reporte Devin #86: una carrera
+      // check-then-write dejaba el conteo completado en desacuerdo con el Kardex).
+      // La lectura del estado ocurre DESPUÉS de tomar el lock: es el estado estable.
+      const lockedId = await lockInventoryCount(parsed.countId, req);
+      if (!lockedId) {
+        throw new Error('El conteo no tiene un identificador válido.');
+      }
+
       const count = await payload.findByID({
         collection: 'inventory-counts',
-        id: parsed.countId,
+        id: Number(lockedId),
         depth: 0,
         req,
       });
@@ -2646,24 +2657,18 @@ export async function completeInventoryCountAction(input: CompleteInventoryCount
     const payload = await getPayload({ config });
 
     const doc = await withTransaction(payload, user, async (req) => {
-      const count = await payload.findByID({
-        collection: 'inventory-counts',
-        id: parsed.countId,
-        depth: 0,
-        req,
-      });
-
-      if (!count || Number(count.tenant) !== Number(parsed.tenantId)) {
-        throw new Error('El conteo no pertenece a este inquilino.');
-      }
-
+      // La relectura del conteo, la validación de inquilino y la de estado viven
+      // AHORA dentro de la utility, bajo el advisory lock por conteo: eso evita
+      // la doble finalización concurrente (dos pestañas aplicando los ajustes dos
+      // veces sobre el Kardex). Ver completeInventoryCount.
       const adjusted = await completeInventoryCount({
-        count,
+        countId: parsed.countId,
+        expectedTenantId: parsed.tenantId,
         completedBy: user.id,
         req,
       });
 
-      return { countId: count.id, adjustedProducts: adjusted };
+      return { countId: parsed.countId, adjustedProducts: adjusted };
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/inventory/counts`);

@@ -87,6 +87,47 @@ export function extractId(value: unknown): number | string | null {
 }
 
 /**
+ * Tamaño de página del barrido de movimientos del turno.
+ */
+const SHIFT_QUERY_PAGE_SIZE = 100;
+
+/**
+ * Recorre TODAS las páginas de una query de la Local API. Un `limit` fijo (p. ej.
+ * 1000) trunca el resultado en SILENCIO: un turno con más cobros/pagos que el
+ * límite calculaba el esperado sobre datos parciales → descuadre falso. Hallazgo
+ * S2-2. Mismo patrón paginado que `fetchAllCustomerOpenInvoices` de financeLedger.
+ */
+async function fetchAllShiftDocs(
+  req: PayloadRequest,
+  collection: 'customer-payments' | 'supplier-payments',
+  where: Where,
+): Promise<Array<Record<string, unknown>>> {
+  const all: Array<Record<string, unknown>> = [];
+  let page = 1;
+  let hasNextPage = true;
+  while (hasNextPage) {
+    const res = await req.payload.find({
+      collection,
+      where,
+      // `sort: 'id'` es OBLIGATORIO con paginación por offset: da un orden único y
+      // estable entre páginas. Sin él, el orden por defecto (timestamp) tiene
+      // empates y una fila puede repetirse en una página y omitirse en otra,
+      // corrompiendo el total del turno (reporte Devin #88). Mismo patrón que
+      // `dashboardData.findAllMatching`.
+      sort: 'id',
+      limit: SHIFT_QUERY_PAGE_SIZE,
+      page,
+      depth: 0,
+      req,
+    });
+    all.push(...(res.docs as unknown as Array<Record<string, unknown>>));
+    hasNextPage = Boolean(res.hasNextPage);
+    page += 1;
+  }
+  return all;
+}
+
+/**
  * Consulta y consolida todas las transacciones operativas (cobranzas a clientes y egresos a proveedores)
  * ejecutadas durante la sesión de turno de una caja registradora.
  */
@@ -143,13 +184,7 @@ export async function computeShiftTransactions({
     and: customerAndConditions,
   };
 
-  const customerPaymentsResult = await req.payload.find({
-    collection: 'customer-payments',
-    where: customerPaymentsWhere,
-    limit: 1000,
-    depth: 0,
-    req,
-  });
+  const customerPaymentsDocs = await fetchAllShiftDocs(req, 'customer-payments', customerPaymentsWhere);
 
   const collections: ShiftMethodTotals & { totalCollectionsUSD: number } = {
     cashUSD: 0,
@@ -162,7 +197,7 @@ export async function computeShiftTransactions({
     totalCollectionsUSD: 0,
   };
 
-  for (const doc of customerPaymentsResult.docs) {
+  for (const doc of customerPaymentsDocs) {
     const payment = doc as unknown as {
       totalUSD?: number;
       methods?: Array<{
@@ -237,13 +272,7 @@ export async function computeShiftTransactions({
     and: supplierAndConditions,
   };
 
-  const supplierPaymentsResult = await req.payload.find({
-    collection: 'supplier-payments',
-    where: supplierPaymentsWhere,
-    limit: 1000,
-    depth: 0,
-    req,
-  });
+  const supplierPaymentsDocs = await fetchAllShiftDocs(req, 'supplier-payments', supplierPaymentsWhere);
 
   const disbursements: ShiftDisbursementsTotals & { totalDisbursementsUSD: number } = {
     cashUSDOut: 0,
@@ -256,7 +285,7 @@ export async function computeShiftTransactions({
     totalDisbursementsUSD: 0,
   };
 
-  for (const doc of supplierPaymentsResult.docs) {
+  for (const doc of supplierPaymentsDocs) {
     const payment = doc as unknown as {
       totalUSD?: number;
       methods?: Array<{

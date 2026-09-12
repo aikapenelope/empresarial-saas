@@ -2,10 +2,10 @@
 
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Copy, Loader2, Mail, MessageCircle } from 'lucide-react';
+import { Check, Copy, Loader2, Mail, MessageCircle, ShieldOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Modal } from './modals/Modal';
-import { ensureShareUrlAction, sendDocumentEmailAction } from '@/actions/shareActions';
+import { ensureShareUrlAction, revokeShareTokenAction, sendDocumentEmailAction } from '@/actions/shareActions';
 
 /**
  * Sprint 28: botones de compartición de cotizaciones y remisiones.
@@ -26,6 +26,7 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [revokeModalOpen, setRevokeModalOpen] = useState(false);
   const [email, setEmail] = useState(defaultEmail);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -73,6 +74,20 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
     });
   };
 
+  const handleRevoke = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await revokeShareTokenAction({ collection, tenantId, documentId });
+      if (!res.ok) {
+        setError(res.error || 'No se pudo revocar el enlace.');
+        return;
+      }
+      toast.success('Enlace público revocado.');
+      setRevokeModalOpen(false);
+      router.refresh();
+    });
+  };
+
   return (
     <>
       <div className="flex items-center gap-1">
@@ -90,6 +105,7 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
           title={`Enviar ${docLabel} por email`}
           disabled={isPending}
           onClick={() => {
+            setError(null);
             setEmail(defaultEmail);
             setEmailModalOpen(true);
           }}
@@ -105,6 +121,18 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
           className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/60 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
         >
           {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+        <button
+          type="button"
+          title="Revocar enlace público"
+          disabled={isPending}
+          onClick={() => {
+            setError(null);
+            setRevokeModalOpen(true);
+          }}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-700/60 bg-rose-900/30 text-rose-400 hover:bg-rose-900/60 transition-colors disabled:opacity-50"
+        >
+          <ShieldOff className="h-3.5 w-3.5" />
         </button>
       </div>
 
@@ -144,6 +172,34 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
             Enviar por email
           </button>
         </form>
+      </Modal>
+
+      <Modal isOpen={revokeModalOpen} onClose={() => setRevokeModalOpen(false)} title={`Revocar enlace de ${docLabel}`} maxWidth="sm">
+        <div className="space-y-4">
+          <p className="text-xs text-slate-400">
+            El enlace público actual dejará de funcionar de inmediato. Si vuelve a compartir el
+            documento, se emitirá un enlace nuevo con caducidad de 30 días.
+          </p>
+          {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setRevokeModalOpen(false)}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={handleRevoke}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 transition-colors disabled:opacity-50"
+            >
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldOff className="h-4 w-4" />}
+              Revocar enlace
+            </button>
+          </div>
+        </div>
       </Modal>
     </>
   );

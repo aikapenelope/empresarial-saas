@@ -63,14 +63,37 @@ export interface VendorAgingRow {
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
-/** Días vencidos al `asOf` (normalizados a medianoche): ≤ 0 significa vigente. */
+/**
+ * Día de negocio en America/Caracas (UTC-4, sin DST) — la MISMA convención que
+ * `formatBusinessDate` de erpValidation. Un timestamp cerca de la medianoche UTC
+ * (p. ej. 2026-09-02T03:30Z = 2026-09-01 23:30 en Caracas) pertenece al día de
+ * negocio ANTERIOR; formatear con la zona del runtime (UTC en Vercel) desviaba el
+ * bucket de antigüedad un día (hallazgo S3-1).
+ */
+const businessDayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Caracas',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Epoch UTC (medianoche) del día de negocio del valor, o null si es inválido. */
+function businessDayEpoch(value: string | Date): number | null {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const [year, month, day] = businessDayFormatter.format(date).split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return Date.UTC(year, month - 1, day);
+}
+
+/** Días vencidos al `asOf` según el día de negocio: ≤ 0 significa vigente. */
 function daysOverdue(baseDateStr: string | null | undefined, asOf: Date): number {
   if (!baseDateStr) return 0;
-  const base = new Date(baseDateStr);
-  if (Number.isNaN(base.getTime())) return 0;
-  const baseMidnight = new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime();
-  const asOfMidnight = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate()).getTime();
-  return Math.floor((asOfMidnight - baseMidnight) / DAY_MS);
+  const baseDay = businessDayEpoch(baseDateStr);
+  if (baseDay === null) return 0;
+  const asOfDay = businessDayEpoch(asOf);
+  if (asOfDay === null) return 0;
+  return Math.floor((asOfDay - baseDay) / DAY_MS);
 }
 
 function emptyBucket(): Omit<AgingRow, 'customerId' | 'customerName' | 'vendorId' | 'vendorName'> {
