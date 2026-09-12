@@ -52,28 +52,82 @@ export async function snapshotWarehouseStock({
 }
 
 /**
+ * Advisory lock transaccional POR CONTEO. Serializa TODA mutación de un conteo
+ * (guardar cantidades y finalizar): sin él, un guardado que leyó `in_progress`
+ * puede escribir sus cantidades DESPUÉS de que la finalización ya creó los
+ * movimientos de Kardex, dejando un conteo "completado" que no concuerda con el
+ * Kardex (reporte Devin #86). Debe tomarse SIEMPRE dentro de la transacción del
+ * llamador y ANTES de leer el conteo. Devuelve el id normalizado, o null si no
+ * es válido.
+ */
+export async function lockInventoryCount(
+  countIdRaw: unknown,
+  req: PayloadRequest,
+): Promise<number | string | null> {
+  const id = extractId(countIdRaw);
+  if (!id) return null;
+  const db = getActiveDb(req);
+  await db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`inventorycount:${id}`}))`);
+  return id;
+}
+
+/**
  * Completa un conteo: valida que esté en progreso, crea un movimiento de ajuste
  * por cada línea con diferencia distinta de cero (agregada por producto) y marca
  * el conteo como completado. Todo en la transacción del llamador (req propagado).
  */
 export async function completeInventoryCount({
-  count,
+  countId,
+  expectedTenantId,
   completedBy,
   req,
 }: {
-  count: InventoryCount;
+  countId: number | string;
+  /** Inquilino esperado; si se pasa, se revalida contra el conteo fresco. */
+  expectedTenantId?: number | string | null;
   completedBy: number;
   req: PayloadRequest;
 }): Promise<number> {
+  const id = extractId(countId);
+  if (!id) {
+    throw new Error('El conteo no tiene un identificador válido.');
+  }
+
+  // Advisory lock transaccional POR CONTEO (helper compartido con el guardado de
+  // cantidades): serializa finalizaciones concurrentes del MISMO documento. Sin
+  // él, ambas transacciones leen `status: in_progress` y aplican los ajustes DOS
+  // veces sobre el Kardex (movimientos duplicados → stock corrupto). Se libera en
+  // el commit/rollback del llamador. Patrón de la casa (consumeApproval / nextDocumentNumber).
+  await lockInventoryCount(id, req);
+
+  // Relectura FRESCA bajo el lock: el estado pudo cambiar entre la lectura del
+  // llamador y la adquisición del lock. Ya bloqueados, el valor es estable y la
+  // validación de "ya completado" es definitiva (no la del objeto del llamador).
+  const count = (await req.payload.findByID({
+    collection: 'inventory-counts',
+    id: Number(id),
+    depth: 0,
+    req,
+    overrideAccess: true,
+  })) as InventoryCount | undefined;
+
+  if (!count) {
+    throw new Error(`El conteo #${id} no existe.`);
+  }
+
+  if (expectedTenantId != null && Number(extractId(count.tenant)) !== Number(expectedTenantId)) {
+    throw new Error('El conteo no pertenece a este inquilino.');
+  }
+
+  if (count.status === 'completed') {
+    throw new Error('El conteo ya está completado.');
+  }
+
   const warehouseIdRaw = extractId(count.warehouse);
   if (!warehouseIdRaw) {
     throw new Error('El conteo no tiene un almacén válido.');
   }
   const warehouseId = Number(warehouseIdRaw);
-
-  if (count.status === 'completed') {
-    throw new Error('El conteo ya está completado.');
-  }
 
   const items = (Array.isArray(count.items) ? count.items : []) as Array<{
     product?: unknown;
