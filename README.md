@@ -150,6 +150,13 @@ pnpm dev
    pnpm build
    ```
 
+> ⚠️ **Las migraciones de base de datos NO se ejecutan en el build de Vercel** (a propósito: los builds de
+> *preview* comparten las variables de producción). Se aplican como paso explícito, por la **conexión
+> directa (5432)**, antes de promover el deployment.
+>
+> 📋 **Procedimiento completo — checklist de promoción, verificación post-deploy, rollback y cron de jobs:
+> [`docs/DEPLOY-RUNBOOK.md`](docs/DEPLOY-RUNBOOK.md).**
+
 ---
 
 ## 🔄 Flujo de Trabajo por Sprints y PRs
