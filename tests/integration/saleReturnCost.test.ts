@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getPayload } from 'payload';
-import type { Payload } from 'payload';
+import type { Payload, PayloadRequest } from 'payload';
 import config from '@payload-config';
-import type { Customer, Invoice, Product, StockMovement, Warehouse } from '@/payload-types';
+import type { Customer, Invoice, Product, StockMovement, User, Warehouse } from '@/payload-types';
 import { extractId } from '@/utilities/inventoryLedger';
+import { returnSaleLines } from '@/utilities/salesLedger';
 
 /**
  * ─── Integración: costo del reingreso por devolución (Sprint R2 · S4-1) ─────
@@ -19,6 +20,7 @@ let payload: Payload;
 let tenantId: number;
 let warehouseId: number;
 let customerId: number;
+let userDoc: User;
 
 beforeAll(async () => {
   payload = await getPayload({ config });
@@ -44,6 +46,14 @@ beforeAll(async () => {
     overrideAccess: true,
   })) as unknown as Customer;
   customerId = customer.id;
+
+  // El Kardex valida pertenencia al inquilino contra `req.user` (no basta con
+  // un id): se necesita el documento completo del usuario.
+  userDoc = (await payload.create({
+    collection: 'users',
+    data: { email: `qa-retorno-${RUN}@example.com`, name: 'QA Retorno', role: 'super-admin', password: 'test-12345678' },
+    overrideAccess: true,
+  })) as unknown as User;
 });
 
 afterAll(async () => {
@@ -51,13 +61,13 @@ afterAll(async () => {
   if (db?.destroy) await db.destroy();
 });
 
-async function createProductWithCost(unitCostUSD: number): Promise<number> {
+async function createProductWithCost(unitCostUSD: number, tag = ''): Promise<number> {
   const product = (await payload.create({
     collection: 'products',
     data: {
       tenant: tenantId,
-      name: `Producto Retorno ${RUN}`,
-      sku: `QAR-P-${RUN}-${unitCostUSD}`,
+      name: `Producto Retorno ${RUN}${tag}`,
+      sku: `QAR-P-${RUN}-${unitCostUSD}${tag}`,
       productType: 'standard',
       unitOfMeasure: 'unit',
       costUSD: unitCostUSD,
@@ -69,6 +79,11 @@ async function createProductWithCost(unitCostUSD: number): Promise<number> {
     overrideAccess: true,
   })) as unknown as Product;
   return product.id;
+}
+
+async function currentStock(productId: number): Promise<number> {
+  const product = await payload.findByID({ collection: 'products', id: productId, overrideAccess: true });
+  return Number((product as unknown as Product).currentStock) || 0;
 }
 
 async function seedStock(productId: number, quantity: number, unitCostUSD: number): Promise<void> {
@@ -150,6 +165,70 @@ describe('devolución de venta — preserva el costo del reingreso (S4-1)', () =
     // El reingreso conserva el costo de la venta (antes del fix: 0).
     expect(Number(returned[0].unitCostUSD)).toBe(unitCost);
     expect(Number(returned[0].totalCostUSD)).toBe(15);
+  });
+
+  it('la devolución PARCIAL reingresa unidades y no falla (Devin #87)', async () => {
+    const unitCost = 5;
+    const product = await createProductWithCost(unitCost, '-partial');
+    await seedStock(product, 10, unitCost);
+
+    // Venta de 4 unidades → sale_out; quedan 6 en stock.
+    const invoice = (await payload.create({
+      collection: 'invoices',
+      data: {
+        tenant: tenantId,
+        invoiceNumber: `RET-${RUN}-PARTIAL`,
+        customer: customerId,
+        dueDate: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+        issueDate: new Date().toISOString(),
+        paymentTerms: 'cash',
+        status: 'issued',
+        exchangeRateSnapshot: 40,
+        totalUSD: 40,
+        totalVES: 1600,
+        balanceUSD: 40,
+        balanceVES: 1600,
+        items: [{ product, description: `P parcial ${RUN}`, quantity: 4, unitPriceUSD: 10, totalUSD: 40 }],
+      },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Invoice;
+
+    expect(await currentStock(product)).toBe(6);
+
+    // Devolución PARCIAL de 1 de las 4 unidades vendidas.
+    const transactionID = await payload.db.beginTransaction();
+    const req = {
+      payload,
+      user: userDoc,
+      context: {},
+      transactionID,
+    } as unknown as PayloadRequest;
+
+    try {
+      const result = await returnSaleLines({
+        invoice,
+        lines: [{ productId: product, quantity: 1 }],
+        reason: 'Devolución parcial de prueba',
+        req,
+      });
+      if (transactionID) await payload.db.commitTransaction(transactionID);
+
+      // Antes del fix, la query agrupada con `ORDER BY id` lanzaba en PostgreSQL
+      // y no se creaba NINGÚN movimiento de devolución.
+      expect(result.movementsCreated).toBe(1);
+      expect(result.results[0]?.status).toBe('ok');
+    } catch (error) {
+      if (transactionID) await payload.db.rollbackTransaction(transactionID);
+      throw error;
+    }
+
+    expect(await currentStock(product)).toBe(7); // 6 + 1
+
+    const returned = await movementsFor(invoice.id, 'sale_return');
+    expect(returned).toHaveLength(1);
+    expect(Number(returned[0].quantity)).toBe(1);
+    expect(Number(returned[0].unitCostUSD)).toBe(unitCost);
   });
 });
 

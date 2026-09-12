@@ -340,13 +340,18 @@ export async function returnSaleLines({
   }
 
   // Vendido y devuelto por (producto, almacén)
+  // `MIN(id)` preserva la asignación determinista FIFO por almacén: con GROUP BY,
+  // PostgreSQL RECHAZA un ORDER BY sobre una columna que no está agrupada ni
+  // agregada, así que el anterior `ORDER BY id` hacía fallar SIEMPRE las
+  // devoluciones parciales. Reporte Devin #87.
   const soldRes = await db.execute(
     sql`SELECT product_id, source_warehouse_id, SUM(quantity) AS qty,
-               SUM(quantity * unit_cost_u_s_d) AS cost
+               SUM(quantity * unit_cost_u_s_d) AS cost,
+               MIN(id) AS first_sale_id
         FROM stock_movements
         WHERE invoice_id = ${invoiceId} AND movement_type = 'sale_out'
         GROUP BY product_id, source_warehouse_id
-        ORDER BY id ASC`,
+        ORDER BY first_sale_id ASC`,
   );
   const soldByKey = new Map<string, number>();
   const saleOrder: Array<{
