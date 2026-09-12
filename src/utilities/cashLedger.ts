@@ -1,6 +1,11 @@
 import type { PayloadRequest, Where } from 'payload';
 import { runIsolatedContext } from './requestContext';
 
+// Sprint R6: helper compartido de extracción de IDs (antes duplicado aquí, en
+// financeLedger y purchasesLedger). Hogar canónico: inventoryLedger.
+import { extractId } from './inventoryLedger';
+export { extractId };
+
 export interface ShiftMethodTotals {
   cashUSD: number;
   cashVES: number;
@@ -70,20 +75,6 @@ export interface DeclaredTotalsInput {
  */
 export function round2(val: number): number {
   return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
-}
-
-/**
- * Extrae un ID normalizado (número o string) de una relación posiblemente poblada.
- */
-export function extractId(value: unknown): number | string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'object' && 'id' in (value as Record<string, unknown>)) {
-    return (value as { id: number | string }).id;
-  }
-  if (typeof value === 'number' || typeof value === 'string') {
-    return value;
-  }
-  return null;
 }
 
 /**

@@ -1529,7 +1529,9 @@ export async function getActiveAlertCount(tenantId: number): Promise<number> {
   const user = await requireErpTenantAccess(tenantId);
   const payload = await getPayload({ config });
 
-  const res = await payload.find({
+  // Sprint R6 (S6-2): `count` no trae documentos — sólo el total (antes era un
+  // `find({ limit: 0 })` que igualmente ejecutaba el pipeline de lectura).
+  const { totalDocs } = await payload.count({
     collection: 'alerts',
     where: {
       and: [
@@ -1538,12 +1540,10 @@ export async function getActiveAlertCount(tenantId: number): Promise<number> {
         { acknowledgedAt: { exists: false } },
       ],
     },
-    limit: 0,
-    depth: 0,
     user,
     overrideAccess: false,
   });
-  return res.totalDocs;
+  return totalDocs;
 }
 
 /** Contador de aprobaciones pendientes/aprobadas sin consumir — badge de navegación (IE-PR6). */
@@ -1551,7 +1551,7 @@ export async function getPendingApprovalsCount(tenantId: number): Promise<number
   const user = await requireErpTenantAccess(tenantId);
   const payload = await getPayload({ config });
 
-  const res = await payload.find({
+  const { totalDocs } = await payload.count({
     collection: 'approvals',
     where: {
       and: [
@@ -1559,12 +1559,10 @@ export async function getPendingApprovalsCount(tenantId: number): Promise<number
         { status: { in: ['pending', 'approved'] } },
       ],
     },
-    limit: 0,
-    depth: 0,
     user,
     overrideAccess: false,
   });
-  return res.totalDocs;
+  return totalDocs;
 }
 
 export interface AuditLogPageData {
