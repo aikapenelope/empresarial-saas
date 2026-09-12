@@ -3,6 +3,11 @@ import { sql } from '@payloadcms/db-postgres';
 import { runIsolatedContext } from './requestContext';
 import type { Product } from '@/payload-types';
 
+// Sprint R6: helpers de acceso a Payload/BD compartidos (antes duplicados aquí,
+// en financeLedger y cashLedger). Hogar canónico: inventoryLedger.
+import { extractId, getActiveDb } from './inventoryLedger';
+export { extractId, getActiveDb };
+
 export interface SupplierRecalculateBalanceResult {
   currentDebtUSD: number;
   currentDebtVES: number;
@@ -17,20 +22,6 @@ export interface SupplierPaymentAllocation {
 export interface SupplierAllocationScopeOptions {
   supplierId?: number | string | null;
   tenantId?: number | string | null;
-}
-
-/**
- * Extracts a numeric or string ID from a potentially populated relationship field.
- */
-export function extractId(value: unknown): number | string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'object' && 'id' in (value as Record<string, unknown>)) {
-    return (value as { id: number | string }).id;
-  }
-  if (typeof value === 'number' || typeof value === 'string') {
-    return value;
-  }
-  return null;
 }
 
 /**
@@ -49,27 +40,6 @@ export function getUserTenantIds(user: unknown): Array<number | string> {
     }
   }
   return ids;
-}
-
-/**
- * Resolves the active database or transaction handle from Payload request.
- */
-export function getActiveDb(req: PayloadRequest): {
-  execute: (query: unknown) => Promise<{ rows: Array<Record<string, unknown>> }>;
-} {
-  const dbAdapter = req.payload.db as unknown as {
-    sessions?: Record<
-      string,
-      { db: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> } }
-    >;
-    drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
-  };
-
-  if (req.transactionID && dbAdapter.sessions?.[req.transactionID as string]?.db) {
-    return dbAdapter.sessions[req.transactionID as string].db;
-  }
-
-  return dbAdapter.drizzle;
 }
 
 /**

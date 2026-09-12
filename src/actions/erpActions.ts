@@ -71,6 +71,8 @@ import {
   snapshotWarehouseStock,
 } from '@/utilities/inventoryCounts';
 import { returnSaleLines } from '@/utilities/salesLedger';
+import { withTransaction } from '@/utilities/withTransaction';
+import { nextDocumentNumber } from '@/utilities/documentNumbering';
 
 // ==========================================
 // Infraestructura de seguridad y transacciones
@@ -84,35 +86,6 @@ import { returnSaleLines } from '@/utilities/salesLedger';
 export interface ErpActionResult {
   success: boolean;
   error?: string;
-}
-
-/** Envuelve un bloque de escritura en una transacción de PostgreSQL accesible vía Local API. */
-async function withTransaction<T>(
-  payload: Payload,
-  user: User,
-  fn: (req: PayloadRequest) => Promise<T>,
-  context?: Record<string, unknown>,
-): Promise<T> {
-  const transactionID = await payload.db.beginTransaction();
-  const req = {
-    payload,
-    user,
-    context: context ?? {},
-    transactionID,
-  } as unknown as PayloadRequest;
-
-  try {
-    const result = await fn(req);
-    if (transactionID) {
-      await payload.db.commitTransaction(transactionID);
-    }
-    return result;
-  } catch (error: unknown) {
-    if (transactionID) {
-      await payload.db.rollbackTransaction(transactionID);
-    }
-    throw error;
-  }
 }
 
 /** Roles con permiso de crear/actualizar catálogos y operaciones restringidas (RBAC de colecciones). */
@@ -554,71 +527,6 @@ export interface CreateInvoiceInput {
   installmentsCount?: number;
   items: InvoiceItemInput[];
   notes?: string;
-}
-
-/**
- * Numeración consecutiva por inquilino y tipo de documento. Toma un advisory lock
- * transaccional (liberado en commit/rollback) para que dos escrituras concurrentes
- * no elijan el mismo número; debe llamarse SIEMPRE dentro de la transacción del
- * llamador (req requerido). Los índices únicos compuestos (tenant, número) sirven
- * de red de seguridad en base de datos.
- */
-const DOC_NUMBER_TABLES: Record<
-  | 'invoices'
-  | 'customer-payments'
-  | 'production-orders'
-  | 'cash-closures'
-  | 'quotes'
-  | 'orders'
-  | 'delivery-notes'
-  | 'purchase-invoices'
-  | 'supplier-payments',
-  { table: string; column: string }
-> = {
-  invoices: { table: 'invoices', column: 'invoice_number' },
-  'customer-payments': { table: 'customer_payments', column: 'payment_number' },
-  'production-orders': { table: 'production_orders', column: 'order_number' },
-  'cash-closures': { table: 'cash_closures', column: 'closure_number' },
-  quotes: { table: 'quotes', column: 'quote_number' },
-  orders: { table: 'orders', column: 'order_number' },
-  'delivery-notes': { table: 'delivery_notes', column: 'note_number' },
-  'purchase-invoices': { table: 'purchase_invoices', column: 'invoice_number' },
-  'supplier-payments': { table: 'supplier_payments', column: 'payment_number' },
-};
-
-/**
- * Numeración consecutiva por inquilino y tipo de documento. Toma un advisory lock
- * transaccional (liberado en commit/rollback) para que dos escrituras concurrentes
- * no elijan el mismo número; debe llamarse SIEMPRE dentro de la transacción del
- * llamador (req requerido). Usa MAX del sufijo numérico — no COUNT — para que los
- * gaps por eliminación no reciclen números ya emitidos; los índices únicos
- * compuestos (tenant, número) son la red de seguridad final en base de datos.
- */
-async function nextDocumentNumber(
-  payload: Payload,
-  collection: 'invoices' | 'customer-payments' | 'production-orders' | 'cash-closures' | 'quotes' | 'orders' | 'delivery-notes' | 'purchase-invoices' | 'supplier-payments',
-  tenantId: number,
-  prefix: string,
-  req: PayloadRequest,
-): Promise<string> {
-  const db = getActiveDb(req);
-  await db.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${`docnum:${collection}:${tenantId}`}))`,
-  );
-
-  const { table, column } = DOC_NUMBER_TABLES[collection];
-  // Solo se consideran identificadores con el formato generado por el sistema
-  // (`prefijo-<solo dígitos>`): valores manuales o históricos con otro formato
-  // se ignoran en la secuencia y no pueden romper el CAST del sufijo.
-  const maxRes = await db.execute(
-    sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(${sql.raw(column)}, '^.*-', '') AS integer)), 0) AS max_num
-        FROM ${sql.raw(table)}
-        WHERE tenant_id = ${tenantId}
-          AND ${sql.raw(column)} ~ ('^' || ${prefix} || '-[0-9]+$')`,
-  );
-  const maxNum = Number(maxRes.rows?.[0]?.max_num) || 0;
-
-  return `${prefix}-${String(maxNum + 1).padStart(5, '0')}`;
 }
 
 /**
