@@ -509,6 +509,10 @@ export interface Invoice {
    */
   shareToken?: string | null;
   /**
+   * Momento en que el enlace público deja de resolver. Server-generated; no editar.
+   */
+  shareTokenExpiresAt?: string | null;
+  /**
    * De dónde sale el inventario de esta factura. Si se omite, se usa el almacén por defecto del inquilino. Solo se aplica al publicar la descarga (Kardex inmutable).
    */
   warehouse?: (number | null) | Warehouse;
@@ -571,6 +575,7 @@ export interface DeliveryNote {
   invoice?: (number | null) | Invoice;
   notes?: string | null;
   shareToken?: string | null;
+  shareTokenExpiresAt?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -951,6 +956,7 @@ export interface Quote {
   convertedInvoice?: (number | null) | Invoice;
   notes?: string | null;
   shareToken?: string | null;
+  shareTokenExpiresAt?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1648,6 +1654,7 @@ export interface InvoicesSelect<T extends boolean = true> {
       };
   notes?: T;
   shareToken?: T;
+  shareTokenExpiresAt?: T;
   warehouse?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -2070,6 +2077,7 @@ export interface QuotesSelect<T extends boolean = true> {
   convertedInvoice?: T;
   notes?: T;
   shareToken?: T;
+  shareTokenExpiresAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -2135,6 +2143,7 @@ export interface DeliveryNotesSelect<T extends boolean = true> {
   invoice?: T;
   notes?: T;
   shareToken?: T;
+  shareTokenExpiresAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }

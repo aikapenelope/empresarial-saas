@@ -12,13 +12,13 @@ import {
   buildDocumentEmailHtml,
   buildWhatsAppText,
   deliveryNoteToSharedDoc,
-  generateShareToken,
   quoteToSharedDoc,
   shareUrlFor,
   type ShareableCollection,
   type SharedDoc,
   invoiceToSharedDoc,
 } from '@/utilities/documentSharing';
+import { ensureShareToken, shareTableFor } from '@/utilities/shareTokens';
 import type { Invoice } from '@/payload-types';
 
 /**
@@ -75,47 +75,6 @@ async function resolveBaseUrl(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-/**
- * Compare-and-set atómico del token: escribe sólo si la columna sigue NULL.
- * Devuelve el token definitivo (el ganado o el ya persistido por otra carrera).
- * UPDATE ... WHERE ... IS NULL RETURNING es atómico en Postgres sin transacción
- * externa; la escritura es infraestructura de compartición (server-generated),
- * por lo que no pasa por los hooks de la colección.
- */
-async function atomicEnsureShareToken(
-  payload: Awaited<ReturnType<typeof getPayload>>,
-  collection: ShareableCollection,
-  documentId: number,
-): Promise<string> {
-  const table =
-    collection === 'quotes' ? 'quotes' : collection === 'invoices' ? 'invoices' : 'delivery_notes';
-  const candidate = generateShareToken();
-
-  const dbAdapter = payload.db as unknown as {
-    drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
-  };
-  const result = await dbAdapter.drizzle.execute(
-    sql`UPDATE ${sql.identifier(table)} SET share_token = ${candidate} WHERE id = ${documentId} AND share_token IS NULL RETURNING share_token`,
-  );
-
-  if (result.rows.length > 0) {
-    return String(result.rows[0].share_token);
-  }
-
-  // Perdimos la carrera (o ya existía): releer el token persistido.
-  const persisted = await payload.findByID({
-    collection,
-    id: documentId,
-    select: { shareToken: true },
-    overrideAccess: true,
-  });
-  const token = persisted?.shareToken;
-  if (!token) {
-    throw new Error('No se pudo emitir el enlace de compartición. Intente nuevamente.');
-  }
-  return token;
-}
-
 interface LoadedDoc {
   doc: SharedDoc;
   shareUrl: string;
@@ -147,19 +106,24 @@ async function loadAndEnsureShare(
       throw new Error('Cotización no encontrada en este inquilino.');
     }
 
-    let token = quote.shareToken || '';
-    if (!token) {
-      if (QUOTE_FINAL_STATUSES.has(quote.status)) {
+    if (QUOTE_FINAL_STATUSES.has(quote.status)) {
+      if (!quote.shareToken) {
         throw new Error(
           quote.status === 'converted'
             ? 'Una cotización convertida a factura ya no puede compartirse.'
             : 'Una cotización rechazada ya no puede compartirse.',
         );
       }
-      token = await atomicEnsureShareToken(payload, 'quotes', quote.id);
-    } else if (!options.allowFinalWithToken && QUOTE_FINAL_STATUSES.has(quote.status)) {
-      throw new Error('La cotización alcanzó un estado final y no puede volver a compartirse.');
+      if (!options.allowFinalWithToken) {
+        throw new Error('La cotización alcanzó un estado final y no puede volver a compartirse.');
+      }
     }
+
+    // SIEMPRE se garantiza un token VIGENTE: emite si falta, acuña caducidad a los
+    // tokens legados o rota el vencido. Antes sólo se invocaba si faltaba el token,
+    // así que los legados quedaban eternos y un enlace vencido se devolvía muerto
+    // (404 al destinatario). Reporte Devin #89.
+    const token = await ensureShareToken(payload, 'quotes', quote.id);
 
     // Releer con el token definitivo para que el doc compartido sea consistente.
     const fresh = token === quote.shareToken ? quote : await payload.findByID({
@@ -187,10 +151,8 @@ async function loadAndEnsureShare(
     if (!invoice) {
       throw new Error('Factura no encontrada en este inquilino.');
     }
-    let token = invoice.shareToken || '';
-    if (!token) {
-      token = await atomicEnsureShareToken(payload, 'invoices', invoice.id);
-    }
+    // Facturas: ninguna está bloqueada para compartir → se garantiza token vigente.
+    const token = await ensureShareToken(payload, 'invoices', invoice.id);
     const fresh = token === invoice.shareToken ? invoice : await payload.findByID({
       collection: 'invoices',
       id: invoice.id,
@@ -216,15 +178,16 @@ async function loadAndEnsureShare(
     throw new Error('Remisión no encontrada en este inquilino.');
   }
 
-  let token = note.shareToken || '';
-  if (!token) {
-    if (DELIVERY_NOTE_FINAL_STATUSES.has(note.status)) {
+  if (DELIVERY_NOTE_FINAL_STATUSES.has(note.status)) {
+    if (!note.shareToken) {
       throw new Error('Una remisión anulada ya no puede compartirse.');
     }
-    token = await atomicEnsureShareToken(payload, 'delivery-notes', note.id);
-  } else if (!options.allowFinalWithToken && DELIVERY_NOTE_FINAL_STATUSES.has(note.status)) {
-    throw new Error('La remisión fue anulada y no puede volver a compartirse.');
+    if (!options.allowFinalWithToken) {
+      throw new Error('La remisión fue anulada y no puede volver a compartirse.');
+    }
   }
+
+  const token = await ensureShareToken(payload, 'delivery-notes', note.id);
 
   const fresh = token === note.shareToken ? note : await payload.findByID({
     collection: 'delivery-notes',
@@ -262,6 +225,57 @@ export async function ensureShareUrlAction(input: unknown): Promise<{
     return { ok: true, shareUrl, whatsappText: buildWhatsAppText(doc, shareUrl) };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error al preparar el enlace.';
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * Sprint R4 (hallazgo S1-1): revoca el enlace público de un documento — el token
+ * deja de resolver de inmediato (se anula en BD). La escritura es cruda por la
+ * MISMA razón que la emisión: los campos `shareToken*` no son editables por
+ * hooks/REST. La autorización se verifica con requireErpTenantAccess + lectura
+ * overrideAccess:false antes de escribir.
+ */
+export async function revokeShareTokenAction(input: unknown): Promise<{ ok: boolean; error?: string }> {
+  const parsed = ensureShareSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message || 'Datos inválidos.' };
+  }
+
+  try {
+    const payload = await getPayload({ config });
+    const user = await requireErpTenantAccess(parsed.data.tenantId, [...SHARE_ROLES]);
+
+    // RBAC real: el documento debe pertenecer al inquilino verificado.
+    const res = await payload.find({
+      collection: parsed.data.collection,
+      where: {
+        and: [
+          { id: { equals: parsed.data.documentId } },
+          { tenant: { equals: parsed.data.tenantId } },
+        ],
+      },
+      depth: 0,
+      limit: 1,
+      user,
+      overrideAccess: false,
+    });
+    if (!res.docs[0]) {
+      throw new Error('Documento no encontrado en este inquilino.');
+    }
+
+    const dbAdapter = payload.db as unknown as {
+      drizzle: { execute: (q: unknown) => Promise<{ rows: Array<Record<string, unknown>> }> };
+    };
+    await dbAdapter.drizzle.execute(
+      sql`UPDATE ${sql.identifier(shareTableFor(parsed.data.collection))}
+          SET share_token = NULL, share_token_expires_at = NULL
+          WHERE id = ${parsed.data.documentId}`,
+    );
+
+    return { ok: true };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Error al revocar el enlace.';
     return { ok: false, error: message };
   }
 }

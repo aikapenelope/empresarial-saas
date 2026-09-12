@@ -58,6 +58,13 @@ export async function fetchAllCustomerOpenInvoices(
       },
       limit: 250,
       page,
+      // `sort: 'id'` es OBLIGATORIO con paginación por offset: garantiza un orden
+      // único y estable entre páginas (con el orden por defecto, los empates de
+      // timestamp pueden repetir una fila en una página y omitirla en otra →
+      // saldo/antigüedad incorrectos). Misma clase de bug que reportó Devin en
+      // #88 (cashLedger.fetchAllShiftDocs); mismo patrón que
+      // `dashboardData.findAllMatching`.
+      sort: 'id',
       depth: 0,
       req,
     });
