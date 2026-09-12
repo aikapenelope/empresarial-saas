@@ -129,9 +129,12 @@ export default buildConfig({
     // Sprint R5: nada de `autoRun` (cron in-process, no fiable en Vercel
     // serverless). El `schedule` declarativo de las tareas habilita el scheduling
     // NATIVO de Payload; un cron externo (Vercel Cron) invoca
-    // `GET /api/payload-jobs/run`, que encola lo vencido (handleSchedules) y
-    // ejecuta la cola. `run` queda protegido: sólo el cron (Bearer CRON_SECRET)
-    // o un usuario autenticado — ver src/utilities/cronAuth.ts.
+    // `GET /api/payload-jobs/run?queue=alerts`, que encola lo vencido
+    // (handleSchedules) y ejecuta la cola. El parámetro `queue=alerts` es
+    // OBLIGATORIO: sin él Payload opera sobre la cola `default` y la tarea
+    // `evaluateAlerts` (agendada en `alerts`) nunca se encolaría (reporte Devin
+    // #90). `run` queda protegido: sólo el cron (Bearer CRON_SECRET) o un
+    // super-admin — ver src/utilities/cronAuth.ts.
     access: {
       run: canRunScheduledJobs,
     },

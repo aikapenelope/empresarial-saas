@@ -25,9 +25,22 @@ afterAll(async () => {
 });
 
 describe('scheduling de alertas (R5)', () => {
-  it('el config declara scheduling (schedule nativo habilitado → global de stats)', () => {
-    const jobs = payload.config.jobs as { scheduling?: boolean } | undefined;
+  it('el scheduling nativo está activo y la tarea vive en la cola `alerts`', () => {
+    const jobs = payload.config.jobs as
+      | {
+          scheduling?: boolean;
+          tasks?: Array<{ slug: string; schedule?: Array<{ queue?: string }> }>;
+        }
+      | undefined;
+
     expect(jobs?.scheduling).toBe(true);
+
+    // Guarda del reporte Devin #90: la URL del cron DEBE seleccionar esta cola
+    // (`?queue=alerts`). Sin el parámetro Payload opera la cola `default` y esta
+    // tarea nunca se encolaría; si alguien mueve la tarea de cola, este test
+    // obliga a actualizar la URL documentada.
+    const task = jobs?.tasks?.find((t) => t.slug === 'evaluateAlerts');
+    expect(task?.schedule?.[0]?.queue).toBe('alerts');
   });
 
   it('encola y ejecuta evaluateAlerts (enum del Jobs Queue corregido)', async () => {
@@ -38,7 +51,11 @@ describe('scheduling de alertas (R5)', () => {
     })) as { id: number };
     expect(job?.id).toBeTruthy();
 
-    await payload.jobs.run({ queue: 'alerts' });
+    // `runByID` ejecuta EXACTAMENTE este job, de forma determinista (sin depender
+    // de otros pendientes que hayan quedado en la cola de corridas previas). El
+    // encolado en la cola `alerts` —que es lo que el cron DEBE seleccionar con
+    // `?queue=alerts`— queda fijado por el test de wiring de arriba.
+    await payload.jobs.runByID({ id: job.id });
 
     const after = (await payload.findByID({
       collection: 'payload-jobs',

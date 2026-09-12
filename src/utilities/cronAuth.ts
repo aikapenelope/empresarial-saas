@@ -31,9 +31,12 @@ export function isCronAuthorized(req: Pick<PayloadRequest, 'headers'>): boolean 
 }
 
 /**
- * Access de `jobs.run`: el cron (secreto) o cualquier usuario autenticado
- * (superficie del panel/operadores), nunca anónimo.
+ * Access de `jobs.run`: el cron (secreto) o un **super-admin**. NUNCA un usuario
+ * de inquilino: el runner es GLOBAL — procesa todas las colas con
+ * `overrideAccess` — y dispararía tareas de sistema cross-tenant (p. ej.
+ * `evaluateAlerts` recorre TODOS los inquilinos). Reporte Devin #90.
  */
 export function canRunScheduledJobs({ req }: { req: PayloadRequest }): boolean {
-  return isCronAuthorized(req) || Boolean(req.user);
+  if (isCronAuthorized(req)) return true;
+  return req.user?.role === 'super-admin';
 }
