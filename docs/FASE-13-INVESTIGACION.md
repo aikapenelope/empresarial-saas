@@ -1,6 +1,11 @@
 # 🔬 FASE 13 — Investigación: Render, Escala (10k SKUs), Multi-tenant oficial y PWA de Vendedores
 
 > **Documento de investigación previo a la ejecución.** Fuentes: docs oficiales de Payload (multi-tenant, database/migrations, jobs-queue, rest-api vía Context7/Firecrawl), skill de Payload y auditoría del código propio con codegraph. Nada de esto se ejecuta sin PR propio por sprint.
+>
+> **ESTADO (2026-09-11): SIN EJECUTAR — investigación vigente.** Es el prerrequisito
+> técnico de escala y de los gates de go-live (§8). El bloque de Implementaciones
+> Estructurales (producto) ya se ejecutó y fusionó completo; esta fase es lo que sigue
+> en infraestructura.
 
 ---
 
@@ -115,3 +120,23 @@ Lo que los docs oficiales recomiendan y nuestro estado:
 - ¿Se venderán dominios propios por inquilino? (define CORS/multi-dominio del PWA/admin)
 - ¿El POS de mostrador necesita entregar "nota" impresa? (S41.2-residual — solo formato de impresión)
 - Plan de Render: tier de Postgres y número de instancias del web service.
+
+## 8. Gates de go-live antes del primer tenant real (centralizado 2026-09-11)
+
+> Resumen unificado de todo lo pendiente del proyecto en
+> [`ROADMAP.md` → «Roadmap activo»](../ROADMAP.md). Requisitos acordados en el análisis
+> comparativo de plataforma (2026-09-11). El bloque de producto ya cumple el suyo
+> (ledgers con tests en CI); esto es lo que falta para **cobrar por el sistema con datos
+> de un cliente real**:
+
+| # | Gate | Estado | Notas |
+|---|---|---|---|
+| 1 | Tests financieros de ledgers en CI | 🟡 Parcial | Suite de 108 tests (9 archivos) con kardex/ventas/crédito; ampliar a cash/finance/AP completos |
+| 2 | PITR + restore **probado** en Supabase | 🔴 Pendiente | Restore de práctica ejecutado y medido, no solo el backup activado |
+| 3 | Observabilidad (Sentry u equivalente) | 🔴 Pendiente | Hoy los errores solo viven en logs de Vercel |
+| 4 | Runner de cron para las alertas | 🔴 Pendiente | El evaluador necesita disparo externo en Vercel (ver §1.2 — se resuelve con Render) |
+| 5 | Disciplina de migraciones | 🟡 En camino | Proceso definido (MCP/SQL mismo día del merge); el caso `add_approvals` (2026-09-11) dejó la lección y el chequeo post-merge `payload_migrations` vs repo |
+
+Los gates 2–4 tienen soluciones naturales dentro de esta fase: PITR es configuración de
+Supabase + ensayo; Sentry es un PR pequeño; el runner de cron desaparece como problema
+con la migración a Render (§1.1–1.2).

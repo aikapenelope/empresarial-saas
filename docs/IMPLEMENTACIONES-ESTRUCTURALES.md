@@ -1,5 +1,20 @@
 # Implementaciones Estructurales — Plan Detallado de 8 Sprints
 
+> **✅ BLOQUE COMPLETADO (2026-09-11):** los 7 PRs del plan están fusionados en main —
+> [#77](https://github.com/aikapenelope/empresarial-saas/pull/77) (pulido UI),
+> [#78](https://github.com/aikapenelope/empresarial-saas/pull/78) (POS),
+> [#79](https://github.com/aikapenelope/empresarial-saas/pull/79) (paleta),
+> [#80](https://github.com/aikapenelope/empresarial-saas/pull/80) (email alertas),
+> [#81](https://github.com/aikapenelope/empresarial-saas/pull/81) (crédito),
+> [#83](https://github.com/aikapenelope/empresarial-saas/pull/83) (aprobaciones) y
+> [#84](https://github.com/aikapenelope/empresarial-saas/pull/84) (wizard) — junto con el
+> sprint de auditoría [#82](https://github.com/aikapenelope/empresarial-saas/pull/82).
+> El esquema de producción quedó al día (25/25 migraciones; `add_approvals` se aplicó el
+> 2026-09-11 tras detectarse pendiente en la verificación post-merge). Este documento se
+> conserva como registro de diseño y de las reparaciones de Devin Review por PR. Lo que
+> sigue: [`ECOSISTEMA-VE-Y-PLUGINS.md` §9](./ECOSISTEMA-VE-Y-PLUGINS.md) (plugins) y
+> [`FASE-13-INVESTIGACION.md`](./FASE-13-INVESTIGACION.md) (escala/infra).
+
 > Documento de planificación (post-investigación de brechas vs. Cendaro). Complementa
 > [`FASE-13-INVESTIGACION.md`](./FASE-13-INVESTIGACION.md): aquel cubre infraestructura
 > (Render, escala, PWA, RLS); este cubre las features de producto y gobernanza aprobadas
@@ -389,15 +404,15 @@ decisión del usuario.
 
 ## 3. Orden de ejecución y dependencias
 
-| # | PR | Items | Migración | Riesgo |
-|---|----|----|----|----|
-| 1 | Pulido UI (skeletons + empty states) | 14, 15 | No | Nulo |
-| 2 | POS keyboard-first | 18 | No | Bajo |
-| 3 | Command palette | 17 | No | Medio-bajo |
-| 4 | Email de alertas + cuota vencida | 25 + 6 parcial | Sí | Bajo |
-| 5 | Enforcement de crédito + UI cuotas | 6 | No | Contenido |
-| 6 | Aprobaciones | 1 | Sí | Medio |
-| 7 | Wizard de importación | 7 | No | Medio-alto |
+| # | PR | Items | Migración | Riesgo | Estado |
+|---|----|----|----|----|----|
+| 1 | [#77](https://github.com/aikapenelope/empresarial-saas/pull/77) | 14, 15 | No | Nulo | ✅ Fusionado 2026-09-10 |
+| 2 | [#78](https://github.com/aikapenelope/empresarial-saas/pull/78) | 18 | No | Bajo | ✅ Fusionado 2026-09-10 (2 rondas Devin) |
+| 3 | [#79](https://github.com/aikapenelope/empresarial-saas/pull/79) | 17 | No | Medio-bajo | ✅ Fusionado 2026-09-10 |
+| 4 | [#80](https://github.com/aikapenelope/empresarial-saas/pull/80) | 25 + 6 parcial | Sí | Bajo | ✅ Fusionado 2026-09-10 (6+2 hallazgos Devin) |
+| 5 | [#81](https://github.com/aikapenelope/empresarial-saas/pull/81) | 6 | No | Contenido | ✅ Fusionado 2026-09-10 (lock de crédito + redondeo canónico) |
+| 6 | [#83](https://github.com/aikapenelope/empresarial-saas/pull/83) | 1 | Sí | Medio | ✅ Fusionado 2026-09-11 (11 hallazgos Devin en 2 rondas) |
+| 7 | [#84](https://github.com/aikapenelope/empresarial-saas/pull/84) | 7 | No | Medio-alto | ✅ Fusionado 2026-09-11 (5 rondas Devin, 14 hallazgos) |
 
 **Dependencias reales respetadas:**
 - El email de cuotas vencidas (PR 4) necesita que la alerta `overdue_installment`
@@ -415,12 +430,15 @@ EXISTS` / `DO $$ … duplicate_object`), nunca el diff crudo de drizzle.
 
 ## 4. Decisiones abiertas (el usuario decide antes de cada PR)
 
-1. **Wizard v1** — solo stock (recomendado) vs. incluir alta de catálogo desde CSV
-   (Phase B aparte).
-2. **Aprobaciones v1** — solo crédito sobre límite (recomendado) vs. incluir también
-   ajustes manuales de inventario.
-3. **Aprobación** — auto-ejecutar la venta al aprobar (recomendado) vs. solo marcar
-   aprobada para reintento manual del vendedor.
+> **✅ Las 3 quedaron resueltas en la implementación (2026-09-10/11):**
+
+1. **Wizard v1** — ✅ **Solo stock.** El alta de catálogo desde CSV (matching fuzzy con
+   `pg_trgm`, productos draft) queda como Phase B en un PR separado, sujeto a decisión.
+2. **Aprobaciones v1** — ✅ **Solo crédito sobre límite** (`credit_over_limit`, único tipo
+   del enum).
+3. **Aprobación** — ✅ **Auto-ejecución con reintento**: aprobar re-ejecuta la venta con
+   el input guardado y el consumo es transaccional (solo queda `consumed` si la venta
+   completa tuvo éxito).
 
 ## 5. Items deliberadamente NO copiados de Cendaro
 
