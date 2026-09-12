@@ -1,0 +1,48 @@
+version: 2
+
+# ─── Dependabot (Sprint CI-5) ───────────────────────────────────────────────
+# GitHub Actions y `pnpm audit --audit-level high` (paso BLOQUEANTE del CI) ya
+# cubren la señal de vulnerabilidades del día a día. Dependabot añade la
+# actualización PROACTIVA de dependencias en PRs pequeños y revisables.
+#
+# ⚠️ Requiere habilitarlo una vez en el repositorio (es GRATIS en repos
+# privados): Settings → Code security → "Dependabot alerts" y
+# "Dependabot version updates". Sin ese clic, este archivo no hace nada.
+#
+# Nota: CodeQL / secret scanning NO se configuran porque este repositorio es
+# PRIVADO y GitHub exige GitHub Advanced Security (de pago) para ambos; se
+# verificó contra la API (403/404 "not enabled for this repository").
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '04:00'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      # El ecosistema de Payload se mueve en bloque: versiones desparejadas de
+      # @payloadcms/* rompen el admin. Agrupado = un solo PR revisable.
+      payload:
+        patterns:
+          - 'payload'
+          - '@payloadcms/*'
+      # El resto de dependencias de desarrollo (incluido vitest/playwright).
+      dev-dependencies:
+        dependency-type: development
+    ignore:
+      # El backend de la base de datos se actualiza a mano junto con las
+      # migraciones, nunca por PR automático.
+      - dependency-name: '@payloadcms/db-postgres'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '04:00'
+    commit-message:
+      prefix: 'chore(ci)'
