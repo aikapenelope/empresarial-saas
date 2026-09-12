@@ -23,11 +23,28 @@ const nextConfig: NextConfig = {
   // (`frame-ancestors`) y el envío de formularios a terceros.
   async headers() {
     const isDev = process.env.NODE_ENV === 'development';
+
+    // Origen público del almacenamiento de medios (S3 / R2 / Supabase Storage):
+    // con `S3_ENDPOINT` configurado, el plugin de storage genera la `url` de cada
+    // media contra ESE origen, así que el admin carga las miniaturas desde ahí.
+    // Sin este origen en `img-src`, el navegador bloquea los previews y el admin
+    // muestra iconos genéricos (reporte Devin #92). Se añade SÓLO el origen.
+    let mediaOrigin = '';
+    if (process.env.S3_ENDPOINT) {
+      try {
+        mediaOrigin = new URL(process.env.S3_ENDPOINT).origin;
+      } catch {
+        mediaOrigin = '';
+      }
+    }
+
+    const imgSrc = ["'self'", 'blob:', 'data:', ...(mediaOrigin ? [mediaOrigin] : [])].join(' ');
+
     const cspHeader = [
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' blob: data:",
+      `img-src ${imgSrc}`,
       "font-src 'self'",
       `connect-src 'self'${isDev ? ' ws:' : ''}`,
       "object-src 'none'",

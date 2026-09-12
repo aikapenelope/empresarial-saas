@@ -46,6 +46,7 @@ import { notifyAlertsEmailTask } from './jobs/notifyAlertsEmail';
 import { migrations } from './migrations';
 import { SUPABASE_ROOT_CA } from './constants/supabaseCa';
 import { canRunScheduledJobs } from './utilities/cronAuth';
+import { computeCsrfOrigins } from './utilities/csrfOrigins';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -58,18 +59,12 @@ if (!payloadSecret) {
 }
 
 /**
- * Orígenes de confianza para CSRF (Sprint R7 · auditoría S0-2). OPT-IN: Payload
- * NO aplica allowlist cuando `csrf` está vacío (default, ver
- * payload/dist/auth/extractJWT.js), así que dejarlo vacío conserva el
- * comportamiento actual. Se expone por entorno porque un allowlist fijo
- * rompería los despliegues PREVIEW de Vercel (dominios dinámicos) y el login
- * del admin: quien despliegue en un dominio estable puede listar sus orígenes
- * (coma-separados) en `PAYLOAD_CSRF_ORIGINS` para exigirlos.
+ * Orígenes de confianza para CSRF (Sprint R7 · auditoría S0-2). Se derivan de
+ * forma SEGURA por defecto (dominios de la app + el propio deployment de Vercel)
+ * para que un despliegue quede protegido sin configuración manual y sin romper
+ * los previews — ver `computeCsrfOrigins`. Reporte Devin #92.
  */
-const csrfOrigins = (process.env.PAYLOAD_CSRF_ORIGINS || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const csrfOrigins = computeCsrfOrigins();
 
 // Route migration CLI operations through DATABASE_DIRECT_URL while retaining DATABASE_URI for Serverless runtime
 const isMigration =
