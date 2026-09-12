@@ -24,6 +24,7 @@ import * as migration_20260910_120000_quote_closure_number_uniques from './20260
 import * as migration_20260910_185508_add_alert_notifications from './20260910_185508_add_alert_notifications';
 import * as migration_20260910_195507_add_approvals from './20260910_195507_add_approvals';
 import * as migration_20260911_231251_add_share_token_expiry from './20260911_231251_add_share_token_expiry';
+import * as migration_20260911_234000_fix_jobs_queue_schema from './20260911_234000_fix_jobs_queue_schema';
 
 export const migrations = [
   {
@@ -155,5 +156,10 @@ export const migrations = [
     up: migration_20260911_231251_add_share_token_expiry.up,
     down: migration_20260911_231251_add_share_token_expiry.down,
     name: '20260911_231251_add_share_token_expiry'
+  },
+  {
+    up: migration_20260911_234000_fix_jobs_queue_schema.up,
+    down: migration_20260911_234000_fix_jobs_queue_schema.down,
+    name: '20260911_234000_fix_jobs_queue_schema'
   },
 ];
