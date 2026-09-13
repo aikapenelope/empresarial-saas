@@ -10,6 +10,7 @@ import {
   recalculateCustomerBalance,
 } from '../../utilities/financeLedger';
 import { runIsolatedContext } from '../../utilities/requestContext';
+import { lineItemsChanged } from '../../utilities/lineItems';
 
 const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
   data,
@@ -21,8 +22,18 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
 
   const rate = Number(data.exchangeRateSnapshot) || Number(originalDoc?.exchangeRateSnapshot) || 1;
 
-  // 1. Compute line items and revised totals if items array is present
-  if (Array.isArray(data.items)) {
+  // 1. Compute line items and revised totals ONLY when the caller really
+  //    changed the lines. En un `update`, Payload rellena `data.items` con las
+  //    líneas del documento original, así que `Array.isArray(data.items)` era
+  //    SIEMPRE verdadero (hallazgo P0 de CI-2b): además de romper el saldo,
+  //    recalculaba `totalUSD` desde las líneas y descartaba impuestos/ajustes
+  //    en cualquier actualización no relacionada.
+  const linesChanged =
+    operation === 'create'
+      ? Array.isArray(data.items)
+      : lineItemsChanged(data.items, originalDoc?.items);
+
+  if (linesChanged && Array.isArray(data.items)) {
     let sumTotalUSD = 0;
     data.items = data.items.map((item) => {
       const qty = Number(item.quantity) || 0;
@@ -118,7 +129,7 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
     );
 
     // If invoice items or exchange rate changed, dynamically reconcile remaining balance
-    const itemsChanged = Array.isArray(data.items);
+    const itemsChanged = linesChanged;
     const rateChanged =
       data.exchangeRateSnapshot !== undefined &&
       data.exchangeRateSnapshot !== originalDoc.exchangeRateSnapshot;

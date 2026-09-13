@@ -17,7 +17,7 @@ import { QUERY_PAGE_SIZE } from '@/utilities/paginatedQuery';
  *  - `getPurchaseInvoicePaidAmount` sólo suma allocations CONFIRMADAS,
  *  - `recalculateSupplierBalance` = Σ saldos de facturas de compra abiertas,
  *  - `postPurchaseReceptionMovements` es IDEMPOTENTE (no duplica kardex),
- *  - y el ratchet `it.fails` del mismo defecto P0 del lado ventas: la rama
+ *  - y la regresión (Sprint CI-2b) del defecto P0 del lado ventas: la rama
  *    `itemsChanged` de `beforeValidatePurchaseInvoice`
  *    (src/collections/PurchaseInvoices/index.ts:267) hace SIEMPRE true el flag
  *    (Payload rellena `data.items` desde el documento original), así que el
@@ -246,8 +246,8 @@ describe('ledger de proveedores — saldos y recepción (CI-2)', () => {
     expect(Number((await supplierById(supplier.id)).currentDebtUSD)).toBe(100);
   });
 
-  // ── Ratchet P0 (mismo defecto que en ventas, lado compras) ────────────────
-  it.fails('un pago PARCIAL baja el saldo de la compra (P0: hoy NO baja)', async () => {
+  // ── Regresión del P0 (CI-2b), lado compras ───────────────────────────────
+  it('un pago PARCIAL baja el saldo de la compra', async () => {
     const purchase = await createPurchase({ total: 100 });
     await createSupplierPayment({ amount: 40, allocations: [{ purchaseInvoice: purchase.id, allocatedAmountUSD: 40 }] });
 

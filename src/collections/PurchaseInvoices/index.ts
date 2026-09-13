@@ -14,6 +14,7 @@ import {
   postPurchaseReceptionMovements,
   recalculateSupplierBalance,
 } from '../../utilities/purchasesLedger';
+import { lineItemsChanged } from '../../utilities/lineItems';
 
 const beforeValidatePurchaseInvoice: CollectionBeforeValidateHook = async ({
   data,
@@ -26,8 +27,16 @@ const beforeValidatePurchaseInvoice: CollectionBeforeValidateHook = async ({
   const rate =
     Number(data.exchangeRateSnapshot) || Number(originalDoc?.exchangeRateSnapshot) || 1;
 
-  // 1. Partial update item merging & line total calculations
-  if (Array.isArray(data.items)) {
+  // 1. Partial update item merging & line total calculations — SOLO cuando el
+  //    llamador cambió realmente las líneas (Sprint CI-2b, hallazgo P0): en un
+  //    `update` Payload rellena `data.items` con las líneas del documento
+  //    original, así que la comprobación por presencia era SIEMPRE verdadera.
+  const linesChanged =
+    operation === 'create'
+      ? Array.isArray(data.items)
+      : lineItemsChanged(data.items, originalDoc?.items);
+
+  if (linesChanged && Array.isArray(data.items)) {
     let sumTotalUSD = 0;
     data.items = data.items.map((item) => {
       const qty = Number(item.quantity) || 0;
@@ -264,7 +273,7 @@ const beforeValidatePurchaseInvoice: CollectionBeforeValidateHook = async ({
       Number((origTotalUSD - (Number(originalDoc.balanceUSD) || 0)).toFixed(2)),
     );
 
-    const itemsChanged = Array.isArray(data.items);
+    const itemsChanged = linesChanged;
     const rateChanged =
       data.exchangeRateSnapshot !== undefined &&
       data.exchangeRateSnapshot !== originalDoc.exchangeRateSnapshot;
