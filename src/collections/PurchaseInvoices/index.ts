@@ -227,7 +227,18 @@ const beforeValidatePurchaseInvoice: CollectionBeforeValidateHook = async ({
       return data;
     }
 
-    if (requestedStatus === 'paid') {
+    // Transición EXPLÍCITA a `paid` (marcar como pagada una compra que aún no lo
+    // estaba): se honra con saldo 0.
+    //
+    // EXCEPCIÓN (hallazgo Devin del PR #100): si la compra YA estaba pagada y las
+    // líneas cambiaron de verdad —p. ej. se corrigió el `unitCostUSD` de una compra
+    // ya recepcionada—, ese `paid` es HEREDADO (Payload rellena `data.status` desde
+    // `originalDoc`) y el total pudo SUBIR. Cortocircuitar aquí dejaría
+    // `balanceUSD = 0` y OCULTARÍA la deuda nueva con el proveedor. En ese caso se
+    // cae al bloque de reconciliación, que recalcula contra lo realmente pagado.
+    const paidIsInherited = originalStatus === 'paid' && linesChanged;
+
+    if (requestedStatus === 'paid' && !paidIsInherited) {
       data.status = 'paid';
       data.balanceUSD = 0;
       data.balanceVES = 0;
@@ -267,11 +278,20 @@ const beforeValidatePurchaseInvoice: CollectionBeforeValidateHook = async ({
       return data;
     }
 
-    // Historical amount paid toward this invoice
-    const priorPaidUSD = Math.max(
+    // Importe histórico YA pagado hacia esta compra.
+    //
+    // Si la compra estaba PAGADA (saldo 0) y sus líneas cambiaron, la inferencia por
+    // saldo no es auditable: se contrasta con el ledger de pagos CONFIRMADOS
+    // tomando el MAYOR de ambos para no reabrir deuda ya cubierta por un ajuste
+    // manual (hallazgo Devin del PR #100).
+    const inferredPaidUSD = Math.max(
       0,
       Number((origTotalUSD - (Number(originalDoc.balanceUSD) || 0)).toFixed(2)),
     );
+    const priorPaidUSD =
+      originalStatus === 'paid' && linesChanged
+        ? Math.max(inferredPaidUSD, await getPurchaseInvoicePaidAmount(originalDoc.id, req))
+        : inferredPaidUSD;
 
     const itemsChanged = linesChanged;
     const rateChanged =

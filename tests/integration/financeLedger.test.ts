@@ -347,5 +347,98 @@ describe('ledger de clientes — cobros y saldos (CI-2)', () => {
     expect(Number(updated.balanceUSD)).toBe(110);
     expect(updated.status).toBe('partially_paid');
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Regresión Devin (PR #100): si una factura YA PAGADA recibe líneas nuevas
+  // (sube el total) deja de estar saldada. Antes, el atajo `paid` —que es
+  // HEREDADO porque Payload rellena `data.status` desde `originalDoc` vía
+  // cloneDataFromOriginalDoc— devolvía saldo 0 y la deuda nueva quedaba OCULTA:
+  // los cargos añadidos nunca llegaban a CxC.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it('editar las líneas de una factura YA PAGADA expone la deuda nueva', async () => {
+    const customer = (await payload.create({
+      collection: 'customers',
+      data: {
+        tenant: tenantId,
+        name: `Cliente Pagada ${RUN}`,
+        taxId: `J-PAG-${RUN}`,
+        phone: '0',
+        status: 'lead',
+      },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Customer;
+
+    const invoice = await createInvoice({ total: 100, customer: customer.id });
+    await createPayment({
+      amount: 100,
+      customer: customer.id,
+      allocations: [{ invoice: invoice.id, allocatedAmountUSD: 100 }],
+    });
+
+    const settled = await invoiceById(invoice.id);
+    expect(Number(settled.balanceUSD)).toBe(0);
+    expect(settled.status).toBe('paid');
+    expect(Number((await customerById(customer.id)).currentDebtUSD)).toBe(0);
+
+    // Cargos añadidos: la factura pasa de 100 a 150 USD.
+    const updated = (await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: {
+        items: [
+          { description: 'A', quantity: 1, unitPriceUSD: 100, totalUSD: 100 },
+          { description: 'B (cargo nuevo)', quantity: 5, unitPriceUSD: 10, totalUSD: 50 },
+        ],
+      },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Invoice;
+
+    expect(Number(updated.totalUSD)).toBe(150);
+    // 150 − 100 realmente cobrados = 50 pendientes (antes: 0, deuda oculta).
+    expect(Number(updated.balanceUSD)).toBe(50);
+    expect(updated.status).toBe('partially_paid');
+
+    // Y el remanente llega a la deuda del cliente (CxC).
+    expect(Number((await customerById(customer.id)).currentDebtUSD)).toBe(50);
+  });
+
+  it('editar las líneas de una factura YA PAGADA a la baja la mantiene saldada', async () => {
+    const invoice = await createInvoice({ total: 100 });
+    await createPayment({
+      amount: 100,
+      allocations: [{ invoice: invoice.id, allocatedAmountUSD: 100 }],
+    });
+
+    const updated = (await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: { items: [{ description: 'A', quantity: 1, unitPriceUSD: 60, totalUSD: 60 }] },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Invoice;
+
+    expect(Number(updated.totalUSD)).toBe(60);
+    expect(Number(updated.balanceUSD)).toBe(0);
+    expect(updated.status).toBe('paid');
+  });
+
+  it('marcar EXPLÍCITAMENTE como pagada una factura emitida sigue dejando saldo 0', async () => {
+    const invoice = await createInvoice({ total: 80 });
+    expect(Number(invoice.balanceUSD)).toBe(80);
+
+    const updated = (await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: { status: 'paid' },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Invoice;
+
+    expect(Number(updated.balanceUSD)).toBe(0);
+    expect(updated.status).toBe('paid');
+  });
 });
 
