@@ -4,6 +4,7 @@ import type { Payload, PayloadRequest } from 'payload';
 import config from '@payload-config';
 import type { Customer, Invoice, User } from '@/payload-types';
 import { applyPaymentAllocations, getInvoicePaidAmount, recalculateCustomerBalance } from '@/utilities/financeLedger';
+import { QUERY_PAGE_SIZE } from '@/utilities/paginatedQuery';
 
 /**
  * ─── Ledger de clientes (CxC): cobros, reversos y saldos (Sprint CI-2) ──────
@@ -262,6 +263,32 @@ describe('ledger de clientes — cobros y saldos (CI-2)', () => {
       if (tx) await payload.db.commitTransaction(tx);
     }
   });
+
+  it(
+    'getInvoicePaidAmount suma TODAS las páginas (más de una página de resultados)',
+    async () => {
+      // Regresión Devin #94 (🟡): con un `limit: 500` fijo, una cuenta con más
+      // cobros confirmados que el límite sumaba sólo los primeros y, al reabrir o
+      // des-anular la factura, se le devolvía deuda YA pagada. Se crean más de
+      // UNA PÁGINA de cobros (QUERY_PAGE_SIZE): si el barrido no siguiera
+      // `hasNextPage`, el total quedaría corto.
+      const paymentsToCreate = QUERY_PAGE_SIZE + 5;
+      const invoice = await createInvoice({ total: paymentsToCreate });
+
+      for (let i = 0; i < paymentsToCreate; i += 1) {
+        await createPayment({ amount: 1, allocations: [{ invoice: invoice.id, allocatedAmountUSD: 1 }] });
+      }
+
+      const tx = await payload.db.beginTransaction();
+      const req = { payload, user, context: {}, transactionID: tx } as unknown as PayloadRequest;
+      try {
+        expect(await getInvoicePaidAmount(invoice.id, req)).toBe(paymentsToCreate);
+      } finally {
+        if (tx) await payload.db.commitTransaction(tx);
+      }
+    },
+    180_000, // 105 altas reales (con sus hooks): se amplía el timeout del test
+  );
 
   it('recalculateCustomerBalance = Σ saldos abiertos, y separa lo VENCIDO', async () => {
     const customer = (await payload.create({

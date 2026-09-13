@@ -8,6 +8,7 @@ import {
   postPurchaseReceptionMovements,
   recalculateSupplierBalance,
 } from '@/utilities/purchasesLedger';
+import { QUERY_PAGE_SIZE } from '@/utilities/paginatedQuery';
 
 /**
  * ─── Ledger de proveedores (CxP): saldos y recepción (Sprint CI-2) ──────────
@@ -167,6 +168,33 @@ describe('ledger de proveedores — saldos y recepción (CI-2)', () => {
       if (tx) await payload.db.commitTransaction(tx);
     }
   });
+
+  it(
+    'getPurchaseInvoicePaidAmount suma TODAS las páginas (más de una página de resultados)',
+    async () => {
+      // Misma clase de defecto del reporte Devin #94 (🟡) en el lado compras:
+      // con un `limit` fijo, al reabrir la compra se descontaba un monto pagado
+      // incompleto y la deuda del proveedor volvía a subir.
+      const paymentsToCreate = QUERY_PAGE_SIZE + 5;
+      const purchase = await createPurchase({ total: paymentsToCreate });
+
+      for (let i = 0; i < paymentsToCreate; i += 1) {
+        await createSupplierPayment({
+          amount: 1,
+          allocations: [{ purchaseInvoice: purchase.id, allocatedAmountUSD: 1 }],
+        });
+      }
+
+      const tx = await payload.db.beginTransaction();
+      const req = { payload, user, context: {}, transactionID: tx } as unknown as PayloadRequest;
+      try {
+        expect(await getPurchaseInvoicePaidAmount(purchase.id, req)).toBe(paymentsToCreate);
+      } finally {
+        if (tx) await payload.db.commitTransaction(tx);
+      }
+    },
+    180_000,
+  );
 
   it('recalculateSupplierBalance = Σ saldos abiertos de facturas de compra', async () => {
     const supplier = (await payload.create({
