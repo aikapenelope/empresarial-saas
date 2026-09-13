@@ -66,6 +66,12 @@ pnpm typecheck && pnpm lint && pnpm test       # debe estar verde
 - [ ] El PR mergeado estaba **verde en CI** (typecheck · lint · tests con ratchet de cobertura · audit · build).
 - [ ] Si el PR traía migración: el archivo está en `src/migrations/` **y** registrado en
       `src/migrations/index.ts` (un archivo sin registrar **no se aplica nunca**).
+- [ ] **Puerta de compatibilidad (🟥 obligatoria antes de aplicar nada)**: clasificar la migración como
+      **COMPATIBLE** o **INCOMPATIBLE** con el código que está sirviendo tráfico **ahora mismo**.
+      Es incompatible si **renombra, elimina o cambia el tipo** de algo que el despliegue actual
+      lee o escribe. Ejemplo real de este repo:
+      `20260906_080000_drop_users_password_column` ejecuta `ALTER TABLE "users" DROP COLUMN`.
+      La clasificación decide el procedimiento de §3.3 (y el orden del rollback de §5).
 
 ### 3.2 Estado del esquema del destino (informativo)
 ```bash
@@ -77,15 +83,43 @@ DATABASE_DIRECT_URL="postgresql://…:5432/postgres" pnpm migrate:status
 > introduce drift" es `tests/integration/schemaMirror.test.ts` (CI).
 
 ### 3.3 Aplicar migraciones (paso deliberado, ANTES del deploy)
+
+> ⚠️ **Por qué el orden importa** (hallazgo 🔴 de Devin #99): entre «aplicar la migración» y «promover el
+> deployment» **el código viejo sigue sirviendo tráfico** contra el esquema nuevo. Si la migración es
+> incompatible con ese código, producción se rompe en esa ventana — y **se queda rota** si la promoción
+> falla. Por eso hay dos caminos según la clasificación de §3.1.
+
+#### 3.3.A COMPATIBLE → *expand-contract* (cero downtime, el camino por defecto)
+La migración sólo **añade** (columnas nuevas nullable, tablas nuevas, índices) o el código nuevo tolera
+ambos esquemas:
+
 ```bash
-DATABASE_DIRECT_URL="postgresql://…:5432/postgres" pnpm migrate
+DATABASE_DIRECT_URL="postgresql://…:5432/postgres" pnpm migrate   # 1) expandir
 ```
 - [ ] Salida sin errores y `Done.`
-- [ ] **Verificación independiente** (SQL, por conexión directa):
+- [ ] Verificación independiente (conexión directa):
       ```sql
       SELECT name, batch FROM payload_migrations ORDER BY batch, id;
       ```
       Cada migración nueva del PR debe aparecer aquí.
+- [ ] Promover el deployment (§3.4). El código nuevo usa el esquema nuevo; el viejo lo ignora.
+- [ ] **Contraer en un segundo release** (borrar la columna/tabla obsoleta) cuando ya no quede código
+      antiguo en vuelo. Así un `DROP` nunca coincide con el deployment que aún lo usa.
+
+#### 3.3.B INCOMPATIBLE (rename / drop / cambio de tipo) → ventana de mantenimiento
+Este camino **no es cero-downtime** y hay que asumirlo explícitamente. **Preferencia fuerte: convertir el
+cambio en A** partiéndolo en dos releases (añadir lo nuevo → migrar datos → borrar lo viejo). Si no es
+viable, proceder así y **con la base respaldada**:
+
+- [ ] **Anunciar** la ventana (fuera de horario de operación) y avisar a los usuarios.
+- [ ] **Respaldo verificable y probado** del destino:
+      - Snapshot/backup del proyecto Supabase **antes** de tocar el esquema.
+      - **Restaurar ese respaldo en un entorno de prueba y conectarse**: un respaldo que nunca se ha
+        restaurado no es un plan de recuperación. Cronometrar el restore (define el RTO real).
+- [ ] Poner la aplicación en **sólo lectura / mantenimiento** para que nadie escriba durante el cambio.
+- [ ] `pnpm migrate` (conexión directa) y, **acto seguido y sin pausa**, promover el deployment.
+- [ ] Smoke post-deploy (§4) y reabrir el servicio.
+- [ ] Si algo falla: **restaurar del respaldo** (no intentar arreglar el esquema a mano en caliente).
 
 ### 3.4 Desplegar
 - [ ] Promover el deployment de `main` en Vercel (Production).
@@ -114,9 +148,23 @@ DATABASE_DIRECT_URL="postgresql://…:5432/postgres" pnpm migrate
 
 ## 5. Rollback
 
-**5.1 Revertir el código** (lo primero y más rápido): promover el deployment anterior en Vercel.
+> 🔀 **El orden depende de la clasificación de §3.1** (esto responde al reporte Devin #99): con una
+> migración **COMPATIBLE** basta volver el código; con una **INCOMPATIBLE** el esquema ya no soporta el
+> código viejo, así que el código por sí solo **no** recupera el servicio.
 
-**5.2 Revertir el esquema** (sólo si la migración lo exige y el código ya volvió atrás):
+**5.1 Si la migración fue COMPATIBLE (*expand-contract*)** — el caso habitual
+1. **Revertir el código**: promover el deployment anterior en Vercel. El esquema expandido es tolerado por
+   el código viejo, así que el servicio vuelve sin tocar la base.
+2. Dejar el esquema como está (las columnas/tablas nuevas no molestan) y arreglar hacia adelante.
+
+**5.2 Si la migración fue INCOMPATIBLE (rename / drop / cambio de tipo)**
+1. **No** basta con volver el código: el esquema ya no tiene lo que el deployment anterior necesita.
+2. **Opción preferida — avanzar**: desplegar una corrección/adapter que funcione con el esquema nuevo
+   (es la vía más rápida y sin pérdida de datos).
+3. **Si no hay salida hacia adelante**: restaurar el **respaldo verificado de §3.3.B** y volver a desplegar
+   el código anterior. Es la última red, y por eso el respaldo se prueba ANTES de la ventana.
+
+**5.3 Revertir el esquema** (sólo si de verdad hay que deshacer la migración):
 ```bash
 DATABASE_DIRECT_URL="postgresql://…:5432/postgres" pnpm payload migrate:down
 ```
@@ -207,6 +255,13 @@ los entornos". Pasos:
       datos reales — §7.4).
 - ❌ Compartir `PAYLOAD_SECRET` entre *Preview* y *Production* (un token emitido en un preview valdría en
       producción).
+- ❌ Aplicar una migración **INCOMPATIBLE** mientras el deployment actual sigue sirviendo tráfico, sin
+      ventana de mantenimiento ni respaldo probado (§3.3.B).
+- ❌ Meter un `DROP`/`RENAME` en el mismo release que introduce el código que ya no usa esa columna
+      (rompe *expand-contract*: usa dos releases).
+- ❌ Creer que revertir el código restaura el servicio tras una migración **incompatible** (el esquema ya
+      no le sirve — §5).
+- ❌ Confiar en un respaldo que **nunca se ha restaurado** en un entorno de prueba.
 
 ---
 
