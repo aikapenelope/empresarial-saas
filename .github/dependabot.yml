@@ -1,0 +1,54 @@
+version: 2
+
+# ─── Dependabot (Sprint CI-5) ───────────────────────────────────────────────
+# GitHub Actions y `pnpm audit --audit-level high` (paso BLOQUEANTE del CI) ya
+# cubren la señal de vulnerabilidades del día a día. Dependabot añade la
+# actualización PROACTIVA de dependencias en PRs pequeños y revisables.
+#
+# ⚠️ Requiere habilitarlo una vez en el repositorio (es GRATIS en repos
+# privados): Settings → Code security → "Dependabot alerts" y
+# "Dependabot version updates". Sin ese clic, este archivo no hace nada.
+#
+# Nota: CodeQL / secret scanning NO se configuran porque este repositorio es
+# PRIVADO y GitHub exige GitHub Advanced Security (de pago) para ambos; se
+# verificó contra la API (403/404 "not enabled for this repository").
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '04:00'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      # El ecosistema de Payload se mueve en bloque: versiones desparejadas de
+      # @payloadcms/* rompen el admin. Agrupado = un solo PR revisable.
+      payload:
+        patterns:
+          - 'payload'
+          - '@payloadcms/*'
+      # El resto de dependencias de desarrollo (incluido vitest/playwright).
+      dev-dependencies:
+        dependency-type: development
+    ignore:
+      # Un MAJOR de Payload se adopta A MANO: arrastra migraciones y cambios de
+      # esquema, y este repo mantiene TODO el ecosistema en lockstep. Ignorar el
+      # major SÓLO en el adapter dejaría al grupo proponer `payload@4` +
+      # `@payloadcms/next@4` conservando `@payloadcms/db-postgres` en v3: justo el
+      # desparejo de versiones que esta configuración quiere evitar (reporte
+      # Devin #98). Se ignora el major para `payload` y para todo `@payloadcms/*`.
+      - dependency-name: 'payload'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@payloadcms/*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '04:00'
+    commit-message:
+      prefix: 'chore(ci)'

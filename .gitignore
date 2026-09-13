@@ -49,3 +49,7 @@ pnpm-debug.log*
 /test-results/
 /blob-report/
 /playwright/.cache/
+
+# Cobertura de Vitest (Sprint CI-5): reporte generado en cada corrida.
+/coverage/
+
