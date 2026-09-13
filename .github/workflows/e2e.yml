@@ -1,0 +1,84 @@
+name: E2E (Playwright) — smoke
+
+# ─── Sprint CI-4: smoke E2E MANUAL + NOCTURNO ───────────────────────────────
+# NO corre en cada push/PR a propósito: el repo es PRIVADO y los minutos de
+# Actions se descuentan de la cuota gratuita. Este job levanta el build de
+# producción (webServer `pnpm build && pnpm start`) + Chromium (~6-8 min), así
+# que se ejecuta a demanda o una vez por noche. Mismo criterio que el job manual
+# de otros repos del autor (que sí documentaron el porqué del gasto).
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:00 UTC cada noche (23:00 en Caracas).
+    - cron: '0 3 * * *'
+
+# Separado por tipo de evento: un disparo manual y el nocturno comparten ref
+# (main) — sin el prefijo se cancelarían entre sí.
+concurrency:
+  group: e2e-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Smoke E2E (build de producción + Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: empresarial_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PAYLOAD_SECRET: e2e-only-secret-0123456789abcdefghijklmnopqrst
+      DATABASE_URI: postgresql://postgres:postgres@127.0.0.1:5432/empresarial_e2e
+      DATABASE_DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:5432/empresarial_e2e
+      # Secreto del runner de jobs: permite comprobar 401 (sin Bearer) y 200 (con).
+      CRON_SECRET: e2e-cron-secret
+      PUBLIC_BASE_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Migraciones contra el Postgres del runner
+        run: pnpm migrate
+
+      - name: Instalar Chromium (con dependencias de sistema)
+        run: pnpm exec playwright install --with-deps chromium
+
+      # El webServer de playwright.config.ts hace `pnpm build && pnpm start`.
+      - name: Smoke E2E
+        run: pnpm test:e2e
+
+      - name: Subir reporte de Playwright (sólo si falla)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

@@ -64,8 +64,11 @@ jobs:
       - name: Migraciones contra el Postgres de CI
         run: pnpm migrate
 
-      - name: Suite de tests (unit + integración)
-        run: pnpm test
+      - name: Suite de tests con ratchet de cobertura (unit + integración)
+        # Sprint CI-5: la suite corre CON cobertura para que el RATCHET de
+        # `coverage.thresholds` (vitest.config.ts) sea REAL — si la cobertura
+        # cae por debajo del valor medido, el pipeline falla.
+        run: pnpm test:coverage
 
       # ── Gates de seguridad y compilación (Sprint R1 · P2-S5-01/02) ──
       # Sprint R7: gate BLOQUEANTE. Las 2 vulns HIGH (sharp: libheif/libvips) se

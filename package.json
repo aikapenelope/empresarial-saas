@@ -17,7 +17,10 @@
     "typecheck": "cross-env NODE_OPTIONS=--no-deprecation tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
-    "test:integration": "vitest run tests/integration"
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "test:coverage": "vitest run --coverage.enabled"
+
   },
   "packageManager": "pnpm@10.27.0",
   "dependencies": {
@@ -53,11 +56,13 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "22.19.9",
     "@types/pg": "^8.23.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@vitest/coverage-v8": "5.0.0",
     "cross-env": "^10.1.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.3.4",
