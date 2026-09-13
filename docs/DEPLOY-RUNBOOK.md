@@ -72,6 +72,13 @@ pnpm typecheck && pnpm lint && pnpm test       # debe estar verde
       lee o escribe. Ejemplo real de este repo:
       `20260906_080000_drop_users_password_column` ejecuta `ALTER TABLE "users" DROP COLUMN`.
       La clasificación decide el procedimiento de §3.3 (y el orden del rollback de §5).
+- [ ] **Puerta de BLOQUEO (🟥 eje INDEPENDIENTE de la compatibilidad)**: comprobar si la migración
+      **bloquea escrituras** mientras corre. Un `CREATE INDEX` normal (sin `CONCURRENTLY`) permite LEER pero
+      toma un lock que **bloquea las escrituras** de esa tabla hasta terminar — igual que un
+      `ALTER TABLE … SET NOT NULL` o un `ADD COLUMN … DEFAULT` sobre una tabla grande. Este repo genera los
+      índices así (**15 migraciones con `CREATE INDEX`, ninguna con `CONCURRENTLY`**), p. ej.
+      `20260906_032741_add_governance.ts`. Si la tabla tiene tráfico, esa migración **exige ventana de
+      mantenimiento (§3.3.B)** aunque sea *compatible*: que el código tolere el esquema no la vuelve inocua.
 
 ### 3.2 Estado del esquema del destino (informativo)
 ```bash
@@ -105,6 +112,24 @@ DATABASE_DIRECT_URL="postgresql://…:5432/postgres" pnpm migrate   # 1) expandi
 - [ ] Promover el deployment (§3.4). El código nuevo usa el esquema nuevo; el viejo lo ignora.
 - [ ] **Contraer en un segundo release** (borrar la columna/tabla obsoleta) cuando ya no quede código
       antiguo en vuelo. Así un `DROP` nunca coincide con el deployment que aún lo usa.
+
+> ℹ️ **`COMPATIBLE` describe el CÓDIGO, no el coste operativo.** Si la migración trae un `CREATE INDEX`
+> normal (sin `CONCURRENTLY`) sobre una tabla con tráfico, **no** se aplica por esta vía: va por la ventana
+> de §3.3.B, porque bloquea escrituras mientras construye el índice.
+>
+> **Por qué no se usa `CREATE INDEX CONCURRENTLY` en las migraciones de este repo:** la documentación
+> oficial de Payload establece que **cada migración corre dentro de una transacción**, y Postgres
+> **prohíbe** `CONCURRENTLY` dentro de un bloque transaccional (verificado además en el runner:
+> `@payloadcms/drizzle` usa `initTransaction`/`commitTransaction` por migración). Un `CONCURRENTLY` fallido
+> deja, además, un índice **`INVALID`** que hay que borrar y recrear. Si de verdad se quiere `CONCURRENTLY`,
+> hay que ejecutarlo **fuera** de Payload (p. ej. `psql` con la conexión directa 5432) y asumir dos costes:
+> validar el resultado y documentarlo, porque **no queda registrado en `payload_migrations`**.
+> ```sql
+> -- tras crearlo CONCURRENTLY, comprobar que quedó VÁLIDO antes de darlo por bueno:
+> SELECT indexrelid::regclass AS index, indisvalid FROM pg_index WHERE indexrelid = 'mi_indice'::regclass;
+> ```
+> Si quedara `INVALID`, borrarlo (`DROP INDEX`) y recrearlo: es un índice inútil que además sigue
+> costando escrituras.
 
 #### 3.3.B INCOMPATIBLE (rename / drop / cambio de tipo) → ventana de mantenimiento
 Este camino **no es cero-downtime** y hay que asumirlo explícitamente. **Preferencia fuerte: convertir el
@@ -204,7 +229,7 @@ snapshot; el artefacto que se restaura es el **final**, capturado ya en quiescen
 **B. Si la migración fue INCOMPATIBLE** (rename / drop / cambio de tipo) — con el servicio cerrado:
 1. **Anunciar** la ventana y **entrar en mantenimiento** (sólo lectura).
 2. **Detener el cron** (§6) y **drenar** el trabajo en vuelo (verificar quiescencia, §3.3.B paso B.4).
-3. **Revertir el esquema**: `pnpm migrate:down` (conexión directa) o **restaurar el snapshot final** de §3.3.B.
+3. **Revertir el esquema**: `pnpm payload migrate:down` (conexión directa) o **restaurar el snapshot final** de §3.3.B.
 4. **Promover el deployment anterior** —el que coincide con el esquema ya revertido— y esperar a que sirva.
 5. **Smoke** (§4) y, sólo entonces, **reabrir el tráfico** y reactivar el cron.
 
@@ -313,13 +338,18 @@ los entornos". Pasos:
       borra todo lo escrito en ese intervalo (§3.3.B).
 - ❌ Correr la ventana de mantenimiento con el **cron** o los jobs en marcha (escriben durante el cambio).
 - ❌ Confiar en un respaldo que **nunca se ha restaurado** en un entorno de prueba.
+- ❌ Clasificar como COMPATIBLE una migración con `CREATE INDEX` normal (sin `CONCURRENTLY`) sobre una tabla
+      con tráfico: bloquea las escrituras aunque el código viejo y el nuevo toleren el esquema (§3.1, §3.3.A).
+- ❌ Invocar `pnpm migrate:down`: ese script **no existe** en este repo (el válido es `pnpm payload migrate:down`).
 
 ---
 
 ## 9. Fuentes
 
 - Payload — Migrations (`docs/database/migrations.mdx`): `payload migrate`, `migrate:status`,
-  `migrate:down`, `migrate:refresh/reset/fresh`, y el patrón `"ci": "payload migrate && pnpm build"`.
+  `migrate:down`, `migrate:refresh/reset/fresh`, el patrón `"ci": "payload migrate && pnpm build"` y la
+  regla oficial de que **cada migración corre en su propia transacción** (por eso `CREATE INDEX
+  CONCURRENTLY` no cabe en una migración de este repo — §3.3.A).
 - Payload — Jobs Queue: `handleSchedules`, `jobs.autoRun`, endpoint `/api/payload-jobs/run`.
 - Supabase — Connection modes: Transaction Pooler (6543) vs direct (5432); DDL por conexión directa.
 - Vercel — Cron Jobs y límites por plan; reglas de *preview deployments* y variables por entorno.
