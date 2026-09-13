@@ -10,6 +10,7 @@ import {
   recalculateCustomerBalance,
 } from '../../utilities/financeLedger';
 import { runIsolatedContext } from '../../utilities/requestContext';
+import { lineItemsChanged } from '../../utilities/lineItems';
 
 const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
   data,
@@ -21,8 +22,18 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
 
   const rate = Number(data.exchangeRateSnapshot) || Number(originalDoc?.exchangeRateSnapshot) || 1;
 
-  // 1. Compute line items and revised totals if items array is present
-  if (Array.isArray(data.items)) {
+  // 1. Compute line items and revised totals ONLY when the caller really
+  //    changed the lines. En un `update`, Payload rellena `data.items` con las
+  //    líneas del documento original, así que `Array.isArray(data.items)` era
+  //    SIEMPRE verdadero (hallazgo P0 de CI-2b): además de romper el saldo,
+  //    recalculaba `totalUSD` desde las líneas y descartaba impuestos/ajustes
+  //    en cualquier actualización no relacionada.
+  const linesChanged =
+    operation === 'create'
+      ? Array.isArray(data.items)
+      : lineItemsChanged(data.items, originalDoc?.items);
+
+  if (linesChanged && Array.isArray(data.items)) {
     let sumTotalUSD = 0;
     data.items = data.items.map((item) => {
       const qty = Number(item.quantity) || 0;
@@ -74,7 +85,18 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
       return data;
     }
 
-    if (requestedStatus === 'paid') {
+    // Transición EXPLÍCITA a `paid` (marcar como pagada una factura que aún no lo
+    // estaba): se honra con saldo 0.
+    //
+    // EXCEPCIÓN (hallazgo Devin del PR #100): si la factura YA estaba pagada y las
+    // líneas cambiaron de verdad, ese `paid` es HEREDADO —Payload rellena
+    // `data.status` desde `originalDoc` vía `cloneDataFromOriginalDoc`— y el total
+    // pudo SUBIR. Cortocircuitar aquí dejaría `balanceUSD = 0` y OCULTARÍA la deuda
+    // nueva: los cargos añadidos nunca llegarían a CxC. En ese caso se cae al
+    // bloque de reconciliación, que recalcula contra lo realmente cobrado.
+    const paidIsInherited = originalStatus === 'paid' && linesChanged;
+
+    if (requestedStatus === 'paid' && !paidIsInherited) {
       data.status = 'paid';
       data.balanceUSD = 0;
       data.balanceVES = 0;
@@ -111,14 +133,24 @@ const beforeValidateInvoice: CollectionBeforeValidateHook = async ({
       return data;
     }
 
-    // Calculate historical amount already paid toward this invoice
-    const priorPaidUSD = Math.max(
+    // Importe histórico YA pagado hacia esta factura.
+    //
+    // Normalmente se infiere del saldo previo (total − saldo). Si la factura
+    // estaba PAGADA (saldo 0) y sus líneas cambiaron, esa inferencia no es
+    // auditable: se contrasta con el ledger de cobros CONFIRMADOS —la fuente de
+    // verdad del dinero recibido— tomando el MAYOR de ambos para no reabrir deuda
+    // ya cubierta por un ajuste manual (hallazgo Devin del PR #100).
+    const inferredPaidUSD = Math.max(
       0,
       Number((origTotalUSD - (Number(originalDoc.balanceUSD) || 0)).toFixed(2)),
     );
+    const priorPaidUSD =
+      originalStatus === 'paid' && linesChanged
+        ? Math.max(inferredPaidUSD, await getInvoicePaidAmount(originalDoc.id, req))
+        : inferredPaidUSD;
 
     // If invoice items or exchange rate changed, dynamically reconcile remaining balance
-    const itemsChanged = Array.isArray(data.items);
+    const itemsChanged = linesChanged;
     const rateChanged =
       data.exchangeRateSnapshot !== undefined &&
       data.exchangeRateSnapshot !== originalDoc.exchangeRateSnapshot;

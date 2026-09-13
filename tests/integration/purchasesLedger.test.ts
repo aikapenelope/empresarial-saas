@@ -17,7 +17,7 @@ import { QUERY_PAGE_SIZE } from '@/utilities/paginatedQuery';
  *  - `getPurchaseInvoicePaidAmount` sólo suma allocations CONFIRMADAS,
  *  - `recalculateSupplierBalance` = Σ saldos de facturas de compra abiertas,
  *  - `postPurchaseReceptionMovements` es IDEMPOTENTE (no duplica kardex),
- *  - y el ratchet `it.fails` del mismo defecto P0 del lado ventas: la rama
+ *  - y la regresión (Sprint CI-2b) del defecto P0 del lado ventas: la rama
  *    `itemsChanged` de `beforeValidatePurchaseInvoice`
  *    (src/collections/PurchaseInvoices/index.ts:267) hace SIEMPRE true el flag
  *    (Payload rellena `data.items` desde el documento original), así que el
@@ -112,9 +112,11 @@ let paymentSeq = 0;
 async function createSupplierPayment({
   allocations,
   amount,
+  supplier = supplierId,
 }: {
   allocations?: Array<{ purchaseInvoice: number; allocatedAmountUSD: number }>;
   amount: number;
+  supplier?: number;
 }): Promise<Row> {
   paymentSeq++;
   return (await payload.create({
@@ -122,7 +124,7 @@ async function createSupplierPayment({
     data: {
       tenant: tenantId,
       paymentNumber: `SP-${RUN}-${paymentSeq}`,
-      supplier: supplierId,
+      supplier,
       paymentDate: new Date().toISOString(),
       status: 'confirmed',
       methods: [{ method: 'transfer_ves', currency: 'USD', amount, exchangeRate: 1 }],
@@ -246,8 +248,8 @@ describe('ledger de proveedores — saldos y recepción (CI-2)', () => {
     expect(Number((await supplierById(supplier.id)).currentDebtUSD)).toBe(100);
   });
 
-  // ── Ratchet P0 (mismo defecto que en ventas, lado compras) ────────────────
-  it.fails('un pago PARCIAL baja el saldo de la compra (P0: hoy NO baja)', async () => {
+  // ── Regresión del P0 (CI-2b), lado compras ───────────────────────────────
+  it('un pago PARCIAL baja el saldo de la compra', async () => {
     const purchase = await createPurchase({ total: 100 });
     await createSupplierPayment({ amount: 40, allocations: [{ purchaseInvoice: purchase.id, allocatedAmountUSD: 40 }] });
 
@@ -307,6 +309,79 @@ describe('ledger de proveedores — saldos y recepción (CI-2)', () => {
     } finally {
       if (tx) await payload.db.commitTransaction(tx);
     }
+  });
+
+  // ── Regresión Devin (PR #100), lado compras ──────────────────────────────
+  // Corregir el costo de una compra YA PAGADA sube el total: la compra deja de
+  // estar saldada y la deuda nueva con el proveedor debe volver a CxP. Antes, el
+  // atajo `paid` —HEREDADO, porque Payload rellena `data.status` desde
+  // `originalDoc`— devolvía saldo 0 y la deuda quedaba oculta.
+  it('editar los costos de una compra YA PAGADA expone la deuda nueva', async () => {
+    const supplier = (await payload.create({
+      collection: 'suppliers',
+      data: {
+        tenant: tenantId,
+        name: `Prov Pagada ${RUN}`,
+        taxId: `R-PAG-${RUN}`,
+        currentDebtUSD: 0,
+        currentDebtVES: 0,
+      },
+      draft: false,
+      overrideAccess: true,
+      context: { allowInternalDebtUpdate: true },
+    })) as unknown as Supplier;
+
+    const purchase = (await payload.create({
+      collection: 'purchase-invoices',
+      data: {
+        tenant: tenantId,
+        invoiceNumber: `CXP-PAG-${RUN}`,
+        supplier: supplier.id,
+        issueDate: new Date().toISOString(),
+        dueDate: new Date(Date.now() + 15 * 86400000).toISOString(),
+        paymentTerms: 'credit',
+        status: 'received',
+        receptionStatus: 'received',
+        receptionWarehouse: warehouseId,
+        receptionDate: new Date().toISOString(),
+        exchangeRateSnapshot: 40,
+        totalUSD: 100,
+        totalVES: 4000,
+        balanceUSD: 100,
+        balanceVES: 4000,
+        items: [{ description: 'insumo', quantity: 1, unitCostUSD: 100, totalUSD: 100 }],
+      },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as PurchaseInvoice;
+
+    await createSupplierPayment({
+      amount: 100,
+      supplier: supplier.id,
+      allocations: [{ purchaseInvoice: purchase.id, allocatedAmountUSD: 100 }],
+    });
+
+    const settled = await purchaseById(purchase.id);
+    expect(Number(settled.balanceUSD)).toBe(0);
+    expect(settled.status).toBe('paid');
+    expect(Number((await supplierById(supplier.id)).currentDebtUSD)).toBe(0);
+
+    // Corrección de costo del insumo: 100 → 150 USD (misma cantidad de líneas).
+    const updated = (await payload.update({
+      collection: 'purchase-invoices',
+      id: purchase.id,
+      data: {
+        items: [{ description: 'insumo', quantity: 1, unitCostUSD: 150, totalUSD: 150 }],
+      },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as PurchaseInvoice;
+
+    expect(Number(updated.totalUSD)).toBe(150);
+    // 150 − 100 realmente pagados = 50 pendientes (antes: 0, deuda oculta).
+    expect(Number(updated.balanceUSD)).toBe(50);
+    expect(updated.status).toBe('partially_paid');
+    expect(Number((await supplierById(supplier.id)).currentDebtUSD)).toBe(50);
   });
 });
 
