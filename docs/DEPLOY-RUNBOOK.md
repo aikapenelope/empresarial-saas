@@ -111,15 +111,40 @@ Este camino **no es cero-downtime** y hay que asumirlo explícitamente. **Prefer
 cambio en A** partiéndolo en dos releases (añadir lo nuevo → migrar datos → borrar lo viejo). Si no es
 viable, proceder así y **con la base respaldada**:
 
-- [ ] **Anunciar** la ventana (fuera de horario de operación) y avisar a los usuarios.
-- [ ] **Respaldo verificable y probado** del destino:
-      - Snapshot/backup del proyecto Supabase **antes** de tocar el esquema.
-      - **Restaurar ese respaldo en un entorno de prueba y conectarse**: un respaldo que nunca se ha
-        restaurado no es un plan de recuperación. Cronometrar el restore (define el RTO real).
-- [ ] Poner la aplicación en **sólo lectura / mantenimiento** para que nadie escriba durante el cambio.
-- [ ] `pnpm migrate` (conexión directa) y, **acto seguido y sin pausa**, promover el deployment.
-- [ ] Smoke post-deploy (§4) y reabrir el servicio.
-- [ ] Si algo falla: **restaurar del respaldo** (no intentar arreglar el esquema a mano en caliente).
+El orden exacto importa: **el respaldo de rollback se toma DESPUÉS de detener las escrituras**, nunca antes
+(hallazgo 🔴 de Devin #99). Un snapshot tomado antes de la ventana no contiene lo que se escriba después, y
+restaurarlo borraría esas transacciones. Por eso el *drill* de restauración se hace **antes**, pero con otro
+snapshot; el artefacto que se restaura es el **final**, capturado ya en quiescencia.
+
+**A. Preparación previa (días antes, sin tocar producción)**
+- [ ] **Drill de restauración**: restaurar un snapshot en un entorno de prueba, conectarse y **cronometrar**
+      (define el RTO real). Un respaldo que nunca se ha restaurado no es un plan de recuperación.
+      ⚠️ Ese snapshot de práctica **no** es el que se usará para revertir: el de rollback se toma en la
+      ventana (paso B.3).
+
+**B. Ventana de mantenimiento (secuencia estricta, sin pausas intermedias)**
+1. [ ] **Anunciar** la ventana (fuera de horario de operación) y avisar a los usuarios.
+2. [ ] Poner la aplicación en **sólo lectura / mantenimiento** (nadie escribe).
+3. [ ] **Detener las tareas programadas**: pausar el cron externo (§6) —y el *Cron Job* de Vercel si
+       existe— para que `GET /api/payload-jobs/run?queue=alerts` no dispare escrituras a mitad del cambio.
+4. [ ] **Drenar el trabajo en vuelo** y **verificar quiescencia de escrituras** antes de seguir. Con la
+       conexión directa:
+       ```sql
+       SELECT pid, state, query FROM pg_stat_activity
+       WHERE datname = current_database() AND state <> 'idle' AND pid <> pg_backend_pid();
+       ```
+       No debe quedar ninguna transacción de negocio activa (sólo sesiones inactivas).
+5. [ ] **Tomar el snapshot FINAL de rollback**, ya con las escrituras detenidas. Éste —no el del drill— es
+       el artefacto que se restaura si la promoción falla: al no haber escrituras posteriores, restaurarlo
+       **no pierde ninguna transacción**. Anotar hora y nombre del snapshot.
+6. [ ] `pnpm migrate` (conexión directa) y, **acto seguido y sin pausa**, promover el deployment.
+7. [ ] Smoke post-deploy (§4) **con el servicio aún cerrado**; sólo si pasa, reabrir el tráfico y
+       **reactivar el cron** (§6).
+8. [ ] Si algo falla: **restaurar del snapshot final del paso 5** (no intentar arreglar el esquema a mano
+       en caliente) y volver a desplegar el código anterior.
+- [ ] Si la política de recuperación exige verificar **ese artefacto exacto** antes de confiar en él,
+      hacer el restore de prueba del snapshot final **dentro** de la ventana y **con el servicio todavía
+      cerrado**: es el único momento en que probarlo no abre la brecha que describe este hallazgo.
 
 ### 3.4 Desplegar
 - [ ] Promover el deployment de `main` en Vercel (Production).
@@ -165,6 +190,24 @@ viable, proceder así y **con la base respaldada**:
    el código anterior. Es la última red, y por eso el respaldo se prueba ANTES de la ventana.
 
 **5.3 Revertir el esquema** (sólo si de verdad hay que deshacer la migración):
+
+> 🔴 **Regla dura (hallazgo de Devin #99):** `migrate:down` **nunca** se ejecuta mientras un deployment que
+> **necesita** el esquema migrado está sirviendo tráfico. `migrate:down` puede eliminar columnas, tablas,
+> valores de `enum` o restricciones que ese código usa, y sus peticiones fallarían hasta que se promueva otro
+> deployment. La reversión es **siempre** un procedimiento con la escritura detenida y en este orden.
+
+**A. Si la migración fue COMPATIBLE** (*expand-contract*):
+1. **Promover primero el código anterior** (el que tolera el esquema viejo) y verificar el smoke (§4).
+2. **Sólo después**, y sin ningún deployment que dependa de lo nuevo, evaluar `migrate:down`. Si el código
+   viejo ignora las columnas/tablas nuevas, lo más seguro es **no revertir** y arreglar hacia adelante.
+
+**B. Si la migración fue INCOMPATIBLE** (rename / drop / cambio de tipo) — con el servicio cerrado:
+1. **Anunciar** la ventana y **entrar en mantenimiento** (sólo lectura).
+2. **Detener el cron** (§6) y **drenar** el trabajo en vuelo (verificar quiescencia, §3.3.B paso B.4).
+3. **Revertir el esquema**: `pnpm migrate:down` (conexión directa) o **restaurar el snapshot final** de §3.3.B.
+4. **Promover el deployment anterior** —el que coincide con el esquema ya revertido— y esperar a que sirva.
+5. **Smoke** (§4) y, sólo entonces, **reabrir el tráfico** y reactivar el cron.
+
 ```bash
 DATABASE_DIRECT_URL="postgresql://…:5432/postgres" pnpm payload migrate:down
 ```
@@ -197,6 +240,8 @@ Authorization: Bearer $CRON_SECRET
       ejecuta la cola en la misma llamada. Está protegido por `jobs.access.run = canRunScheduledJobs`
       (cron con `Bearer`, o super-admin; todo lo demás 401).
 - [ ] Sin `CRON_SECRET` configurado, el endpoint es **fail-closed** (401).
+- [ ] **Durante una ventana de mantenimiento** (§3.3.B / §5.3): **pausar el cron** para que el runner no
+      escriba a mitad del cambio, y **reactivarlo** al reabrir el servicio.
 
 ---
 
@@ -261,6 +306,12 @@ los entornos". Pasos:
       (rompe *expand-contract*: usa dos releases).
 - ❌ Creer que revertir el código restaura el servicio tras una migración **incompatible** (el esquema ya
       no le sirve — §5).
+- ❌ Suponer que `migrate:down` es seguro porque «el código se puede volver a desplegar»: con un deployment
+      que **requiere** el esquema migrado sirviendo tráfico, elimina columnas/tablas/`enum` que ese código
+      usa (§5.3).
+- ❌ Tomar el snapshot de rollback **antes** de detener las escrituras y usarlo después para restaurar:
+      borra todo lo escrito en ese intervalo (§3.3.B).
+- ❌ Correr la ventana de mantenimiento con el **cron** o los jobs en marcha (escriben durante el cambio).
 - ❌ Confiar en un respaldo que **nunca se ha restaurado** en un entorno de prueba.
 
 ---
