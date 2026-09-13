@@ -163,26 +163,15 @@ async function customerById(id: number): Promise<Customer> {
 
 describe('ledger de clientes — cobros y saldos (CI-2)', () => {
   // ─────────────────────────────────────────────────────────────────────────
-  // HALLAZGO P0 (CI-2): estas pruebas documentan un DEFECTO REAL y actúan como
-  // ratchet: `it.fails` pasa mientras el bug exista y FALLA en cuanto se corrija
-  // (obligando a convertirlas en `it`).
-  //
-  // Causa raíz: `beforeValidateInvoice` (src/collections/Invoices/index.ts:124)
-  // calcula `itemsChanged = Array.isArray(data.items)`. Payload RELLENA `data`
-  // con los campos ausentes clonados del documento original (field-level
-  // beforeValidate → getFallbackValue), así que en CUALQUIER update `data.items`
-  // ya viene poblado ⇒ `itemsChanged` es SIEMPRE true ⇒ la rama de
-  // reconciliación sobreescribe `data.balanceUSD` con
-  // `origTotal − (origTotal − originalDoc.balanceUSD)` = el saldo ORIGINAL.
-  //
-  // CONSECUENCIA MEDIDA: un cobro PARCIAL no mueve el saldo (queda el total) y
-  // la factura no pasa a `partially_paid`; la deuda del cliente no baja. Un cobro
-  // por el TOTAL sí funciona, porque la rama `requestedStatus === 'paid'` sale
-  // ANTES de la de reconciliación (por eso el cobro total SÍ pasa — ver abajo).
-  // El mismo patrón existe en PurchaseInvoices (líneas 267-274).
+  // REGRESIÓN del hallazgo P0 (Sprint CI-2b): el hook decidía si reconciliar el
+  // saldo con `Array.isArray(data.items)`, que es SIEMPRE true en un `update`
+  // (Payload rellena `data` con los campos clonados del documento original vía
+  // getFallbackValue). Ahora usa `lineItemsChanged()`
+  // (src/utilities/lineItems.ts), que compara por VALOR contra el documento
+  // original. Estas pruebas nacieron como `it.fails` (ratchet) y hoy son `it`.
   // ─────────────────────────────────────────────────────────────────────────
 
-  it.fails('un cobro PARCIAL baja el saldo y marca la factura como partially_paid (P0: hoy NO baja)', async () => {
+  it('un cobro PARCIAL baja el saldo y marca la factura como partially_paid', async () => {
     const invoice = await createInvoice({ total: 100 });
     expect(Number(invoice.balanceUSD)).toBe(100);
 
@@ -197,7 +186,7 @@ describe('ledger de clientes — cobros y saldos (CI-2)', () => {
     expect(Number(customer.currentDebtUSD)).toBe(60);
   });
 
-  it('un cobro TOTAL deja la factura en paid con saldo 0 (la rama `paid` sí escapa del P0)', async () => {
+  it('un cobro TOTAL deja la factura en paid con saldo 0', async () => {
     const invoice = await createInvoice({ total: 35 });
     await createPayment({ amount: 35, allocations: [{ invoice: invoice.id, allocatedAmountUSD: 35 }] });
 
@@ -206,7 +195,7 @@ describe('ledger de clientes — cobros y saldos (CI-2)', () => {
     expect(after.status).toBe('paid');
   });
 
-  it.fails('borrar el cobro RESTAURA el saldo de la factura (reverso)', async () => {
+  it('borrar el cobro RESTAURA el saldo de la factura (reverso)', async () => {
     const invoice = await createInvoice({ total: 80 });
     const payment = await createPayment({
       amount: 30,
@@ -330,6 +319,126 @@ describe('ledger de clientes — cobros y saldos (CI-2)', () => {
     } finally {
       if (tx) await payload.db.rollbackTransaction(tx);
     }
+  });
+
+  // Otra mitad del contrato (CI-2b): si las líneas SÍ cambian, la reconciliación
+  // debe seguir ejecutándose y conservar lo ya cobrado.
+  it('editar las líneas SÍ reconcilia el saldo conservando lo cobrado', async () => {
+    const invoice = await createInvoice({ total: 100 });
+    await createPayment({ amount: 40, allocations: [{ invoice: invoice.id, allocatedAmountUSD: 40 }] });
+    expect(Number((await invoiceById(invoice.id)).balanceUSD)).toBe(60);
+
+    // Cambio real de líneas: 2 líneas por 150 USD en total.
+    const updated = (await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: {
+        items: [
+          { description: 'A', quantity: 1, unitPriceUSD: 100, totalUSD: 100 },
+          { description: 'B', quantity: 5, unitPriceUSD: 10, totalUSD: 50 },
+        ],
+      },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Invoice;
+
+    // priorPaidUSD = 100 − 60 = 40 ⇒ nuevo saldo = 150 − 40 = 110.
+    expect(Number(updated.totalUSD)).toBe(150);
+    expect(Number(updated.balanceUSD)).toBe(110);
+    expect(updated.status).toBe('partially_paid');
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Regresión Devin (PR #100): si una factura YA PAGADA recibe líneas nuevas
+  // (sube el total) deja de estar saldada. Antes, el atajo `paid` —que es
+  // HEREDADO porque Payload rellena `data.status` desde `originalDoc` vía
+  // cloneDataFromOriginalDoc— devolvía saldo 0 y la deuda nueva quedaba OCULTA:
+  // los cargos añadidos nunca llegaban a CxC.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it('editar las líneas de una factura YA PAGADA expone la deuda nueva', async () => {
+    const customer = (await payload.create({
+      collection: 'customers',
+      data: {
+        tenant: tenantId,
+        name: `Cliente Pagada ${RUN}`,
+        taxId: `J-PAG-${RUN}`,
+        phone: '0',
+        status: 'lead',
+      },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Customer;
+
+    const invoice = await createInvoice({ total: 100, customer: customer.id });
+    await createPayment({
+      amount: 100,
+      customer: customer.id,
+      allocations: [{ invoice: invoice.id, allocatedAmountUSD: 100 }],
+    });
+
+    const settled = await invoiceById(invoice.id);
+    expect(Number(settled.balanceUSD)).toBe(0);
+    expect(settled.status).toBe('paid');
+    expect(Number((await customerById(customer.id)).currentDebtUSD)).toBe(0);
+
+    // Cargos añadidos: la factura pasa de 100 a 150 USD.
+    const updated = (await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: {
+        items: [
+          { description: 'A', quantity: 1, unitPriceUSD: 100, totalUSD: 100 },
+          { description: 'B (cargo nuevo)', quantity: 5, unitPriceUSD: 10, totalUSD: 50 },
+        ],
+      },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Invoice;
+
+    expect(Number(updated.totalUSD)).toBe(150);
+    // 150 − 100 realmente cobrados = 50 pendientes (antes: 0, deuda oculta).
+    expect(Number(updated.balanceUSD)).toBe(50);
+    expect(updated.status).toBe('partially_paid');
+
+    // Y el remanente llega a la deuda del cliente (CxC).
+    expect(Number((await customerById(customer.id)).currentDebtUSD)).toBe(50);
+  });
+
+  it('editar las líneas de una factura YA PAGADA a la baja la mantiene saldada', async () => {
+    const invoice = await createInvoice({ total: 100 });
+    await createPayment({
+      amount: 100,
+      allocations: [{ invoice: invoice.id, allocatedAmountUSD: 100 }],
+    });
+
+    const updated = (await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: { items: [{ description: 'A', quantity: 1, unitPriceUSD: 60, totalUSD: 60 }] },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Invoice;
+
+    expect(Number(updated.totalUSD)).toBe(60);
+    expect(Number(updated.balanceUSD)).toBe(0);
+    expect(updated.status).toBe('paid');
+  });
+
+  it('marcar EXPLÍCITAMENTE como pagada una factura emitida sigue dejando saldo 0', async () => {
+    const invoice = await createInvoice({ total: 80 });
+    expect(Number(invoice.balanceUSD)).toBe(80);
+
+    const updated = (await payload.update({
+      collection: 'invoices',
+      id: invoice.id,
+      data: { status: 'paid' },
+      draft: false,
+      overrideAccess: true,
+    })) as unknown as Invoice;
+
+    expect(Number(updated.balanceUSD)).toBe(0);
+    expect(updated.status).toBe('paid');
   });
 });
 
