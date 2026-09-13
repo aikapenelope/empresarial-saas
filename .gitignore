@@ -44,5 +44,12 @@ pnpm-debug.log*
 .codegraph/
 .serena/
 
+# Playwright (Sprint CI-4): reportes y trazas generados por la suite smoke.
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
+
 # Cobertura de Vitest (Sprint CI-5): reporte generado en cada corrida.
 /coverage/
+

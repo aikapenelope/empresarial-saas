@@ -33,9 +33,15 @@ updates:
       dev-dependencies:
         dependency-type: development
     ignore:
-      # El backend de la base de datos se actualiza a mano junto con las
-      # migraciones, nunca por PR automático.
-      - dependency-name: '@payloadcms/db-postgres'
+      # Un MAJOR de Payload se adopta A MANO: arrastra migraciones y cambios de
+      # esquema, y este repo mantiene TODO el ecosistema en lockstep. Ignorar el
+      # major SÓLO en el adapter dejaría al grupo proponer `payload@4` +
+      # `@payloadcms/next@4` conservando `@payloadcms/db-postgres` en v3: justo el
+      # desparejo de versiones que esta configuración quiere evitar (reporte
+      # Devin #98). Se ignora el major para `payload` y para todo `@payloadcms/*`.
+      - dependency-name: 'payload'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@payloadcms/*'
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions

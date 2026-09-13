@@ -6,6 +6,9 @@ import { runIsolatedContext } from './requestContext';
 import { extractId } from './inventoryLedger';
 export { extractId };
 
+// Sprint CI-2: barrido paginado de la Local API (hogar canónico único).
+import { fetchAllDocs } from './paginatedQuery';
+
 export interface ShiftMethodTotals {
   cashUSD: number;
   cashVES: number;
@@ -78,44 +81,16 @@ export function round2(val: number): number {
 }
 
 /**
- * Tamaño de página del barrido de movimientos del turno.
+ * Barrido paginado del turno (Sprint CI-2): delegado al helper canónico
+ * `fetchAllDocs` — un `limit` fijo truncaba en SILENCIO y descuadraba el turno
+ * (hallazgo S2-2 / reporte Devin #88).
  */
-const SHIFT_QUERY_PAGE_SIZE = 100;
-
-/**
- * Recorre TODAS las páginas de una query de la Local API. Un `limit` fijo (p. ej.
- * 1000) trunca el resultado en SILENCIO: un turno con más cobros/pagos que el
- * límite calculaba el esperado sobre datos parciales → descuadre falso. Hallazgo
- * S2-2. Mismo patrón paginado que `fetchAllCustomerOpenInvoices` de financeLedger.
- */
-async function fetchAllShiftDocs(
+function fetchAllShiftDocs(
   req: PayloadRequest,
   collection: 'customer-payments' | 'supplier-payments',
   where: Where,
 ): Promise<Array<Record<string, unknown>>> {
-  const all: Array<Record<string, unknown>> = [];
-  let page = 1;
-  let hasNextPage = true;
-  while (hasNextPage) {
-    const res = await req.payload.find({
-      collection,
-      where,
-      // `sort: 'id'` es OBLIGATORIO con paginación por offset: da un orden único y
-      // estable entre páginas. Sin él, el orden por defecto (timestamp) tiene
-      // empates y una fila puede repetirse en una página y omitirse en otra,
-      // corrompiendo el total del turno (reporte Devin #88). Mismo patrón que
-      // `dashboardData.findAllMatching`.
-      sort: 'id',
-      limit: SHIFT_QUERY_PAGE_SIZE,
-      page,
-      depth: 0,
-      req,
-    });
-    all.push(...(res.docs as unknown as Array<Record<string, unknown>>));
-    hasNextPage = Boolean(res.hasNextPage);
-    page += 1;
-  }
-  return all;
+  return fetchAllDocs({ req, collection, where });
 }
 
 /**

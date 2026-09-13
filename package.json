@@ -18,7 +18,9 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
     "test:coverage": "vitest run --coverage.enabled"
+
   },
   "packageManager": "pnpm@10.27.0",
   "dependencies": {
@@ -54,6 +56,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "22.19.9",
     "@types/pg": "^8.23.1",

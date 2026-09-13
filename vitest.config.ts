@@ -51,17 +51,19 @@ export default defineConfig({
         'src/components/**',
       ],
       thresholds: {
-        // RATCHET (medido el 2026-09-12 sobre `main`, 154 tests):
-        //   statements 28.63 · branches 20.21 · functions 25.66 · lines 28.99
-        // Se fija 1 punto por debajo: el CI FALLA si baja, y subirlo siempre
-        // es bienvenido. Lo que arrastra el número son dos módulos grandes y
-        // aún sin cobertura (`actions/erpActions.ts` ~3.9k LOC y
-        // `utilities/erpData.ts` ~2.2k LOC) — backlog documentado en la
-        // auditoría (Sprint R6b / CI-3).
-        statements: 28,
-        branches: 20,
-        functions: 25,
-        lines: 28,
+        // RATCHET (valores EXACTOS medidos tras integrar CI-1..CI-4 en `main`;
+        // 32 archivos / 201 pruebas):
+        //   statements 39.68 · branches 30.62 · functions 32.74 · lines 40.27
+        //
+        // Se fijan los valores exactos (no un piso redondeado) para que
+        // CUALQUIER bajada rompa el CI — un umbral redondeado deja un hueco por
+        // el que la cobertura puede caer sin que el pipeline lo note (reporte
+        // Devin #98). Cuando la cobertura SUBE, se actualizan estos números en
+        // el mismo PR de forma deliberada y revisable.
+        statements: 39.68,
+        branches: 30.62,
+        functions: 32.74,
+        lines: 40.27,
       },
     },
   },

@@ -8,6 +8,9 @@ import type { Product } from '@/payload-types';
 import { extractId, getActiveDb } from './inventoryLedger';
 export { extractId, getActiveDb };
 
+// Sprint CI-2: barrido paginado de la Local API (hogar canónico único).
+import { fetchAllDocs } from './paginatedQuery';
+
 export interface SupplierRecalculateBalanceResult {
   currentDebtUSD: number;
   currentDebtVES: number;
@@ -97,7 +100,8 @@ export async function getPurchaseInvoicePaidAmount(
   const invoiceId = extractId(invoiceIdRaw);
   if (!invoiceId) return 0;
 
-  const payments = await req.payload.find({
+  const payments = await fetchAllDocs({
+    req,
     collection: 'supplier-payments',
     where: {
       and: [
@@ -113,13 +117,10 @@ export async function getPurchaseInvoicePaidAmount(
         },
       ],
     },
-    limit: 500,
-    depth: 0,
-    req,
   });
 
   let totalPaid = 0;
-  for (const pay of payments.docs) {
+  for (const pay of payments) {
     if (Array.isArray(pay.allocations)) {
       for (const alloc of pay.allocations) {
         if (String(extractId(alloc.purchaseInvoice)) === String(invoiceId)) {
