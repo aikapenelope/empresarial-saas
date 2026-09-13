@@ -48,6 +48,9 @@ subcomandos, el fallback por `argv` (contiene `migrate`) hace lo mismo.
   - [ ] `RESEND_API_KEY` **o** el juego `SMTP_*` (sin ninguno, dev usa el mock de Ethereal — **no** en prod)
   - [ ] `SUPABASE_CA_CERT` si el certificado del proyecto no está en el CA bundle del runtime
   - [ ] `S3_*` si se usa almacenamiento externo (el origen del endpoint entra solo en la CSP: `img-src`)
+- [ ] **Aislamiento de entornos (🟥 ver §7.4)**: `DATABASE_URI`, `DATABASE_DIRECT_URL` y `PAYLOAD_SECRET`
+      acotados a **`Production`** en Vercel; el entorno *Preview* apunta a una base de **staging** (o a
+      ninguna). Un preview nunca debe poder escribir en la base de producción.
 - [ ] Un programador externo de cron (Vercel Cron o cron-job.org / GitHub Actions) — ver §6.
 
 ---
@@ -153,10 +156,10 @@ Authorization: Bearer $CRON_SECRET
 
 ### 7.1 NO se embebe `payload migrate` en el build de Vercel
 La documentación oficial de Payload propone `"ci": "payload migrate && pnpm build"`. **Aquí NO se aplica a
-Vercel**, y es deliberado: Vercel ejecuta el *build* también en **cada preview**, y esos previews apuntan
-a las mismas variables de producción ⇒ se estaría ejecutando **DDL sobre la base de producción desde un
-preview**, sin control ni revisión. Las migraciones son un paso **explícito** (§3.3). En CI sí corre
-`pnpm migrate` (contra el Postgres desechable del runner), que es donde tiene sentido.
+Vercel**, y es deliberado: Vercel ejecuta el *build* también en **cada preview**, y si el entorno
+*Preview* tiene expuesta la base de producción (§7.4) se estaría ejecutando **DDL sobre la base de
+producción desde código no revisado**. Las migraciones son un paso **explícito** (§3.3), desde la conexión
+directa. En CI sí corre `pnpm migrate` (contra el Postgres desechable del runner), que es donde tiene sentido.
 
 ### 7.2 El DDL nunca por el pooler (6543)
 Ver §1. Es un invariante de infraestructura, no una preferencia.
@@ -165,10 +168,29 @@ Ver §1. Es un invariante de infraestructura, no una preferencia.
 Ver §3.2. El repo **no** incluye un paso de CI con `migrate:status` porque sería decorativo (sale 0).
 La guarda real anti-drift es `schemaMirror.test.ts` + `pnpm migrate` en CI.
 
-### 7.4 Preview y producción comparten base
-Consecuencia de 7.1: un preview puede escribir en la base de producción (es intencional para poder probar
-con datos reales). Si en algún momento se quiere aislar, crear un proyecto Supabase de *staging* y mapear
-`DATABASE_URI`/`DATABASE_DIRECT_URL` por entorno en Vercel — **no** cambiar el código.
+### 7.4 🟥 Riesgo de seguridad: previews contra la base de PRODUCCIÓN
+**El riesgo es real** (hallazgo 🟥 del reporte Devin #99): un *preview deployment* ejecuta **código no
+fusionado ni revisado** contra la base a la que apunte, y puede **leer, alterar o borrar datos reales**
+sin pasar por revisión. No es una decisión que convenga dejar "por defecto".
+
+**Configuración SEGURA por defecto (recomendada): aislar la base por entorno en Vercel.**
+En Vercel las variables se pueden acotar por entorno; el problema aparece cuando se crean "para todos
+los entornos". Pasos:
+
+1. **Vercel → Settings → Environment Variables**: editar `DATABASE_URI` y `DATABASE_DIRECT_URL` y dejar
+   marcado **sólo `Production`** (quitar `Preview` y `Development`). Lo mismo para
+   `PAYLOAD_SECRET`: compartirlo permitiría que un token emitido en un preview valide en producción.
+2. Para que los previews sigan siendo útiles, crear un **proyecto Supabase de staging** y declarar sus
+   `DATABASE_URI`/`DATABASE_DIRECT_URL` **sólo para `Preview`** (con sus migraciones aplicadas: §3.3).
+3. Verificar el efecto: en un preview, `GET /api/health` debe devolver `200` con la base de staging, y
+   **no** debe ver datos de clientes reales.
+4. Si no se va a montar staging todavía, la alternativa honesta es **no exponer la base a `Preview`**
+   (el preview fallará al conectar: es preferible a que escriba en producción).
+
+> Consecuencia documentada de §7.1: como las migraciones **no** corren en el build de Vercel, un preview
+> nunca aplica DDL — pero eso **no** impide que escriba filas de negocio. La contención es el aislamiento
+> de la base, no la ausencia de migraciones.
+
 
 ---
 
@@ -181,6 +203,10 @@ con datos reales). Si en algún momento se quiere aislar, crear un proyecto Supa
 - ❌ Depender de `migrate:status` como puerta de calidad.
 - ❌ Poner `payload migrate` en el build de Vercel (ver 7.1).
 - ❌ Confundir el proyecto Supabase: producción = **`empresarial-saas`** (`mzpqwaepkyhktfvgbxcq`).
+- ❌ Dejar la base de **producción** expuesta al entorno *Preview* de Vercel (código no revisado escribiendo
+      datos reales — §7.4).
+- ❌ Compartir `PAYLOAD_SECRET` entre *Preview* y *Production* (un token emitido en un preview valdría en
+      producción).
 
 ---
 
