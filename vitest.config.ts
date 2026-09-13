@@ -51,19 +51,32 @@ export default defineConfig({
         'src/components/**',
       ],
       thresholds: {
-        // RATCHET (valores EXACTOS medidos tras integrar CI-1..CI-4 en `main`;
-        // 32 archivos / 201 pruebas):
-        //   statements 39.68 · branches 30.62 · functions 32.74 · lines 40.27
+        // RATCHET de cobertura — valores ROBUSTOS entre entornos.
         //
-        // Se fijan los valores exactos (no un piso redondeado) para que
-        // CUALQUIER bajada rompa el CI — un umbral redondeado deja un hueco por
-        // el que la cobertura puede caer sin que el pipeline lo note (reporte
-        // Devin #98). Cuando la cobertura SUBE, se actualizan estos números en
-        // el mismo PR de forma deliberada y revisable.
-        statements: 39.68,
-        branches: 30.62,
-        functions: 32.74,
-        lines: 40.27,
+        // ⚠️ Medición empírica (misma revisión, misma suite: 32 archivos / 201
+        // pruebas + 3 expected fail):
+        //   local (macOS/darwin)
+        //     statements 39.68 · branches 30.62 · functions 32.74 · lines 40.27
+        //   GitHub Actions (ubuntu-latest · Node 22)
+        //     statements 39.57 · branches 30.44 · functions 32.59 · lines 40.14
+        //
+        // La cobertura de v8 NO es idéntica entre plataformas (deltas medidos de
+        // ~0,11-0,18 puntos; también cambia el denominador de funciones). Por eso
+        // fijar el valor EXACTO medido en local hace fallar el CI aunque el código
+        // sea el mismo — pasó en el PR #99 y dejó `main` en rojo para todos los PRs.
+        //
+        // Regla: umbral = floor(medida_en_CI − 0,5), es decir el peor entorno
+        // conocido con medio punto de holgura para variaciones de plataforma/Node.
+        // Sigue siendo un ratchet: cualquier bajada REAL (añadir código sin
+        // pruebas, perder cobertura) rompe el CI; lo que NO rompe es el ruido de
+        // entorno.
+        //
+        // Al SUBIR la cobertura: re-medir EN CI (no en local) y actualizar estos
+        // números de forma deliberada en el mismo PR.
+        statements: 39.0,
+        branches: 29.9,
+        functions: 32.0,
+        lines: 39.6,
       },
     },
   },
