@@ -50,5 +50,18 @@ updates:
       interval: weekly
       day: monday
       time: '04:00'
+    # Igual que el ecosistema npm de arriba: UNA sola PR por ronda.
+    # Sin agrupar, cada bump de Action abre su propia PR y dispara su propia
+    # corrida de CI (4 bumps = 4 builds, y los minutos del plan gratuito los paga
+    # el usuario). Además, las ramas individuales envejecen por separado: en la
+    # ronda #101-#104 las cuatro quedaron atrás de `main` sin conflicto, así que
+    # Dependabot no las rebasó y sus checks quedaron OBSOLETOS (el CI solo se
+    # re-dispara con un push a la rama). Un grupo = un rebase, una corrida, un
+    # merge.
+    open-pull-requests-limit: 3
     commit-message:
       prefix: 'chore(ci)'
+    groups:
+      github-actions:
+        patterns:
+          - '*'
