@@ -43,3 +43,13 @@ pnpm-debug.log*
 # Índices locales de herramientas de agentes (codegraph, serena)
 .codegraph/
 .serena/
+
+# Playwright (Sprint CI-4): reportes y trazas generados por la suite smoke.
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
+
+# Cobertura de Vitest (Sprint CI-5): reporte generado en cada corrida.
+/coverage/
+
