@@ -58,17 +58,17 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "22.19.9",
+    "@types/node": "26.5.1",
     "@types/pg": "^8.23.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitest/coverage-v8": "5.0.0",
     "cross-env": "^10.1.0",
-    "eslint": "^9.39.5",
+    "eslint": "^10.10.0",
     "eslint-config-next": "16.3.4",
     "postcss": "^8.5.2",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.8.0",
+    "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   },
   "pnpm": {
