@@ -299,26 +299,17 @@ mínima → precio/descuento, campo `min_quantity`); la adaptación sería un ca
 5. Widget de WhatsApp en la web (visitante → inbox del ERP) como pieza natural del
    mismo plugin cuando exista inboxPlugin (§7).
 
-## 9. Orden sugerido de ejecución (después de los 7 PRs aprobados)
+## 9. Orden sugerido de ejecución (Actualizado con ADR 2026-09-15)
 
-> **ESTADO (2026-09-11): los 7 PRs del bloque de Implementaciones Estructurales están
-> fusionados** (#77–#81, #83, #84 + auditoría #82, ver banner en
-> [`IMPLEMENTACIONES-ESTRUCTURALES.md`](./IMPLEMENTACIONES-ESTRUCTURALES.md)) — **este
-> §9 es el roadmap ACTIVO.** Nada de los 6 puntos ha empezado. Resumen unificado de
-> TODO lo pendiente (plugins + pulido + gates + Fase 13 + decisiones) en
-> [`ROADMAP.md` → «Roadmap activo»](../ROADMAP.md). Regla de proceso
-> aprendida con #83/#84: cada PR con migración termina con el contraste
-> `payload_migrations` (Supabase) vs repo — migración aplicada el mismo día del merge.
+> **ACTUALIZACIÓN ARQUITECTÓNICA (2026-09-15):** Véase [`docs/PLAN-MODULOS-NATIVOS.md`](./PLAN-MODULOS-NATIVOS.md)
+> para el plan detallado y especificación técnica de la arquitectura nativa.
+> - **Inbox (WhatsApp/Instagram):** Cancelado formalmente.
+> - **Fiscal Complejo:** Descartado por riesgo legal y regulatorio crítico (SENIAT).
+> - **Storefront, HR y Tesorería:** Se implementan de forma **100% nativa** (sin plugins) con colecciones canónicas y Next.js App Router.
 
-1. **TreasuryPlugin v1** — MacroDroid + matching (2-3 sprints, más valor inmediato).
-2. **StorefrontPlugin** — vitrina B2B de presupuesto (§8, ~1-1.5 sprints; puede
-   avanzar en paralelo porque la base existe). *Decisión pendiente del usuario: v1
-   solo-URL vs v1 con subida al bucket propio + BYO por tenant en fase 2 (§8).*
-3. **HrPlugin** — Expediente de Personal (1.5-2 sprints).
-4. **InboxPlugin v1** — previo: PoC de 1 día de Composio (§7) (3 sprints).
-5. **FiscalPlugin v1** — previo: sprint de investigación (formatos 99035/XML reales +
-   contador) (3-4 sprints).
-6. Inbox v2 (Instagram) / Fiscal v2+ / Payroll — según demanda de clientes.
+1. **Storefront B2B Nativo** — Vitrina de presupuesto `/t/[slug]` + `Orders` web (1.5 sprints).
+2. **Expediente de Personal (RRHH) Nativo** — `Employees`, `EmploymentEvents`, `EmployeeDocuments` (1.5 sprints).
+3. **Tesorería & MacroDroid Nativo** — `BankAccounts`, `BankMovements` + matching asistido (2 sprints).
 
 **Fuera de este orden pero abiertos**: los Lotes 2–4 del pulido de modales (Fase 12 del
 ROADMAP.md) como pulido continuo; y los gates de go-live de

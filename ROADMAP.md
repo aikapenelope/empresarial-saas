@@ -763,20 +763,19 @@ el merge de #83 y se detectó en la verificación post-merge de #84 (lección: c
 > `docs/`; aquí está el índice unificado con estado y esfuerzo. Nada de esta lista ha
 > empezado salvo donde se indica.
 
-## 1. Producto — plugins del ecosistema VE (orden acordado, `docs/ECOSISTEMA-VE-Y-PLUGINS.md` §2–§9)
+## 1. Producto — Módulos Nativos (Pivote Arquitectónico sin Plugins, ver `docs/PLAN-MODULOS-NATIVOS.md`)
 
-| # | Plugin | Alcance v1 | Esfuerzo | Previo |
+> **DECISIÓN ARQUITECTÓNICA (2026-09-15):** Se descartan los plugins artificiales para nuevos dominios (`storefrontPlugin`, `hrPlugin`, `treasuryPlugin`), implementándose como **colecciones nativas de Payload CMS 3.x y rutas App Router de Next.js 15**.
+> - ❌ **`inboxPlugin` (Composio/Meta):** **ELIMINADO DEFINITIVAMENTE.** Evita sobreingeniería, riesgos de suspensión de WABA y costes ocultos. Se consolida el uso de enlaces criptográficos públicos (`/share/...`) con deep-links directos a WhatsApp (`wa.me`).
+> - ❌ **`fiscalPlugin` complejo:** **DESCARTADO POR RIESGO LEGAL CRÍTICO.** El riesgo de multas y clausuras del SENIAT (5-10 días) por discrepancias en XML/TXT es inasumible. Se preserva el núcleo fiscal seguro existente: Libro de Ventas en CSV normativo, IVA bimonetario de 3 alícuotas, IGTF (3%) informativo en cobros en divisas y Nota de Entrega por defecto (Sprint 41).
+
+| # | Módulo Nativo | Tipo / Rutas | Alcance v1 | Esfuerzo |
 |---|---|---|---|---|
-| 1 | `treasuryPlugin` | BankAccounts/BankMovements + webhook MacroDroid (pago móvil/Zelle concilia solo) + motor de matching puro que propone y el humano confirma | 2–3 sprints | — |
-| 2 | `storefrontPlugin` | Vitrina B2B de presupuesto: `/t/[slug]` con stock disponible → "Solicitar Presupuesto" cae como `Order` canal `web` (§8) | 1–1.5 sprints | ⚠️ Decisión del dueño: v1 solo-URL vs subida al bucket propio + BYO por tenant en fase 2 |
-| 3 | `hrPlugin` | Expediente de Personal (empleados, eventos, documentos) — cero cálculos de nómina | 1.5–2 sprints | — |
-| 4 | `inboxPlugin` v1 | WhatsApp vía Composio (un proyecto por tenant, conexión global de la empresa, webhook firmado → Jobs Queue) | 3 sprints | PoC Composio de 1 día |
-| 5 | `fiscalPlugin` v1 | Retenciones IVA + base fiscal (checklist validado §2, norma PA SNAT/2025/000054) | 3–4 sprints | Sprint de investigación de formatos + sesión con contador |
+| 1 | **Storefront B2B Nativo** | App Router (`/t/[slug]`) + `Orders` (`channel: 'web'`) | Catálogo público con existencias en vivo + formulario "Solicitar Presupuesto" que genera pedidos web | 1.5 sprints |
+| 2 | **Expediente de Personal (RRHH)** | Colecciones `Employees`, `EmploymentEvents`, `EmployeeDocuments` + `/erp/hr` | Padrón de empleados, cronología de eventos y repositorio documental — cero cálculos de nómina | 1.5 sprints |
+| 3 | **Tesorería & MacroDroid** | Colecciones `BankAccounts`, `BankMovements` + Webhook `/api/webhooks/macrodroid` | Webhook para captura de SMS/notificaciones de Pago Móvil y Zelle con motor de matching asistido | 2 sprints |
 
-Después, según demanda de clientes: Inbox v2 (Instagram), Fiscal v2 (ISLR + IGTF
-ampliado), Fiscal v3, `payrollPlugin`. Fuera de plugins pero del mismo origen: **Phase B
-del wizard** (alta de catálogo desde CSV con matching fuzzy `pg_trgm` — PR separado,
-sujeto a decisión).
+Fuera de este bloque pero del mismo origen: **Phase B del wizard** (alta de catálogo desde CSV con matching fuzzy `pg_trgm` — PR separado, sujeto a decisión).
 
 ## 2. Pulido continuo — Fase 12, Lotes 2–4 de modales (detalle en Sprint 45, arriba)
 
