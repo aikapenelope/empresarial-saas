@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Cendaro ERP · Ciclo de Punto de Venta (POS) y Cierre de Caja",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "happy-path",
+        "label": "Turno de Caja Completo",
+        "focus": ["open_reg", "scan_items", "split_pay", "stock_deduct", "cash_audit", "close_reg"],
+        "note": "Ciclo completo desde la apertura del cajero hasta el cobro multimoneda y cierre."
+      },
+      {
+        "id": "cash-variance",
+        "label": "Control de Descuadres",
+        "focus": ["cash_audit", "variance_flag", "close_reg"],
+        "note": "Ruta de control cuando el arqueo físico difiere del balance teórico del sistema."
+      }
+    ],
+    "output": "docs/diagrams/02-workflows/pos-and-cash-closure.html"
+  },
+  "lanes": [
+    { "id": "cashier", "label": "Cajero y Mostrador" },
+    { "id": "pos_engine", "label": "Motor POS y Stock" },
+    { "id": "supervisor", "label": "Supervisión y Auditoría", "variant": "exception" }
+  ],
+  "phases": [
+    { "id": "opening", "label": "Apertura y Venta", "fromCol": 0, "toCol": 1 },
+    { "id": "payment_phase", "label": "Cobro Mixto y Stock", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "closure_phase", "label": "Arqueo y Cierre", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "pos_shift", "label": "Turno Operativo", "lane": "cashier", "fromCol": 0, "toCol": 2, "variant": "emphasis" },
+    { "id": "tx_engine", "label": "Procesamiento en Línea", "lane": "pos_engine", "fromCol": 2, "toCol": 3, "variant": "dashed" },
+    { "id": "audit_gate", "label": "Control de Arqueo", "lane": "supervisor", "fromCol": 4, "toCol": 5, "variant": "security" }
+  ],
+  "mainPath": ["open_reg", "scan_items", "split_pay", "stock_deduct", "cash_audit", "close_reg"],
+  "nodes": [
+    { "id": "open_reg", "lane": "cashier", "col": 0, "type": "frontend", "label": "Apertura de Caja", "sublabel": "Fondo Inicial USD/VES", "width": 132 },
+    { "id": "scan_items", "lane": "cashier", "col": 1, "type": "frontend", "label": "Venta Rápida POS", "sublabel": "Código / Barra", "width": 132 },
+    { "id": "split_pay", "lane": "pos_engine", "col": 2, "type": "backend", "label": "Cobro Multimoneda", "sublabel": "Efectivo / Pago Móvil", "tag": "Tasa Congelada", "width": 132 },
+    { "id": "stock_deduct", "lane": "pos_engine", "col": 3, "type": "database", "label": "Deducción de Stock", "sublabel": "Salida Inmediata Kardex", "width": 132 },
+    { "id": "cash_audit", "lane": "cashier", "col": 4, "type": "frontend", "label": "Arqueo de Turno", "sublabel": "Conteo Físico Ciega", "width": 132 },
+    { "id": "variance_flag", "lane": "supervisor", "col": 4, "type": "security", "label": "Descuadre Caja", "sublabel": "Diferencia > Margen", "tag": "Auditoría", "width": 132 },
+    { "id": "close_reg", "lane": "supervisor", "col": 5, "type": "database", "label": "Cierre Blindado", "sublabel": "Asiento CashClosure", "tag": "Bloqueo Turno", "width": 132 }
+  ],
+  "edges": [
+    { "id": "open-to-sale", "from": "open_reg", "to": "scan_items", "variant": "emphasis" },
+    { "id": "sale-to-pay", "from": "scan_items", "to": "split_pay", "label": "Totalizar", "variant": "emphasis" },
+    { "id": "pay-to-stock", "from": "split_pay", "to": "stock_deduct", "label": "Ticket Emitido", "variant": "emphasis" },
+    { "id": "stock-to-audit", "from": "stock_deduct", "to": "cash_audit", "label": "Fin de Turno", "variant": "default" },
+    { "id": "audit-to-variance", "from": "cash_audit", "to": "variance_flag", "label": "Diferencia", "variant": "security" },
+    { "id": "audit-to-close", "from": "cash_audit", "to": "close_reg", "label": "Conforme", "variant": "emphasis" },
+    { "id": "variance-to-close", "from": "variance_flag", "to": "close_reg", "label": "Aprobado", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Apertura y Venta Rápida",
+      "items": [
+        "Apertura de turno asignada por cajero con registro de fondo fijo en divisas y bolívares"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Cobro Mixto y Kardex",
+      "items": [
+        "División de pagos en múltiples divisas con tasa BCV del día y rebaja instantánea de stock"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Arqueo y Cierre Ciego",
+      "items": [
+        "Cierre ciego con detección automática de sobrantes/faltantes y bloqueo del turno"
+      ]
+    }
+  ]
+}

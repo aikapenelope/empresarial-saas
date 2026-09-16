@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Cendaro ERP · Flujo de Storefront B2B y Generación de Pedidos",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "catalog-to-quote",
+        "label": "Catálogo a Cotización",
+        "focus": ["browse", "cart", "checkout", "quote"],
+        "note": "Ruta principal: navegación pública en /t/[slug], carrito bimonetario y emisión automática de cotización borrador."
+      },
+      {
+        "id": "buyer-communication",
+        "label": "Notificación y WhatsApp",
+        "focus": ["quote", "wa_link"],
+        "note": "Envío inmediato de resumen con link criptográfico /share/quotes/[token] vía WhatsApp sin costo de API."
+      },
+      {
+        "id": "commercial-conversion",
+        "label": "Conversión a Pedido ERP",
+        "focus": ["quote", "approval"],
+        "note": "El vendedor revisa la cotización en el cockpit y la promueve a Pedido Confirmado (Orders)."
+      }
+    ],
+    "output": "docs/diagrams/02-workflows/storefront-b2b.html"
+  },
+  "lanes": [
+    { "id": "buyer", "label": "Comprador B2B / Exterior" },
+    { "id": "session", "label": "Sesión y Carrito Next.js" },
+    { "id": "erp", "label": "ERP Core y Comercial" }
+  ],
+  "phases": [
+    { "id": "catalog_phase", "label": "Catálogo y Selección", "fromCol": 0, "toCol": 1 },
+    { "id": "order_phase", "label": "Checkout Rápido B2B", "fromCol": 2, "toCol": 2, "variant": "emphasis" },
+    { "id": "settle_phase", "label": "Cotización y Conversión", "fromCol": 3, "toCol": 4, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "public_experience", "label": "Experiencia Pública", "lane": "buyer", "fromCol": 0, "toCol": 2, "variant": "emphasis" },
+    { "id": "erp_ops", "label": "Operación Comercial", "lane": "erp", "fromCol": 3, "toCol": 4, "variant": "security" }
+  ],
+  "mainPath": ["browse", "cart", "checkout", "quote", "approval"],
+  "nodes": [
+    { "id": "browse", "lane": "buyer", "col": 0, "type": "frontend", "label": "Catálogo B2B", "sublabel": "/t/[slug]", "tag": "Público", "width": 132 },
+    { "id": "cart", "lane": "session", "col": 1, "type": "frontend", "label": "Carrito B2B", "sublabel": "USD / VES Tasa BCV", "tag": "Sesión", "width": 132 },
+    { "id": "checkout", "lane": "buyer", "col": 2, "type": "frontend", "label": "Checkout Rápido", "sublabel": "RIF / Datos / Envío", "tag": "Sin Login", "width": 132 },
+    { "id": "quote", "lane": "erp", "col": 3, "type": "database", "label": "Quote Borrador", "sublabel": "collection: quotes", "tag": "ERP Core", "width": 132 },
+    { "id": "wa_link", "lane": "buyer", "col": 3, "type": "frontend", "label": "Aviso WhatsApp", "sublabel": "wa.me y Share URL", "tag": "Cero Costo", "width": 132 },
+    { "id": "approval", "lane": "erp", "col": 4, "type": "security", "label": "Pedido Confirmado", "sublabel": "Pase a Orders", "tag": "Aprobación", "width": 132 }
+  ],
+  "edges": [
+    { "id": "browse-to-cart", "from": "browse", "to": "cart", "label": "Añadir Item", "variant": "emphasis" },
+    { "id": "cart-to-checkout", "from": "cart", "to": "checkout", "label": "Comprar", "variant": "emphasis" },
+    { "id": "checkout-to-quote", "from": "checkout", "to": "quote", "label": "Crear Quote", "variant": "emphasis" },
+    { "id": "quote-to-wa", "from": "quote", "to": "wa_link", "label": "Compartir", "variant": "default" },
+    { "id": "quote-to-approval", "from": "quote", "to": "approval", "label": "Aprobar", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Catálogo Público Multi-Tenant",
+      "items": [
+        "Acceso directo vía /t/[slug] con aislamiento de productos, precios y categorías por empresa",
+        "Precios transparentes en USD con contravalor en Bolívares sincronizado a la tasa oficial del día"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Checkout Sin Fricción",
+      "items": [
+        "El cliente ingresa su RIF y razón social sin requerir registro de contraseña previo",
+        "Genera una cotización en estado borrador en la colección nativa quotes vinculada al inquilino"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Canal Comercial Ágil",
+      "items": [
+        "Generación inmediata de link de WhatsApp (wa.me) con enlace seguro de vista (/share/quotes/[token])",
+        "El equipo comercial valida el inventario y convierte la cotización en pedido formal en un clic"
+      ]
+    }
+  ]
+}

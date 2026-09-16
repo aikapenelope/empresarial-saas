@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Cendaro ERP · Producción (BOM) y Transformación de Inventario",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "happy-path",
+        "label": "Ciclo de Producción Completo",
+        "focus": ["bom_recipe", "prod_order", "reserve_mat", "assembly", "pt_entry", "cost_settle"],
+        "note": "Ruta principal de fabricación desde la receta BOM hasta el ingreso del producto terminado."
+      },
+      {
+        "id": "material-shortage",
+        "label": "Control de Faltantes",
+        "focus": ["prod_order", "shortage_alert", "reserve_mat"],
+        "note": "Compuerta de alerta cuando el inventario de materia prima es insuficiente."
+      }
+    ],
+    "output": "docs/diagrams/02-workflows/manufacturing-bom.html"
+  },
+  "lanes": [
+    { "id": "planning", "label": "Planificación y Receta" },
+    { "id": "plant", "label": "Piso de Producción" },
+    { "id": "inventory", "label": "Almacén y Kardex" }
+  ],
+  "phases": [
+    { "id": "bom_prep", "label": "Fórmula y Orden", "fromCol": 0, "toCol": 1 },
+    { "id": "execution", "label": "Reserva y Fabricación", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "closure", "label": "Ingreso PT y Costeo", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "prep_group", "label": "Diseño de Orden", "lane": "planning", "fromCol": 0, "toCol": 1, "variant": "emphasis" },
+    { "id": "plant_ops", "label": "Transformación Física", "lane": "plant", "fromCol": 2, "toCol": 4, "variant": "dashed" },
+    { "id": "kardex_ops", "label": "Asientos de Inventario", "lane": "inventory", "fromCol": 2, "toCol": 5, "variant": "emphasis" }
+  ],
+  "mainPath": ["bom_recipe", "prod_order", "reserve_mat", "assembly", "pt_entry", "cost_settle"],
+  "nodes": [
+    { "id": "bom_recipe", "lane": "planning", "col": 0, "type": "backend", "label": "Receta BOM", "sublabel": "Bill of Materials", "tag": "Fórmula Estándar", "width": 132 },
+    { "id": "prod_order", "lane": "planning", "col": 1, "type": "frontend", "label": "Orden Producción", "sublabel": "ProductionOrder", "width": 132 },
+    { "id": "shortage_alert", "lane": "planning", "col": 2, "type": "security", "label": "Alerta Faltante", "sublabel": "Stock Insuficiente", "tag": "Bloqueo", "width": 132 },
+    { "id": "reserve_mat", "lane": "inventory", "col": 2, "type": "database", "label": "Reserva Insumos", "sublabel": "Bloqueo Materia Prima", "width": 132 },
+    { "id": "assembly", "lane": "plant", "col": 3, "type": "backend", "label": "Transformación", "sublabel": "Consumo de Insumos", "tag": "En Proceso", "width": 132 },
+    { "id": "pt_entry", "lane": "inventory", "col": 4, "type": "database", "label": "Ingreso Kardex PT", "sublabel": "Producto Terminado", "tag": "Stock Disponible", "width": 132 },
+    { "id": "cost_settle", "lane": "inventory", "col": 5, "type": "database", "label": "Cierre y Costeo", "sublabel": "Recálculo Costo Promedio", "width": 132 }
+  ],
+  "edges": [
+    { "id": "bom-to-order", "from": "bom_recipe", "to": "prod_order", "label": "Explosión BOM", "variant": "emphasis" },
+    { "id": "order-to-check", "from": "prod_order", "to": "shortage_alert", "label": "Déficit", "variant": "security" },
+    { "id": "order-to-reserve", "from": "prod_order", "to": "reserve_mat", "label": "Stock OK", "variant": "emphasis" },
+    { "id": "reserve-to-assembly", "from": "reserve_mat", "to": "assembly", "label": "Entrega Planta", "variant": "emphasis" },
+    { "id": "assembly-to-pt", "from": "assembly", "to": "pt_entry", "label": "Lote Finalizado", "variant": "emphasis" },
+    { "id": "pt-to-settle", "from": "pt_entry", "to": "cost_settle", "label": "Costeo Real", "variant": "dashed" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Explosión de Materiales (BOM)",
+      "items": [
+        "Definición de listas de materiales con componentes, mermas porcentuales y costos estándar"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Control en Planta",
+      "items": [
+        "Reserva preventiva de materia prima y control de lotes durante la fase de transformación"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Kardex y Valoración",
+      "items": [
+        "Consumo automático de insumos, alta de producto terminado y actualización del costo promedio"
+      ]
+    }
+  ]
+}

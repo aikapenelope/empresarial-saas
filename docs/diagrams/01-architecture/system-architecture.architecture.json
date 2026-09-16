@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cendaro ERP · Multi-Tenant Serverless Architecture",
+    "output": "system-architecture.html",
+    "viewBox": [1080, 460],
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "operational-path",
+        "label": "Ruta Operativa Principal",
+        "focus": ["client", "edge", "server", "payload", "pooler", "db"],
+        "note": "Petición desde Cendaro UI hacia Next.js Serverless y Payload Local API hasta PostgreSQL mediante Transaction Pooler."
+      },
+      {
+        "id": "tenant-isolation",
+        "label": "Aislamiento Multi-Tenant",
+        "focus": ["auth", "client", "payload", "db"],
+        "note": "Validación de inquilino (Tenant) en JWT y blindaje a nivel de fila (Row-Level Security) en colecciones."
+      },
+      {
+        "id": "async-and-storage",
+        "label": "Trabajo Asíncrono y Media",
+        "focus": ["payload", "jobs", "storage", "db"],
+        "note": "Encolamiento de tareas pesadas (alertas de inventario, emails) y almacenamiento de comprobantes en S3 Storage."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "Cendaro Web UI",
+      "sublabel": "Next.js 15 & Error Boundaries",
+      "brand": "next-js",
+      "tag": "Resilient error.tsx",
+      "pos": [40, 200],
+      "size": [140, 60]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "Tenant Auth",
+      "sublabel": "JWT & Row Isolation",
+      "tag": "Tenant Context",
+      "pos": [40, 70],
+      "size": [140, 60]
+    },
+    {
+      "id": "edge",
+      "type": "cloud",
+      "label": "Vercel Edge",
+      "sublabel": "Edge Network & CDN",
+      "brand": "vercel",
+      "pos": [240, 200],
+      "size": [140, 60]
+    },
+    {
+      "id": "server",
+      "type": "backend",
+      "label": "Next.js Serverless",
+      "sublabel": "RSC & Server Actions",
+      "brand": "next-js",
+      "pos": [440, 200],
+      "size": [140, 60]
+    },
+    {
+      "id": "jobs",
+      "type": "messagebus",
+      "label": "Jobs Queue",
+      "sublabel": "Alertas & Email Cron",
+      "tag": "queue: alerts",
+      "pos": [440, 330],
+      "size": [140, 60]
+    },
+    {
+      "id": "payload",
+      "type": "backend",
+      "label": "Payload Core 3.x",
+      "sublabel": "Local API & Plugins",
+      "pos": [640, 200],
+      "size": [140, 60]
+    },
+    {
+      "id": "pooler",
+      "type": "cloud",
+      "label": "Tx Pooler",
+      "sublabel": "PgBouncer :6543",
+      "brand": "supabase",
+      "tag": "max pool: 10",
+      "pos": [860, 70],
+      "size": [140, 60]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "Supabase Postgres",
+      "sublabel": "Schema Relacional :5432",
+      "brand": "postgresql",
+      "pos": [860, 200],
+      "size": [140, 60]
+    },
+    {
+      "id": "storage",
+      "type": "database",
+      "label": "S3 Object Store",
+      "sublabel": "Comprobantes & Media",
+      "brand": "supabase",
+      "tag": "@payloadcms/storage-s3",
+      "pos": [860, 330],
+      "size": [140, 60]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Vercel Serverless Runtime (Node.js 22)",
+      "wraps": ["edge", "server", "payload", "jobs"]
+    },
+    {
+      "kind": "region",
+      "label": "Supabase Managed Platform",
+      "wraps": ["pooler", "db", "storage"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "client-auth",
+      "from": "client",
+      "to": "auth",
+      "label": "JWT Cookie",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "client-edge",
+      "from": "client",
+      "to": "edge",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "edge-server",
+      "from": "edge",
+      "to": "server",
+      "label": "Actions"
+    },
+    {
+      "id": "server-payload",
+      "from": "server",
+      "to": "payload",
+      "label": "Local API",
+      "variant": "emphasis"
+    },
+    {
+      "id": "payload-jobs",
+      "from": "payload",
+      "to": "jobs",
+      "label": "Enqueue",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "via": [[710, 360]]
+    },
+    {
+      "id": "payload-pooler",
+      "from": "payload",
+      "to": "pooler",
+      "label": ":6543 Tx",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "left",
+      "via": [[710, 100]]
+    },
+    {
+      "id": "pooler-db",
+      "from": "pooler",
+      "to": "db",
+      "label": "Pool Conn",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    },
+    {
+      "id": "db-storage",
+      "from": "db",
+      "to": "storage",
+      "label": "Media Ref",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Edge, Frontend & Resiliencia",
+      "items": [
+        "Next.js 15 App Router con React Server Components (RSC) y streaming multi-inquilino (/[tenant]/erp/*)",
+        "Multi-tier Error Boundaries (error.tsx, global-error.tsx) y health check resiliente (/api/health con 503)"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Capa de Aplicación y Core ERP",
+      "items": [
+        "Payload CMS 3.x consumido directamente vía Local API sin sobrecoste de red HTTP",
+        "Módulos nativos (Storefront B2B /t/[slug], RRHH, Tesorería) y plugins de acoplamiento atómicos"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Persistencia y Base de Datos",
+      "items": [
+        "Supabase PostgreSQL con Transaction Pooler en puerto 6543 para entornos serverless",
+        "Row-Level Isolation con campo tenant indexado en todas las tablas operativas"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Cendaro ERP · Flujo Comercial, Facturación y Kardex Real",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "happy-path",
+        "label": "Flujo Comercial Canónico",
+        "focus": ["quote", "order", "invoice", "payment"],
+        "note": "Ruta principal: Cotización, Pedido, Facturación con descarga en Kardex y Cobro bimonetario."
+      },
+      {
+        "id": "credit-governance",
+        "label": "Control de Límite de Crédito",
+        "focus": ["order", "approval", "invoice"],
+        "note": "Compuerta de aprobación cuando el saldo del cliente excede su límite de crédito."
+      },
+      {
+        "id": "shipping-note",
+        "label": "Remisión de Despacho",
+        "focus": ["order", "delivery"],
+        "note": "Remisión logística sin afectación de Kardex (el stock se descuenta con la factura)."
+      },
+      {
+        "id": "stock-deduction",
+        "label": "Descarga de Inventario",
+        "focus": ["invoice", "kardex"],
+        "note": "Movimiento inmutable sale_out generado automáticamente por salesInventoryPlugin."
+      }
+    ],
+    "output": "docs/diagrams/02-workflows/commercial-sales-pipeline.html"
+  },
+  "lanes": [
+    { "id": "commercial", "label": "Comercial y Despacho" },
+    { "id": "finance", "label": "Facturación y Crédito" },
+    { "id": "operations", "label": "Almacén y Kardex" }
+  ],
+  "phases": [
+    { "id": "sales_phase", "label": "Cotización y Pedido", "fromCol": 0, "toCol": 1 },
+    { "id": "prep_phase", "label": "Crédito y Remisión", "fromCol": 2, "toCol": 2, "variant": "emphasis" },
+    { "id": "settle_phase", "label": "Factura, Kardex y Cobro", "fromCol": 3, "toCol": 4, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "origination", "label": "Venta Inicial", "lane": "commercial", "fromCol": 0, "toCol": 2, "variant": "emphasis" },
+    { "id": "credit_gate", "label": "Gobernanza Financiera", "lane": "finance", "fromCol": 2, "toCol": 4, "variant": "security" },
+    { "id": "stock_settle", "label": "Kardex Inmutable", "lane": "operations", "fromCol": 3, "toCol": 3, "variant": "dashed" }
+  ],
+  "mainPath": ["quote", "order", "invoice", "payment"],
+  "nodes": [
+    { "id": "quote", "lane": "commercial", "col": 0, "type": "frontend", "label": "Cotización", "sublabel": "Emisión de Quote", "width": 132 },
+    { "id": "order", "lane": "commercial", "col": 1, "type": "frontend", "label": "Pedido de Venta", "sublabel": "Confirmed Order", "width": 132 },
+    { "id": "delivery", "lane": "commercial", "col": 2, "type": "frontend", "label": "Nota de Entrega", "sublabel": "Remisión Logística", "tag": "Sin Kardex", "width": 132 },
+    { "id": "approval", "lane": "finance", "col": 2, "type": "security", "label": "Aprobación Crédito", "sublabel": "credit_over_limit", "tag": "Excede Cupo", "width": 132 },
+    { "id": "invoice", "lane": "finance", "col": 3, "type": "frontend", "label": "Factura de Venta", "sublabel": "Fiscal y Control", "tag": "Emisión", "width": 132 },
+    { "id": "kardex", "lane": "operations", "col": 3, "type": "database", "label": "Kardex sale_out", "sublabel": "salesInventoryPlugin", "tag": "Deducción Real", "width": 132 },
+    { "id": "payment", "lane": "finance", "col": 4, "type": "database", "label": "Cobro Bimonetario", "sublabel": "Recibo o Crédito", "tag": "Recálculo Deuda", "width": 132 }
+  ],
+  "edges": [
+    { "id": "quote-to-order", "from": "quote", "to": "order", "label": "Confirmar", "variant": "emphasis" },
+    { "id": "order-to-delivery", "from": "order", "to": "delivery", "label": "Despacho", "variant": "default" },
+    { "id": "order-to-approval", "from": "order", "to": "approval", "label": "Excede Límite", "variant": "security" },
+    { "id": "approval-to-invoice", "from": "approval", "to": "invoice", "label": "Autorizado", "variant": "emphasis" },
+    { "id": "order-to-invoice", "from": "order", "to": "invoice", "label": "Facturar", "variant": "emphasis" },
+    { "id": "invoice-to-kardex", "from": "invoice", "to": "kardex", "label": "Rebaja Stock", "variant": "dashed" },
+    { "id": "invoice-to-payment", "from": "invoice", "to": "payment", "label": "Conciliar", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Pipeline Comercial",
+      "items": [
+        "Cotizaciones convertibles en pedidos con control de versiones y preservación de precios"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Invariante de Despacho y Kardex",
+      "items": [
+        "La remisión es un documento de transporte; el movimiento sale_out lo descarga la factura"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Gobernanza de Crédito",
+      "items": [
+        "Ventas que exceden el cupo de crédito del cliente quedan en espera de aprobación del supervisor"
+      ]
+    }
+  ]
+}
