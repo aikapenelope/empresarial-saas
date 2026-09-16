@@ -155,7 +155,7 @@ export function CashClosureModal({
         {/* Declaración Canales Bancarios VES */}
         <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
           <div className="flex items-center gap-1.5 text-foreground font-semibold uppercase text-[10px] tracking-wider">
-            <CreditCard className="h-3.5 w-3.5 text-indigo-400" />
+            <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
             <span>Canales Bancarios (VES)</span>
           </div>
 
@@ -254,7 +254,7 @@ export function CashClosureModal({
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-destructive hover:bg-destructive/90 text-white font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Cerrar Turno & Registrar Arqueo</span>

@@ -500,7 +500,7 @@ export async function getInvoicesPage(
  */
 export async function getQuotesPage(
   tenantId: number,
-  filters: BusinessListFilters,
+  filters: BusinessListFilters & { status?: string; origin?: string },
 ): Promise<PaginatedList<Quote>> {
   const user = await requireErpTenantAccess(tenantId);
   const payload = await getPayload({ config });
@@ -508,6 +508,7 @@ export async function getQuotesPage(
   const and: Where[] = [{ tenant: { equals: tenantId } }];
   and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
   if (filters.status) and.push({ status: { equals: filters.status } });
+  if (filters.origin) and.push({ origin: { equals: filters.origin } });
 
   const res = await payload.find({
     collection: 'quotes',
@@ -625,7 +626,7 @@ export interface QuotesTotals {
 /** KPIs de cotizaciones sobre el conjunto FILTRADO completo (Sprint 44): alimenta el embudo sin depender de la página visible. */
 export async function getQuotesTotals(
   tenantId: number,
-  filters: BusinessListFilters,
+  filters: BusinessListFilters & { status?: string; origin?: string },
 ): Promise<QuotesTotals> {
   const user = await requireErpTenantAccess(tenantId);
   const payload = await getPayload({ config });
@@ -633,6 +634,7 @@ export async function getQuotesTotals(
   const and: Where[] = [{ tenant: { equals: tenantId } }];
   and.push(...buildBusinessDateRange(filters.from, filters.to, 'issueDate'));
   if (filters.status) and.push({ status: { equals: filters.status } });
+  if (filters.origin) and.push({ origin: { equals: filters.origin } });
 
   const byStatus: Record<string, number> = {};
   let total = 0;

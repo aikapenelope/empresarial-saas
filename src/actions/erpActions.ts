@@ -1250,6 +1250,7 @@ export async function createQuoteAction(input: CreateQuoteInput) {
           validUntil: parsed.validUntil || undefined,
           status: 'draft',
           exchangeRateSnapshot: rate,
+          origin: 'manual',
           notes: parsed.notes || undefined,
         },
         req,
