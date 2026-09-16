@@ -174,7 +174,7 @@ export function InvoiceModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
             {error && (
-              <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-xs text-rose-600 dark:text-rose-400" role="alert">
+              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive" role="alert">
                 {error}
               </div>
             )}
@@ -335,7 +335,7 @@ export function InvoiceModal({
             <button
               type="button"
               onClick={handleAddItem}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Agregar Artículo</span>
@@ -355,7 +355,7 @@ export function InvoiceModal({
                     className="w-full rounded border border-border bg-background p-1.5 text-xs text-foreground"
                   >
                     {products.map((p) => (
-                      <option key={p.id} value={p.sku}>
+                       <option key={p.id} value={p.sku}>
                         {p.name}
                       </option>
                     ))}
@@ -413,7 +413,7 @@ export function InvoiceModal({
 
           <div className="flex items-center justify-between text-base font-bold text-foreground border-t border-border pt-2">
             <span>Total Factura (USD):</span>
-            <span className="font-mono text-indigo-400">{formatUSD(totalUSD)}</span>
+            <span className="font-mono text-foreground font-bold">{formatUSD(totalUSD)}</span>
           </div>
 
           <div className="flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
@@ -444,7 +444,7 @@ export function InvoiceModal({
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Emitir Factura</span>

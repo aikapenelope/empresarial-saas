@@ -152,7 +152,7 @@ export function PaymentModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-destructive">
             {error}
           </div>
         )}
@@ -288,7 +288,7 @@ export function PaymentModal({
             type="file"
             accept="image/*,.pdf"
             onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-indigo-600 file:text-white text-[11px]"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-primary file:text-primary-foreground text-[11px]"
           />
           {receiptFile && (
             <p className="text-[10px] text-muted-foreground mt-1">Adjunto: {receiptFile.name}</p>

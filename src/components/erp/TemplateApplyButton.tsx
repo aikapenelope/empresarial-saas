@@ -50,7 +50,7 @@ export function TemplateApplyButton({ slug, tenantId }: TemplateApplyButtonProps
       <button
         onClick={handleApply}
         disabled={loading}
-        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition-all shadow-sm shadow-indigo-600/20"
+        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-xs font-semibold transition-all shadow-sm"
       >
         {loading ? (
           <>
@@ -66,14 +66,14 @@ export function TemplateApplyButton({ slug, tenantId }: TemplateApplyButtonProps
       </button>
 
       {message && (
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-[11px] text-emerald-300 flex items-center gap-1.5">
-          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
           <span>{message}</span>
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2 text-[11px] text-rose-300">
+        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2 text-[11px] text-destructive">
           {error}
         </div>
       )}

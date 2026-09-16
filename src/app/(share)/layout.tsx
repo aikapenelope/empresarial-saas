@@ -5,7 +5,7 @@ import '../(app)/globals.css';
 // del ERP, para que un cliente que abre el enlace vea sólo el documento.
 export default function ShareLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    <div className="min-h-screen bg-background text-foreground">
       {children}
     </div>
   );
