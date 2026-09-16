@@ -29,4 +29,17 @@ describe('health check (CI-5)', () => {
     expect(response.status).toBe(200);
     expect(Object.keys(await response.json())).toEqual(['ok']);
   });
+
+  it('responde con diagnóstico enriquecido cuando se solicita ?verbose=true', async () => {
+    const request = new Request('http://localhost:3000/api/health?verbose=true');
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({
+      ok: true,
+      status: 'healthy',
+      database: 'connected',
+    });
+  });
 });

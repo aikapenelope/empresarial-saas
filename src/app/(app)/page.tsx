@@ -18,15 +18,19 @@ export default async function HomePage() {
   // con un CTA de inicio de sesión, nunca nombres ni slugs de inquilinos.
   const [tenantListResult, liveRates] = await Promise.all([
     getAllTenants()
-      .then((tenants) => ({ ok: true as const, tenants }))
+      .then((tenants) => ({ ok: true as const, tenants, isDbOffline: false }))
       .catch((error: unknown) => {
-        if (error instanceof ErpAccessError) return { ok: false as const };
-        throw error;
+        if (error instanceof ErpAccessError) {
+          return { ok: false as const, tenants: null, isDbOffline: false };
+        }
+        // Resiliencia ante caída/reinicio de Supabase o falta de conectividad
+        return { ok: false as const, tenants: null, isDbOffline: true };
       }),
     getLiveExchangeRates(),
   ]);
 
   const tenants = tenantListResult.ok ? tenantListResult.tenants : null;
+  const isDbOffline = tenantListResult.isDbOffline;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 sm:p-12 bg-background text-foreground">
@@ -65,7 +69,24 @@ export default async function HomePage() {
         </p>
 
         {/* Empresas Registradas & Modal de Creación (requiere sesión) */}
-        {tenants ? (
+        {isDbOffline ? (
+          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-5 max-w-md mx-auto space-y-3 text-center">
+            <div className="flex items-center justify-center gap-2 text-destructive font-semibold text-sm">
+              <Database className="h-4 w-4" aria-hidden="true" />
+              <span>Base de datos en mantenimiento</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              El servicio no pudo conectar con el servidor de datos. Si la base de datos se está recreando o ejecutando migraciones, el acceso se restablecerá en breve.
+            </p>
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <Button size="xs" variant="outline" asChild>
+                <Link href="/api/health" target="_blank">
+                  Consultar estado (/api/health)
+                </Link>
+              </Button>
+            </div>
+          </div>
+        ) : tenants ? (
           <HomeTenantList tenants={tenants} />
         ) : (
           <Button size="lg" asChild>

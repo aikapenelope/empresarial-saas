@@ -15,13 +15,35 @@ import config from '@payload-config';
  */
 export const dynamic = 'force-dynamic';
 
-export async function GET(): Promise<Response> {
+export async function GET(req?: Request): Promise<Response> {
   try {
-    const payload = await getPayload({ config });
-    await payload.db.drizzle.execute(sql`SELECT 1`);
+    const checkDb = async () => {
+      const payload = await getPayload({ config });
+      await payload.db.drizzle.execute(sql`SELECT 1`);
+    };
+
+    // Timeout de 5s para evitar que conexiones colgadas agoten el runtime Serverless
+    await Promise.race([
+      checkDb(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Database ping timeout')), 5000)
+      ),
+    ]);
+
+    const url = req ? new URL(req.url) : null;
+    if (url?.searchParams.get('verbose') === 'true') {
+      return Response.json(
+        { ok: true, status: 'healthy', database: 'connected' },
+        { status: 200 }
+      );
+    }
+
     return Response.json({ ok: true }, { status: 200 });
   } catch {
     // 503 (no 500): el servicio está arriba pero su dependencia crítica no.
-    return Response.json({ ok: false }, { status: 503 });
+    return Response.json(
+      { ok: false, status: 'degraded', database: 'disconnected' },
+      { status: 503 }
+    );
   }
 }
