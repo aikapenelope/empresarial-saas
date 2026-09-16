@@ -81,7 +81,7 @@ export function ManualRateForm({
       <button
         type="submit"
         disabled={loading}
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
       >
         {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         <Save className="h-3.5 w-3.5" />

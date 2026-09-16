@@ -627,7 +627,13 @@ export const quotesListFiltersSchema = businessListFiltersSchema.extend({
     .enum(['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted'])
     .optional()
     .catch(undefined),
+  origin: z
+    .enum(['manual', 'storefront'])
+    .optional()
+    .catch(undefined),
 });
+
+export type QuotesListFilters = z.infer<typeof quotesListFiltersSchema>;
 
 /**
  * Campo sobre el que se aplica el período de negocio. Los documentos de venta

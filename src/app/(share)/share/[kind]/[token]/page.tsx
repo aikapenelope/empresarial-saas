@@ -45,12 +45,12 @@ export default async function SharedDocumentPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         {/* Encabezado del documento */}
-        <div className="flex items-start justify-between gap-4 bg-slate-900 px-6 py-5 text-white">
+        <div className="flex items-start justify-between gap-4 bg-primary px-6 py-5 text-primary-foreground">
           <div>
             <div className="text-lg font-extrabold tracking-tight">{doc.tenantName}</div>
-            <div className="text-xs text-slate-400 mt-0.5">
+            <div className="text-xs opacity-80 mt-0.5">
               {doc.docTitle} · {doc.number}
             </div>
           </div>
@@ -63,8 +63,8 @@ export default async function SharedDocumentPage({ params }: PageProps) {
           <div
             className={`px-6 py-3 text-sm font-bold ${
               banner.tone === 'danger'
-                ? 'bg-rose-50 text-rose-700 border-b border-rose-200'
-                : 'bg-blue-50 text-blue-700 border-b border-blue-200'
+                ? 'bg-destructive/10 text-destructive border-b border-destructive/20'
+                : 'bg-muted text-foreground border-b border-border'
             }`}
           >
             {banner.label}
@@ -72,18 +72,18 @@ export default async function SharedDocumentPage({ params }: PageProps) {
         )}
 
         {/* Metadatos */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-6 py-5 border-b border-slate-200 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-6 py-5 border-b border-border text-sm">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cliente</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Cliente</div>
             <div className="font-semibold">{doc.customerName || '—'}</div>
           </div>
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fecha de emisión</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fecha de emisión</div>
             <div className="font-semibold">{fmtDate(doc.issueDate)}</div>
           </div>
           {(doc.kind === 'quote' || doc.kind === 'invoice') && (
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {doc.kind === 'invoice' ? 'Vencimiento' : 'Válida hasta'}
               </div>
               <div className="font-semibold">{fmtDate(doc.validUntil)}</div>
@@ -95,14 +95,14 @@ export default async function SharedDocumentPage({ params }: PageProps) {
         <div className="px-6 py-5 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="py-2 text-left font-semibold">Descripción</th>
                 <th className="py-2 text-right font-semibold">Cant.</th>
                 <th className="py-2 text-right font-semibold">Precio USD</th>
                 <th className="py-2 text-right font-semibold">Total USD</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {doc.lines.map((line, index) => (
                 <tr key={index}>
                   <td className="py-2">{line.description}</td>
@@ -121,26 +121,26 @@ export default async function SharedDocumentPage({ params }: PageProps) {
             Total: <span className="tabular-nums">${doc.totalUSD.toFixed(2)}</span>
           </div>
           {doc.totalVES != null && (
-            <div className="font-semibold text-slate-700">
+            <div className="font-semibold text-foreground">
               Total Bs.: <span className="tabular-nums">{doc.totalVES.toFixed(2)}</span>
             </div>
           )}
           {doc.exchangeRate != null && (
-            <div className="text-slate-500">
+            <div className="text-muted-foreground">
               Tasa aplicada: <span className="tabular-nums">Bs. {doc.exchangeRate.toFixed(4)} / USD</span>
             </div>
           )}
         </div>
 
         {doc.notes && (
-          <div className="px-6 pb-6 text-sm text-slate-600">
-            <span className="font-semibold">Notas:</span> {doc.notes}
+          <div className="px-6 pb-6 text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">Notas:</span> {doc.notes}
           </div>
         )}
 
         {/* Pie */}
-        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200">
-          <p className="text-xs text-slate-500">
+        <div className="bg-muted/50 px-6 py-4 border-t border-border">
+          <p className="text-xs text-muted-foreground">
             Documento generado electrónicamente por {doc.tenantName} · Empresarial ERP Bimonetario.
           </p>
         </div>
