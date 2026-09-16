@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Printer } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 /**
  * Botón de impresión (Client Component): window.print requiere un handler de
@@ -10,13 +11,15 @@ import { Printer } from 'lucide-react';
  */
 export function PrintButton({ label }: { label: string }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       onClick={() => window.print()}
-      className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
+      className="no-print"
     >
-      <Printer className="h-3.5 w-3.5" />
+      <Printer className="h-3.5 w-3.5 mr-1" />
       <span>{label}</span>
-    </button>
+    </Button>
   );
 }

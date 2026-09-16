@@ -18,7 +18,7 @@ import { quotesListFiltersSchema } from '@/utilities/erpValidation';
 
 interface PageProps {
   params: Promise<{ tenant: string }>;
-  searchParams: Promise<{ from?: string; to?: string; status?: string; page?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; status?: string; origin?: string; page?: string }>;
 }
 
 export default async function QuotesPage({ params, searchParams }: PageProps) {
@@ -68,7 +68,7 @@ export default async function QuotesPage({ params, searchParams }: PageProps) {
     <div className="space-y-6">
 
       <QuotesView
-        filters={{ from: filters.from, to: filters.to, status: filters.status }}
+        filters={{ from: filters.from, to: filters.to, status: filters.status, origin: filters.origin }}
         pagination={{ page: quotes.page, totalPages: quotes.totalPages, totalDocs: quotes.totalDocs }}
         totals={quotesTotals}
         tenantId={tenant.id}
@@ -78,6 +78,7 @@ export default async function QuotesPage({ params, searchParams }: PageProps) {
           id: c.id,
           name: c.name,
           taxId: c.taxId,
+          phone: c.phone,
           priceTier: c.priceTier,
         }))}
         products={products.map((p) => ({

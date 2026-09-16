@@ -186,6 +186,21 @@ export const Quotes: CollectionConfig = {
       ],
     },
     {
+      name: 'origin',
+      label: 'Canal de Origen',
+      type: 'select',
+      defaultValue: 'manual',
+      index: true,
+      options: [
+        { label: 'Mostrador / ERP', value: 'manual' },
+        { label: 'Catálogo Web B2B', value: 'storefront' },
+      ],
+      admin: {
+        position: 'sidebar',
+        description: 'Indica si el presupuesto se generó internamente o desde el portal web.',
+      },
+    },
+    {
       name: 'exchangeRateSnapshot',
       label: 'Tasa de Cambio al Emitir (USD a VES)',
       type: 'number',
