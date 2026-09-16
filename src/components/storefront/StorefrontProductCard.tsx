@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Package, Plus, Minus } from 'lucide-react';
+import { Package, Plus, Minus, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatUSD, formatVES } from '@/components/erp/format';
@@ -14,6 +14,7 @@ interface StorefrontProductCardProps {
   quantityInCart: number;
   onAddToCart: (product: ProductProjection) => void;
   onUpdateQuantity: (productId: number, quantity: number) => void;
+  onQuickView?: (product: ProductProjection) => void;
 }
 
 export const StorefrontProductCard: React.FC<StorefrontProductCardProps> = ({
@@ -22,6 +23,7 @@ export const StorefrontProductCard: React.FC<StorefrontProductCardProps> = ({
   quantityInCart,
   onAddToCart,
   onUpdateQuantity,
+  onQuickView,
 }) => {
   const isAvailable = !product.trackInventory || product.currentStock > 0;
   const priceVES = bcvRate > 0 ? product.priceUSD * bcvRate : 0;
@@ -29,7 +31,11 @@ export const StorefrontProductCard: React.FC<StorefrontProductCardProps> = ({
   return (
     <div className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-card transition-all hover:border-foreground/30 hover:shadow-sm">
       {/* Product Image Container */}
-      <div className="relative aspect-square w-full overflow-hidden bg-muted/20">
+      <div
+        className="relative aspect-square w-full overflow-hidden bg-muted/20 cursor-pointer"
+        onClick={() => onQuickView?.(product)}
+      >
+
         {product.imageUrl ? (
           <Image
             src={product.imageUrl}
@@ -70,6 +76,16 @@ export const StorefrontProductCard: React.FC<StorefrontProductCardProps> = ({
             </span>
           </div>
         )}
+
+        {/* Quick View Hover Indicator */}
+        {onQuickView && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-background/95 px-3 py-1 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur-xs">
+              <Eye className="h-3.5 w-3.5" />
+              Vista Rápida
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Content details */}
@@ -86,7 +102,10 @@ export const StorefrontProductCard: React.FC<StorefrontProductCardProps> = ({
             )}
           </div>
 
-          <h3 className="mt-1 font-semibold text-sm leading-snug text-foreground line-clamp-2">
+          <h3
+            className="mt-1 font-semibold text-sm leading-snug text-foreground line-clamp-2 cursor-pointer hover:underline"
+            onClick={() => onQuickView?.(product)}
+          >
             {product.name}
           </h3>
 

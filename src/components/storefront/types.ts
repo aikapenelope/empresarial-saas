@@ -35,3 +35,11 @@ export interface CartItem {
   product: ProductProjection;
   quantity: number;
 }
+
+export type StorefrontSortOption =
+  | 'name-asc'
+  | 'name-desc'
+  | 'price-asc'
+  | 'price-desc'
+  | 'stock-desc';
+

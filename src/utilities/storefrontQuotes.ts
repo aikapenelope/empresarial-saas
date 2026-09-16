@@ -136,3 +136,25 @@ export function buildStorefrontWhatsAppUrl(params: BuildWhatsAppUrlParams): stri
 
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
 }
+
+/**
+ * Formatea el enlace directo a WhatsApp (wa.me) para consultas generales y contacto rápido en el catálogo.
+ */
+export function buildStorefrontContactWhatsAppUrl(
+  targetPhone?: string | null,
+  tenantName?: string | null,
+): string {
+  let cleanPhone = (targetPhone || '').replace(/[^0-9]/g, '');
+  if (!cleanPhone) return '';
+
+  // En Venezuela números locales suelen escribirse como 0414... (11 dígitos)
+  if (cleanPhone.startsWith('04') && cleanPhone.length === 11) {
+    cleanPhone = '58' + cleanPhone.slice(1);
+  }
+
+  const name = tenantName ? ` de *${tenantName}*` : '';
+  const message = `Hola, estoy revisando el catálogo digital${name} y quisiera solicitar información sobre disponibilidad y pedidos.`;
+
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+}
+

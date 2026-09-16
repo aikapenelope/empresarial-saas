@@ -1,17 +1,20 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, PackageSearch, Truck } from 'lucide-react';
+import { Search, PackageSearch, Truck, ArrowUpDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { StorefrontHeader } from './StorefrontHeader';
 import { StorefrontProductCard } from './StorefrontProductCard';
 import { StorefrontCartDrawer } from './StorefrontCartDrawer';
 import { StorefrontCheckoutModal } from './StorefrontCheckoutModal';
+import { StorefrontQuickViewModal } from './StorefrontQuickViewModal';
+import { StorefrontFloatingWhatsApp } from './StorefrontFloatingWhatsApp';
 import type {
   ProductProjection,
   StorefrontCategory,
   StorefrontTenantInfo,
+  StorefrontSortOption,
   CartItem,
 } from './types';
 
@@ -21,6 +24,8 @@ interface StorefrontCatalogProps {
   categories: StorefrontCategory[];
 }
 
+const PAGE_SIZE = 16;
+
 export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
   tenant,
   products,
@@ -28,9 +33,15 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<StorefrontSortOption>('name-asc');
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+
+  const [quickViewProduct, setQuickViewProduct] = useState<ProductProjection | null>(null);
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
 
   // Cart operations
   const handleAddToCart = (product: ProductProjection) => {
@@ -79,9 +90,25 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
     return map;
   }, [cart]);
 
-  // Product filtering
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
+  // Handle filter changes and reset pagination
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    setVisibleCount(PAGE_SIZE);
+  };
+
+  const handleCategoryChange = (cat: string | null) => {
+    setSelectedCategory(cat);
+    setVisibleCount(PAGE_SIZE);
+  };
+
+  const handleSortChange = (sort: StorefrontSortOption) => {
+    setSortBy(sort);
+    setVisibleCount(PAGE_SIZE);
+  };
+
+  // Product filtering & sorting
+  const sortedAndFilteredProducts = useMemo(() => {
+    const list = products.filter((product) => {
       const matchesSearch =
         !searchQuery.trim() ||
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -92,7 +119,38 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
 
       return matchesSearch && matchesCategory;
     });
-  }, [products, searchQuery, selectedCategory]);
+
+    const copy = [...list];
+    switch (sortBy) {
+      case 'name-asc':
+        return copy.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      case 'name-desc':
+        return copy.sort((a, b) => b.name.localeCompare(a.name, 'es'));
+      case 'price-asc':
+        return copy.sort((a, b) => a.priceUSD - b.priceUSD);
+      case 'price-desc':
+        return copy.sort((a, b) => b.priceUSD - a.priceUSD);
+      case 'stock-desc':
+        return copy.sort((a, b) => {
+          const aInStock = !a.trackInventory || a.currentStock > 0 ? 1 : 0;
+          const bInStock = !b.trackInventory || b.currentStock > 0 ? 1 : 0;
+          if (bInStock !== aInStock) return bInStock - aInStock;
+          return a.name.localeCompare(b.name, 'es');
+        });
+      default:
+        return copy;
+    }
+  }, [products, searchQuery, selectedCategory, sortBy]);
+
+  // Paginated visible slice
+  const displayedProducts = useMemo(() => {
+    return sortedAndFilteredProducts.slice(0, visibleCount);
+  }, [sortedAndFilteredProducts, visibleCount]);
+
+  const handleOpenQuickView = (product: ProductProjection) => {
+    setQuickViewProduct(product);
+    setIsQuickViewOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -127,24 +185,44 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
           </div>
         </div>
 
-        {/* Filter & Search Bar */}
+        {/* Filter & Search & Sort Bar */}
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            {/* Search Input */}
-            <div className="relative w-full sm:max-w-md">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nombre de producto o SKU..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-10 text-xs bg-card border-border"
-              />
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            {/* Search & Sort Controls */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:max-w-2xl">
+              {/* Search Input */}
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por nombre de producto o SKU..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-9 h-10 text-xs bg-card border-border"
+                />
+              </div>
+
+              {/* Sort Selector */}
+              <div className="relative w-full sm:w-auto">
+                <ArrowUpDown className="absolute left-2.5 top-3 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => handleSortChange(e.target.value as StorefrontSortOption)}
+                  className="w-full sm:w-auto pl-8 pr-4 h-10 rounded-md border border-border bg-card text-xs text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+                  aria-label="Ordenar productos por"
+                >
+                  <option value="name-asc">Nombre (A - Z)</option>
+                  <option value="name-desc">Nombre (Z - A)</option>
+                  <option value="price-asc">Precio: Menor a Mayor</option>
+                  <option value="price-desc">Precio: Mayor a Menor</option>
+                  <option value="stock-desc">En Existencia Primero</option>
+                </select>
+              </div>
             </div>
 
             {/* Results Counter */}
             <span className="text-xs text-muted-foreground whitespace-nowrap self-end sm:self-center">
-              Mostrando <strong className="text-foreground">{filteredProducts.length}</strong> de{' '}
-              {products.length} productos
+              Mostrando <strong className="text-foreground">{displayedProducts.length}</strong> de{' '}
+              {sortedAndFilteredProducts.length} productos
             </span>
           </div>
 
@@ -154,7 +232,7 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
               <Button
                 variant={selectedCategory === null ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setSelectedCategory(null)}
+                onClick={() => handleCategoryChange(null)}
                 className="rounded-full text-xs h-8 px-3 border-border font-medium"
               >
                 Todos
@@ -164,7 +242,7 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
                   key={cat.id}
                   variant={selectedCategory === cat.name ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setSelectedCategory(cat.name)}
+                  onClick={() => handleCategoryChange(cat.name)}
                   className="rounded-full text-xs h-8 px-3 border-border font-medium whitespace-nowrap"
                 >
                   {cat.name}
@@ -175,7 +253,7 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
         </div>
 
         {/* Product Grid */}
-        {filteredProducts.length === 0 ? (
+        {sortedAndFilteredProducts.length === 0 ? (
           <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-border p-8 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
               <PackageSearch className="h-6 w-6 stroke-[1.5]" />
@@ -192,8 +270,8 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
                 size="sm"
                 className="mt-4 text-xs"
                 onClick={() => {
-                  setSearchQuery('');
-                  setSelectedCategory(null);
+                  handleSearchChange('');
+                  handleCategoryChange(null);
                 }}
               >
                 Limpiar filtros
@@ -201,17 +279,49 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {filteredProducts.map((product) => (
-              <StorefrontProductCard
-                key={product.id}
-                product={product}
-                bcvRate={tenant.bcvRate}
-                quantityInCart={quantityMap.get(product.id) || 0}
-                onAddToCart={handleAddToCart}
-                onUpdateQuantity={handleUpdateQuantity}
-              />
-            ))}
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+              {displayedProducts.map((product) => (
+                <StorefrontProductCard
+                  key={product.id}
+                  product={product}
+                  bcvRate={tenant.bcvRate}
+                  quantityInCart={quantityMap.get(product.id) || 0}
+                  onAddToCart={handleAddToCart}
+                  onUpdateQuantity={handleUpdateQuantity}
+                  onQuickView={handleOpenQuickView}
+                />
+              ))}
+            </div>
+
+            {/* Pagination Controls */}
+            {visibleCount < sortedAndFilteredProducts.length && (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4 border-t border-border/40">
+                <Button
+                  variant="outline"
+                  size="default"
+                  onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                  className="w-full sm:w-auto text-xs font-semibold px-6 border-border hover:bg-muted"
+                >
+                  Cargar más productos ({sortedAndFilteredProducts.length - visibleCount} restantes)
+                </Button>
+                {sortedAndFilteredProducts.length > PAGE_SIZE * 2 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setVisibleCount(sortedAndFilteredProducts.length)}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Mostrar todos ({sortedAndFilteredProducts.length})
+                  </Button>
+                )}
+              </div>
+            )}
+            {visibleCount >= sortedAndFilteredProducts.length && sortedAndFilteredProducts.length > PAGE_SIZE && (
+              <p className="text-center text-xs text-muted-foreground pt-4">
+                Has visto los {sortedAndFilteredProducts.length} productos disponibles.
+              </p>
+            )}
           </div>
         )}
       </main>
@@ -238,6 +348,23 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
         tenant={tenant}
         onOrderSuccess={handleClearCart}
       />
+
+      {/* Quick View Modal */}
+      <StorefrontQuickViewModal
+        product={quickViewProduct}
+        isOpen={isQuickViewOpen}
+        onClose={() => {
+          setIsQuickViewOpen(false);
+          setQuickViewProduct(null);
+        }}
+        bcvRate={tenant.bcvRate}
+        quantityInCart={quickViewProduct ? quantityMap.get(quickViewProduct.id) || 0 : 0}
+        onAddToCart={handleAddToCart}
+        onUpdateQuantity={handleUpdateQuantity}
+      />
+
+      {/* Persistent Floating WhatsApp Button */}
+      <StorefrontFloatingWhatsApp tenant={tenant} />
 
       {/* Footer */}
       <footer className="border-t border-border mt-16 py-8 bg-muted/20 text-xs text-muted-foreground text-center">
