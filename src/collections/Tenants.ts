@@ -197,6 +197,76 @@ export const Tenants: CollectionConfig = {
         },
       ],
     },
+    {
+      name: 'storefrontConfig',
+      label: 'Portal de Pedidos B2B (Catálogo Web)',
+      type: 'group',
+      fields: [
+        {
+          name: 'enabled',
+          label: 'Habilitar Portal Web de Pedidos (/[tenant])',
+          type: 'checkbox',
+          defaultValue: false,
+          access: {
+            read: () => true,
+            update: ({ req: { user } }) => Boolean(user?.role === 'super-admin'),
+          },
+          admin: {
+            description:
+              'Solo el Superadministrador de la plataforma puede activar o desactivar este portal comercial.',
+          },
+        },
+        {
+          name: 'whatsappOrdersNumber',
+          label: 'Teléfono WhatsApp para Recepción de Pedidos',
+          type: 'text',
+          admin: {
+            description:
+              'Número en formato internacional (ej. +584121234567) al que se dirigirá el pedido cotizado.',
+          },
+        },
+        {
+          name: 'portalTitle',
+          label: 'Título del Catálogo Web',
+          type: 'text',
+          defaultValue: 'Portal de Pedidos y Catálogo Mayorista',
+        },
+        {
+          name: 'tagline',
+          label: 'Eslogan o Subtítulo de Marca',
+          type: 'text',
+          admin: {
+            description:
+              'Subtítulo destacado bajo el nombre de la empresa en la cabecera (ej. Distribuidor Mayorista Autorizado).',
+          },
+        },
+        {
+          name: 'portalDescription',
+          label: 'Descripción o Condiciones Comerciales',
+          type: 'textarea',
+          defaultValue:
+            'Precios sujetos a cambio sin previo aviso. Despachos y condiciones acordadas con su asesor comercial.',
+        },
+        {
+          name: 'announcementText',
+          label: 'Anuncio o Promoción Superior (Banner)',
+          type: 'text',
+          admin: {
+            description:
+              'Barra superior visible en el portal público (ej. Envíos gratis a nivel nacional en compras mayores a $300). Dejar vacío para ocultar.',
+          },
+        },
+        {
+          name: 'deliveryPolicy',
+          label: 'Políticas de Entrega y Despacho',
+          type: 'textarea',
+          admin: {
+            description:
+              'Información sobre tiempos de entrega, cobertura de despachos o retiro en tienda.',
+          },
+        },
+      ],
+    },
   ],
   timestamps: true,
 };

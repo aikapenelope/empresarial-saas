@@ -12,9 +12,33 @@ export const Media: CollectionConfig = {
   },
   upload: {
     mimeTypes: ['image/*', 'application/pdf'],
+    imageSizes: [
+      {
+        name: 'thumbnail',
+        width: 400,
+        height: 400,
+        position: 'centre',
+        formatOptions: {
+          format: 'webp',
+          options: { quality: 80 },
+        },
+      },
+      {
+        name: 'card',
+        width: 800,
+        height: 800,
+        position: 'centre',
+        formatOptions: {
+          format: 'webp',
+          options: { quality: 80 },
+        },
+      },
+    ],
+    adminThumbnail: 'thumbnail',
   },
   access: {
-    read: ({ req: { user } }) => Boolean(user),
+    // Sprint 49: Lectura pública para que las imágenes de productos se sirvan en el catálogo web
+    read: () => true,
     create: ({ req: { user } }) => Boolean(user),
     update: ({ req: { user } }) => Boolean(user),
     delete: ({ req: { user } }) => Boolean(user?.role === 'super-admin' || user?.role === 'tenant-admin'),

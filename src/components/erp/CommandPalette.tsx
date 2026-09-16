@@ -241,11 +241,11 @@ export function CommandPalette({
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 shadow-2xl overflow-hidden"
+        className="w-full max-w-xl rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800">
-          <Search className="h-4 w-4 text-slate-500" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <Search className="h-4 w-4 text-muted-foreground" />
           <input
             autoFocus
             value={query}
@@ -256,16 +256,16 @@ export function CommandPalette({
             aria-controls="palette-listbox"
             aria-autocomplete="list"
             placeholder="Buscar rutas, PED-…, QUE-…, clientes, productos…"
-            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
-          <kbd className="text-[10px] px-1.5 py-0.5 rounded border border-slate-700 text-slate-500">ESC</kbd>
+          <kbd className="text-[10px] px-1.5 py-0.5 rounded border border-border bg-muted text-muted-foreground font-mono">ESC</kbd>
         </div>
 
         <div id="palette-listbox" role="listbox" aria-label="Resultados de la paleta" className="max-h-[50vh] overflow-y-auto p-2 text-sm">
           {entries.map((item, idx) => (
             <React.Fragment key={item.key}>
               {(idx === 0 || entries[idx - 1].section !== item.section) && (
-                <p role="presentation" className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase text-slate-500">
+                <p role="presentation" className="px-2 pt-2 pb-1 text-[10px] font-bold uppercase text-muted-foreground">
                   {SECTION_LABELS[item.section]}
                 </p>
               )}
@@ -276,23 +276,23 @@ export function CommandPalette({
                 onClick={() => navigate(item.href)}
                 onMouseEnter={() => setActiveIndexRaw(idx)}
                 className={cn(
-                  'w-full text-left px-3 py-2 rounded-lg flex items-center justify-between gap-3',
-                  idx === activeIndex ? 'bg-slate-800 text-white' : 'text-slate-200 hover:bg-slate-800/60',
+                  'w-full text-left px-3 py-2 rounded-lg flex items-center justify-between gap-3 transition-colors',
+                  idx === activeIndex ? 'bg-accent text-accent-foreground font-medium' : 'text-foreground hover:bg-muted/60',
                 )}
               >
                 <span className="truncate">
                   {item.label}
                   {item.hint && (
-                    <span className="text-slate-500 font-mono text-xs ml-2">({item.hint})</span>
+                    <span className="text-muted-foreground font-mono text-xs ml-2">({item.hint})</span>
                   )}
                 </span>
-                {idx === activeIndex && <CornerDownLeft className="h-3 w-3 text-slate-600 shrink-0" />}
+                {idx === activeIndex && <CornerDownLeft className="h-3 w-3 text-muted-foreground shrink-0" />}
               </button>
             </React.Fragment>
           ))}
 
           {entries.length === 0 && query.trim().length >= 2 && (
-            <p className="text-slate-500 text-center py-6">Sin resultados para &quot;{query}&quot;.</p>
+            <p className="text-muted-foreground text-center py-6">Sin resultados para &quot;{query}&quot;.</p>
           )}
         </div>
       </div>

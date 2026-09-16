@@ -244,6 +244,30 @@ export interface Tenant {
         }[]
       | null;
   };
+  storefrontConfig?: {
+    /**
+     * Solo el Superadministrador de la plataforma puede activar o desactivar este portal comercial.
+     */
+    enabled?: boolean | null;
+    /**
+     * Número en formato internacional (ej. +584121234567) al que se dirigirá el pedido cotizado.
+     */
+    whatsappOrdersNumber?: string | null;
+    portalTitle?: string | null;
+    /**
+     * Subtítulo destacado bajo el nombre de la empresa en la cabecera (ej. Distribuidor Mayorista Autorizado).
+     */
+    tagline?: string | null;
+    portalDescription?: string | null;
+    /**
+     * Barra superior visible en el portal público (ej. Envíos gratis a nivel nacional en compras mayores a $300). Dejar vacío para ocultar.
+     */
+    announcementText?: string | null;
+    /**
+     * Información sobre tiempos de entrega, cobertura de despachos o retiro en tienda.
+     */
+    deliveryPolicy?: string | null;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -299,6 +323,24 @@ export interface Media {
   height?: number | null;
   focalX?: number | null;
   focalY?: number | null;
+  sizes?: {
+    thumbnail?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    card?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -420,6 +462,10 @@ export interface Product {
   description?: string | null;
   image?: (number | null) | Media;
   isActive?: boolean | null;
+  /**
+   * Controla si el producto es visible públicamente en el portal de pedidos /[tenant].
+   */
+  isPublishedOnWeb?: boolean | null;
   /**
    * El precio base (retail) es el campo "Precio Base de Venta". Agrega aquí los tiers alternativos; los documentos seleccionan el tier según el cliente.
    */
@@ -947,6 +993,10 @@ export interface Quote {
   issueDate?: string | null;
   validUntil?: string | null;
   status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted';
+  /**
+   * Indica si el presupuesto se generó internamente o desde el portal web.
+   */
+  origin?: ('manual' | 'storefront') | null;
   exchangeRateSnapshot?: number | null;
   totalUSD?: number | null;
   totalVES?: number | null;
@@ -967,7 +1017,14 @@ export interface Quote {
 export interface Alert {
   id: number;
   tenant?: (number | null) | Tenant;
-  type: 'low_stock' | 'inventory_diff' | 'rate_change' | 'overdue_invoice' | 'vendor_overdue' | 'overdue_installment';
+  type:
+    | 'low_stock'
+    | 'inventory_diff'
+    | 'rate_change'
+    | 'overdue_invoice'
+    | 'vendor_overdue'
+    | 'overdue_installment'
+    | 'storefront_order';
   severity: 'info' | 'warning' | 'critical';
   message: string;
   /**
@@ -1530,6 +1587,17 @@ export interface TenantsSelect<T extends boolean = true> {
               id?: T;
             };
       };
+  storefrontConfig?:
+    | T
+    | {
+        enabled?: T;
+        whatsappOrdersNumber?: T;
+        portalTitle?: T;
+        tagline?: T;
+        portalDescription?: T;
+        announcementText?: T;
+        deliveryPolicy?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1581,6 +1649,30 @@ export interface MediaSelect<T extends boolean = true> {
   height?: T;
   focalX?: T;
   focalY?: T;
+  sizes?:
+    | T
+    | {
+        thumbnail?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+            };
+        card?:
+          | T
+          | {
+              url?: T;
+              width?: T;
+              height?: T;
+              mimeType?: T;
+              filesize?: T;
+              filename?: T;
+            };
+      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1747,6 +1839,7 @@ export interface ProductsSelect<T extends boolean = true> {
   description?: T;
   image?: T;
   isActive?: T;
+  isPublishedOnWeb?: T;
   priceTiers?:
     | T
     | {
@@ -2071,6 +2164,7 @@ export interface QuotesSelect<T extends boolean = true> {
   issueDate?: T;
   validUntil?: T;
   status?: T;
+  origin?: T;
   exchangeRateSnapshot?: T;
   totalUSD?: T;
   totalVES?: T;

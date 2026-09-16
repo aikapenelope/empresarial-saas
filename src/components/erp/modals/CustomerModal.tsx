@@ -148,7 +148,7 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-destructive">
             {error}
           </div>
         )}
@@ -236,7 +236,7 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
               id="creditAllowed"
               checked={creditAllowed}
               onChange={(e) => setCreditAllowed(e.target.checked)}
-              className="h-4 w-4 rounded border-border bg-background text-indigo-600 focus:ring-indigo-500"
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-ring"
             />
             <label htmlFor="creditAllowed" className="font-semibold text-foreground cursor-pointer">
               Habilitar Línea de Crédito
@@ -297,7 +297,7 @@ export function CustomerModal({ isOpen, onClose, tenantId, tenantSlug, initial }
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>{isEdit ? 'Guardar Cambios' : 'Registrar Cliente'}</span>

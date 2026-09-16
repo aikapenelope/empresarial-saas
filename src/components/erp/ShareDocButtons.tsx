@@ -20,9 +20,10 @@ interface ShareDocButtonsProps {
   documentId: number;
   docLabel: string;
   defaultEmail?: string;
+  defaultPhone?: string | null;
 }
 
-export function ShareDocButtons({ collection, tenantId, documentId, docLabel, defaultEmail = '' }: ShareDocButtonsProps) {
+export function ShareDocButtons({ collection, tenantId, documentId, docLabel, defaultEmail = '', defaultPhone = '' }: ShareDocButtonsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -38,7 +39,9 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
         toast.error(res.error || 'No se pudo generar el enlace.');
         return;
       }
-      window.open(`https://wa.me/?text=${encodeURIComponent(res.whatsappText)}`, '_blank', 'noopener');
+      const cleanPhone = (defaultPhone || '').replace(/\D/g, '');
+      const target = cleanPhone ? `${cleanPhone}` : '';
+      window.open(`https://wa.me/${target}?text=${encodeURIComponent(res.whatsappText)}`, '_blank', 'noopener');
     });
   };
 
@@ -93,7 +96,7 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
       <div className="flex items-center gap-1">
         <button
           type="button"
-          title={`Compartir ${docLabel} por WhatsApp`}
+          title={defaultPhone ? `Contactar al cliente (${defaultPhone}) por WhatsApp` : `Compartir ${docLabel} por WhatsApp`}
           disabled={isPending}
           onClick={handleWhatsApp}
           className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-700/60 bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/60 transition-colors disabled:opacity-50"
@@ -109,7 +112,7 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
             setEmail(defaultEmail);
             setEmailModalOpen(true);
           }}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-indigo-700/60 bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/60 transition-colors disabled:opacity-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-muted/60 text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
           <Mail className="h-3.5 w-3.5" />
         </button>
@@ -118,9 +121,9 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
           title="Copiar enlace público"
           disabled={isPending}
           onClick={handleCopy}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-700 bg-slate-800/60 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-muted/60 text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
         >
-          {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
         <button
           type="button"
@@ -130,7 +133,7 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
             setError(null);
             setRevokeModalOpen(true);
           }}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-rose-700/60 bg-rose-900/30 text-rose-400 hover:bg-rose-900/60 transition-colors disabled:opacity-50"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
         >
           <ShieldOff className="h-3.5 w-3.5" />
         </button>
@@ -144,12 +147,12 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
           }}
           className="space-y-4"
         >
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             Se envía por Resend con un enlace público e índice-imposible de adivinar (token de 192 bits)
             para que el cliente vea el documento completo y pueda descargarlo como PDF.
           </p>
           <div>
-            <label htmlFor={`share-email-${documentId}`} className="block text-xs font-semibold text-slate-300 mb-1">
+            <label htmlFor={`share-email-${documentId}`} className="block text-xs font-semibold text-foreground mb-1">
               Correo del destinatario
             </label>
             <input
@@ -159,14 +162,14 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="cliente@correo.com"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-ring focus:outline-none"
             />
           </div>
-          {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
+          {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
             Enviar por email
@@ -176,16 +179,16 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
 
       <Modal isOpen={revokeModalOpen} onClose={() => setRevokeModalOpen(false)} title={`Revocar enlace de ${docLabel}`} maxWidth="sm">
         <div className="space-y-4">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             El enlace público actual dejará de funcionar de inmediato. Si vuelve a compartir el
             documento, se emitirá un enlace nuevo con caducidad de 30 días.
           </p>
-          {error && <p className="text-xs font-semibold text-rose-400">{error}</p>}
+          {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setRevokeModalOpen(false)}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800 transition-colors"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted transition-colors"
             >
               Cancelar
             </button>
@@ -193,7 +196,7 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
               type="button"
               disabled={isPending}
               onClick={handleRevoke}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500 transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 transition-colors disabled:opacity-50"
             >
               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldOff className="h-4 w-4" />}
               Revocar enlace
