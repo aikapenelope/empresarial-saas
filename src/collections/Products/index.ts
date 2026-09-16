@@ -353,6 +353,16 @@ export const Products: CollectionConfig = {
       type: 'checkbox',
       defaultValue: true,
     },
+    {
+      name: 'isPublishedOnWeb',
+      label: 'Publicar en Catálogo Web B2B',
+      type: 'checkbox',
+      defaultValue: true,
+      index: true,
+      admin: {
+        description: 'Controla si el producto es visible públicamente en el portal de pedidos /[tenant].',
+      },
+    },
   ],
   timestamps: true,
 };
