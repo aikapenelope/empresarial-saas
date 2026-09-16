@@ -105,7 +105,7 @@ export function ProductionModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-destructive">
             {error}
           </div>
         )}
@@ -182,7 +182,7 @@ export function ProductionModal({
         {selectedBom?.items && selectedBom.items.length > 0 && (
           <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-2">
             <div className="flex items-center gap-1.5 text-foreground font-semibold uppercase text-[10px] tracking-wider">
-              <FlaskConical className="h-3.5 w-3.5 text-indigo-400" />
+              <FlaskConical className="h-3.5 w-3.5 text-muted-foreground" />
               <span>Insumos calculados a descontar del almacén origen:</span>
             </div>
 
@@ -222,7 +222,7 @@ export function ProductionModal({
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Ejecutar Fabricación</span>
