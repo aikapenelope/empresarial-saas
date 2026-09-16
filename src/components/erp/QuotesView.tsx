@@ -9,6 +9,8 @@ import {
   Ban,
   Calendar,
   Zap,
+  Globe,
+  MessageCircle,
 } from 'lucide-react';
 import { EmptyState } from './EmptyState';
 import { formatUSD, formatVES } from './format';
@@ -35,10 +37,10 @@ interface QuotesViewProps {
   tenantId: number;
   tenantSlug: string;
   quotes: Quote[];
-  filters: { from?: string; to?: string; status?: string };
+  filters: { from?: string; to?: string; status?: string; origin?: string };
   pagination: { page: number; totalPages: number; totalDocs: number };
   totals: { byStatus: Record<string, number>; total: number; totalUSD: number };
-  customers: Array<{ id: number; name: string; taxId: string }>;
+  customers: Array<{ id: number; name: string; taxId: string; phone?: string | null; priceTier?: string | null }>;
   products: Array<{ id: number; name: string; sku: string; priceUSD: number }>;
   cashRegisters: Array<{ id: number; name: string; code: string; currentStatus: string }>;
   warehouses: Array<{ id: number; name: string; code: string; isDefault?: boolean | null }>;
@@ -96,6 +98,31 @@ export function QuotesView({
       ? ((q.customer as { email?: string | null }).email ?? '')
       : '';
 
+  const customerPhone = (q: Quote) => {
+    if (typeof q.customer === 'object' && q.customer !== null && 'phone' in q.customer) {
+      const p = (q.customer as { phone?: string | null }).phone;
+      if (p) return p;
+    }
+    const custId =
+      typeof q.customer === 'object' && q.customer !== null ? q.customer.id : Number(q.customer);
+    const found = customers.find((c) => c.id === custId);
+    return found?.phone ?? null;
+  };
+
+  const isWebQuote = (q: Quote) =>
+    q.origin === 'storefront' ||
+    (typeof q.notes === 'string' && q.notes.includes('[Pedido Web B2B]'));
+
+  const buildOriginUrl = (origin?: string) => {
+    const params = new URLSearchParams();
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    if (filters.status) params.set('status', filters.status);
+    if (origin) params.set('origin', origin);
+    const qs = params.toString();
+    return `/${tenantSlug}/erp/quotes${qs ? `?${qs}` : ''}`;
+  };
+
   return (
     <div className="space-y-6">
       <ErpPageHeader
@@ -122,6 +149,7 @@ export function QuotesView({
       <BusinessFiltersBar
         basePath={`/${tenantSlug}/erp/quotes`}
         current={filters}
+        extraHiddenParams={{ origin: filters.origin }}
         statusOptions={[
           { value: 'draft', label: 'Borrador' },
           { value: 'sent', label: 'Enviada' },
@@ -140,12 +168,46 @@ export function QuotesView({
 
       {/* Listado */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <h2 className="text-sm font-semibold text-foreground">Cotizaciones del Inquilino</h2>
+            <span className="text-xs text-muted-foreground">({pagination.totalDocs} registro(s))</span>
           </div>
-          <span className="text-xs text-muted-foreground">{pagination.totalDocs} registro(s)</span>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button
+              asChild
+              variant={!filters.origin ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs rounded-full"
+            >
+              <Link href={buildOriginUrl(undefined)}>
+                Todos
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant={filters.origin === 'storefront' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs rounded-full gap-1"
+            >
+              <Link href={buildOriginUrl('storefront')}>
+                <Globe className="h-3 w-3" aria-hidden="true" />
+                Solo Web B2B
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant={filters.origin === 'manual' ? 'default' : 'outline'}
+              size="sm"
+              className="h-7 text-xs rounded-full"
+            >
+              <Link href={buildOriginUrl('manual')}>
+                Solo Mostrador / ERP
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {quotes.length === 0 ? (
@@ -169,8 +231,31 @@ export function QuotesView({
                   const badge = STATUS_BADGE[q.status] || STATUS_BADGE.draft;
                   return (
                     <TableRow key={q.id}>
-                      <TableCell className="font-mono font-bold">{q.quoteNumber}</TableCell>
-                      <TableCell className="text-foreground">{customerName(q)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="font-mono font-bold">{q.quoteNumber}</span>
+                          {isWebQuote(q) ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30">
+                              <Globe className="h-2.5 w-2.5" aria-hidden="true" />
+                              Web B2B
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border border-border/50">
+                              Mostrador
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-foreground">{customerName(q)}</span>
+                          {customerPhone(q) && (
+                            <span className="text-[11px] text-muted-foreground">
+                              {customerPhone(q)}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-muted-foreground text-[11px]">
                         {q.validUntil ? (
                           <span className="flex items-center gap-1">
@@ -194,6 +279,28 @@ export function QuotesView({
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 flex-wrap">
+                          {customerPhone(q) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-[11px] text-emerald-600 dark:text-emerald-400 border-emerald-600/30 hover:bg-emerald-500/10 hover:border-emerald-600/50 gap-1"
+                              asChild
+                            >
+                              <a
+                                href={`https://wa.me/${customerPhone(q)!.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                  isWebQuote(q)
+                                    ? `Hola ${customerName(q)}, te contactamos respecto a tu solicitud web ${q.quoteNumber || `COT-${q.id}`} por $${(Number(q.totalUSD) || 0).toFixed(2)} USD. Estamos confirmando disponibilidad de stock para coordinar la entrega.`
+                                    : `Hola ${customerName(q)}, te contactamos respecto a la cotización ${q.quoteNumber || `COT-${q.id}`} por $${(Number(q.totalUSD) || 0).toFixed(2)} USD.`,
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`Contactar a ${customerName(q)} por WhatsApp (${customerPhone(q)})`}
+                              >
+                                <MessageCircle className="h-3 w-3" aria-hidden="true" />
+                                <span>WhatsApp</span>
+                              </a>
+                            </Button>
+                          )}
                           {q.status !== 'converted' && q.status !== 'rejected' && (
                             <ShareDocButtons
                               collection="quotes"
@@ -201,6 +308,7 @@ export function QuotesView({
                               documentId={q.id}
                               docLabel={q.quoteNumber || `COT-${q.id}`}
                               defaultEmail={customerEmail(q)}
+                              defaultPhone={customerPhone(q)}
                             />
                           )}
                           {(q.status === 'draft' || q.status === 'sent') && (

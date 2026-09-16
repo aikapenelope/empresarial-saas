@@ -161,6 +161,7 @@ export async function createStorefrontQuoteAction(
         validUntil,
         status: 'draft',
         exchangeRateSnapshot: rate,
+        origin: 'storefront',
         notes: notesSummary,
       },
       req,

@@ -20,9 +20,10 @@ interface ShareDocButtonsProps {
   documentId: number;
   docLabel: string;
   defaultEmail?: string;
+  defaultPhone?: string | null;
 }
 
-export function ShareDocButtons({ collection, tenantId, documentId, docLabel, defaultEmail = '' }: ShareDocButtonsProps) {
+export function ShareDocButtons({ collection, tenantId, documentId, docLabel, defaultEmail = '', defaultPhone = '' }: ShareDocButtonsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -38,7 +39,9 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
         toast.error(res.error || 'No se pudo generar el enlace.');
         return;
       }
-      window.open(`https://wa.me/?text=${encodeURIComponent(res.whatsappText)}`, '_blank', 'noopener');
+      const cleanPhone = (defaultPhone || '').replace(/\D/g, '');
+      const target = cleanPhone ? `${cleanPhone}` : '';
+      window.open(`https://wa.me/${target}?text=${encodeURIComponent(res.whatsappText)}`, '_blank', 'noopener');
     });
   };
 
@@ -93,7 +96,7 @@ export function ShareDocButtons({ collection, tenantId, documentId, docLabel, de
       <div className="flex items-center gap-1">
         <button
           type="button"
-          title={`Compartir ${docLabel} por WhatsApp`}
+          title={defaultPhone ? `Contactar al cliente (${defaultPhone}) por WhatsApp` : `Compartir ${docLabel} por WhatsApp`}
           disabled={isPending}
           onClick={handleWhatsApp}
           className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-700/60 bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/60 transition-colors disabled:opacity-50"

@@ -981,6 +981,10 @@ export interface Quote {
   issueDate?: string | null;
   validUntil?: string | null;
   status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted';
+  /**
+   * Indica si el presupuesto se generó internamente o desde el portal web.
+   */
+  origin?: ('manual' | 'storefront') | null;
   exchangeRateSnapshot?: number | null;
   totalUSD?: number | null;
   totalVES?: number | null;
@@ -2138,6 +2142,7 @@ export interface QuotesSelect<T extends boolean = true> {
   issueDate?: T;
   validUntil?: T;
   status?: T;
+  origin?: T;
   exchangeRateSnapshot?: T;
   totalUSD?: T;
   totalVES?: T;

@@ -18,6 +18,8 @@ interface BusinessFiltersBarProps {
   filterName?: string;
   /** Etiqueta del campo de estado (p. ej. "Estado"). */
   statusLabel?: string;
+  /** Parámetros adicionales a preservar en inputs ocultos y enlaces de paginación. */
+  extraHiddenParams?: Record<string, string | undefined>;
   /** Metadatos de paginación para el bloque de navegación. */
   pagination?: {
     page: number;
@@ -38,6 +40,7 @@ export function BusinessFiltersBar({
   statusOptions,
   statusLabel = 'Estado',
   filterName = 'status',
+  extraHiddenParams,
   pagination,
 }: BusinessFiltersBarProps) {
   const buildQuery = (overrides: Record<string, string | number | undefined>) => {
@@ -47,6 +50,7 @@ export function BusinessFiltersBar({
       from: current.from,
       to: current.to,
       ...(filterName !== 'status' ? { [filterName]: filterValue as string | undefined } : { status: current.status }),
+      ...extraHiddenParams,
       ...overrides,
     };
     for (const [key, value] of Object.entries(merged)) {
@@ -97,6 +101,12 @@ export function BusinessFiltersBar({
             </select>
           </div>
         )}
+        {extraHiddenParams &&
+          Object.entries(extraHiddenParams).map(([key, val]) =>
+            val !== undefined && val !== '' ? (
+              <input key={key} type="hidden" name={key} value={val} />
+            ) : null,
+          )}
         <div className="flex items-end gap-2 sm:col-span-2">
           <Button type="submit" size="sm">
             Filtrar
