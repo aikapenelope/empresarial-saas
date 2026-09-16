@@ -153,7 +153,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-destructive">
             {error}
           </div>
         )}
@@ -177,7 +177,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
               <button
                 type="button"
                 onClick={handleGenerateSku}
-                className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                className="text-[10px] text-muted-foreground hover:text-foreground font-semibold"
               >
                 Auto-generar
               </button>
@@ -279,7 +279,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
                 ])
               }
               disabled={tiers.length >= 3}
-              className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold disabled:opacity-40"
+              className="inline-flex items-center gap-1 text-primary hover:text-primary/80 font-semibold disabled:opacity-40"
             >
               <Plus className="h-3 w-3" />
               <span>Agregar Tier</span>
@@ -359,7 +359,7 @@ export function ProductModal({ isOpen, onClose, tenantId, tenantSlug, initial }:
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Guardar Artículo</span>
