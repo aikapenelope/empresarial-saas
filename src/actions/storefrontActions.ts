@@ -167,6 +167,22 @@ export async function createStorefrontQuoteAction(
       req,
     });
 
+    // 5.1 Crear Alerta Operativa para el ERP (Sprint 53)
+    await payload.create({
+      collection: 'alerts',
+      data: {
+        tenant: tenantId,
+        type: 'storefront_order',
+        severity: 'warning',
+        message: `Nuevo pedido Web B2B recibido: ${quoteNumber} (${lineItems.length} producto${
+          lineItems.length > 1 ? 's' : ''
+        }, $${totalUSD.toFixed(2)} USD) de ${parsed.companyName} (RIF: ${parsed.taxId}).`,
+        refCollection: 'quotes',
+        refId: quote.id,
+      },
+      req,
+    });
+
     return {
       quoteId: quote.id,
       quoteNumber,

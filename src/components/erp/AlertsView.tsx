@@ -12,6 +12,7 @@ import {
   Users,
   ClipboardList,
   UserCheck,
+  Globe,
 } from 'lucide-react';
 import { EmptyState } from './EmptyState';
 import { toast } from 'sonner';
@@ -50,6 +51,11 @@ const TYPE_META: Record<
     refRoute: (t, id) => `/${t}/erp/invoices/${id}`,
   },
   vendor_overdue: { label: 'Canal con Vencidos', icon: Users, refRoute: (t) => `/${t}/erp/vendors` },
+  storefront_order: {
+    label: 'Pedido Web B2B',
+    icon: Globe,
+    refRoute: (t) => `/${t}/erp/quotes?origin=storefront`,
+  },
 };
 
 function alertIcon(type: string) {

@@ -1005,7 +1005,14 @@ export interface Quote {
 export interface Alert {
   id: number;
   tenant?: (number | null) | Tenant;
-  type: 'low_stock' | 'inventory_diff' | 'rate_change' | 'overdue_invoice' | 'vendor_overdue' | 'overdue_installment';
+  type:
+    | 'low_stock'
+    | 'inventory_diff'
+    | 'rate_change'
+    | 'overdue_invoice'
+    | 'vendor_overdue'
+    | 'overdue_installment'
+    | 'storefront_order';
   severity: 'info' | 'warning' | 'critical';
   message: string;
   /**
