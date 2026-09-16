@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Cendaro ERP · Flujo de Conciliación Bancaria y Webhook MacroDroid",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "sms-to-reconciliation",
+        "label": "Ruta Canónica de Conciliación",
+        "focus": ["bank_sms", "macro_parse", "webhook", "match_payment", "settled"],
+        "note": "Recepción de SMS bancario en dispositivo móvil, parseo por regex, ingesta por webhook firmado y liquidación en base de datos."
+      },
+      {
+        "id": "security-validation",
+        "label": "Blindaje Criptográfico HMAC",
+        "focus": ["macro_parse", "webhook"],
+        "note": "El endpoint rechaza cualquier petición sin la firma SHA256 generada con la clave compartida del inquilino."
+      },
+      {
+        "id": "ledger-and-notification",
+        "label": "Libro Mayor y Notificación",
+        "focus": ["match_payment", "notify", "settled"],
+        "note": "Asiento inmutable en bank-movements, actualización de deuda con locks FOR UPDATE y notificación al cajero."
+      }
+    ],
+    "output": "docs/diagrams/02-workflows/treasury-macrodroid.html"
+  },
+  "lanes": [
+    { "id": "mobile", "label": "Dispositivo Android (MacroDroid)" },
+    { "id": "gateway", "label": "API Gateway y Seguridad" },
+    { "id": "treasury", "label": "Tesorería y Libro Mayor" }
+  ],
+  "phases": [
+    { "id": "capture_phase", "label": "Recepción y Parseo SMS", "fromCol": 0, "toCol": 1 },
+    { "id": "ingest_phase", "label": "Ingesta Segura Webhook", "fromCol": 2, "toCol": 2, "variant": "emphasis" },
+    { "id": "match_phase", "label": "Cruce y Liquidación", "fromCol": 3, "toCol": 4, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "mobile_group", "label": "Captura en Dispositivo", "lane": "mobile", "fromCol": 0, "toCol": 1, "variant": "emphasis" },
+    { "id": "ledger_group", "label": "Persistencia Contable", "lane": "treasury", "fromCol": 3, "toCol": 4, "variant": "security" }
+  ],
+  "mainPath": ["bank_sms", "macro_parse", "webhook", "match_payment", "settled"],
+  "nodes": [
+    { "id": "bank_sms", "lane": "mobile", "col": 0, "type": "external", "label": "SMS Bancario", "sublabel": "Banesco / Mercantil / BDV", "tag": "Pago Móvil", "width": 132 },
+    { "id": "macro_parse", "lane": "mobile", "col": 1, "type": "backend", "label": "MacroDroid Parser", "sublabel": "Regex Ref / Monto / Cédula", "tag": "Automatización", "width": 132 },
+    { "id": "webhook", "lane": "gateway", "col": 2, "type": "security", "label": "Webhook Seguro", "sublabel": "/api/webhooks/bank-sms", "tag": "HMAC SHA256", "width": 132 },
+    { "id": "match_payment", "lane": "treasury", "col": 3, "type": "database", "label": "Cruce y Registro", "sublabel": "bank-movements", "tag": "Detección Ref", "width": 132 },
+    { "id": "notify", "lane": "gateway", "col": 3, "type": "messagebus", "label": "Alerta en Vivo", "sublabel": "Aviso en Cockpit / POS", "tag": "Auditoría Real", "width": 132 },
+    { "id": "settled", "lane": "treasury", "col": 4, "type": "database", "label": "Saldo Conciliado", "sublabel": "Liquidación Factura", "tag": "Lock FOR UPDATE", "width": 132 }
+  ],
+  "edges": [
+    { "id": "sms-to-macro", "from": "bank_sms", "to": "macro_parse", "label": "Trigger SMS", "variant": "emphasis" },
+    { "id": "macro-to-webhook", "from": "macro_parse", "to": "webhook", "label": "POST Firmado", "variant": "security" },
+    { "id": "webhook-to-match", "from": "webhook", "to": "match_payment", "label": "Verificado", "variant": "emphasis" },
+    { "id": "match-to-notify", "from": "match_payment", "to": "notify", "label": "Notificar", "variant": "default" },
+    { "id": "match-to-settled", "from": "match_payment", "to": "settled", "label": "Liquidar", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Integración Bancaria de Costo Cero",
+      "items": [
+        "Elimina la necesidad de contratos de API bancarias de alto costo mediante lectura local de SMS oficiales",
+        "Compatible con formatos de notificación de Pago Móvil y transferencias de toda la banca venezolana"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Seguridad de Ingesta Criptográfica",
+      "items": [
+        "Cada inquilino posee un token secreto para firmar peticiones HTTP con cabecera X-Webhook-Signature",
+        "Prevención de inyección de comprobantes falsos o reenvío malicioso de transacciones previas"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Conciliación Atómica sin Carreras",
+      "items": [
+        "Búsqueda por número de referencia y fecha dentro de una transacción PostgreSQL con bloqueo FOR UPDATE",
+        "Conciliación instantánea de facturas pendientes y actualización inmediata de saldos de clientes y cuentas bancarias"
+      ]
+    }
+  ]
+}

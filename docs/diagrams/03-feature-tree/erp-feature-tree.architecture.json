@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Cendaro ERP · Árbol de Opciones y Mapa Funcional de Features",
+    "output": "erp-feature-tree.html",
+    "viewBox": [960, 440],
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "operational-tree",
+        "label": "Árbol Completo de Opciones",
+        "focus": ["cockpit", "ventas", "inventario", "finanzas", "sales_leaf", "mfg_leaf", "treasury_leaf", "governance", "jobs_engine"],
+        "note": "Estructura jerárquica de módulos y capacidades del sistema ERP."
+      },
+      {
+        "id": "commercial-core",
+        "label": "Módulos Comerciales y Logísticos",
+        "focus": ["cockpit", "ventas", "sales_leaf", "inventario", "mfg_leaf"],
+        "note": "Operación de ventas, inventario físico, kardex y manufactura BOM."
+      },
+      {
+        "id": "governance-finances",
+        "label": "Finanzas y Gobernanza",
+        "focus": ["cockpit", "finanzas", "treasury_leaf", "governance", "jobs_engine"],
+        "note": "Tesorería bimonetaria, puntos de venta, reglas de aprobación y auditoría."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "cockpit",
+      "type": "frontend",
+      "label": "ERP Cockpit Hub",
+      "sublabel": "Navegación /[tenant]/erp",
+      "tag": "Multi-Tenant Root",
+      "pos": [40, 190],
+      "size": [140, 60]
+    },
+    {
+      "id": "ventas",
+      "type": "frontend",
+      "label": "Ventas y Clientes",
+      "sublabel": "Quotes, Orders, Invoices",
+      "pos": [250, 70],
+      "size": [140, 60]
+    },
+    {
+      "id": "inventario",
+      "type": "database",
+      "label": "Inventario y Kardex",
+      "sublabel": "Stock, Warehouses, Counts",
+      "pos": [250, 190],
+      "size": [140, 60]
+    },
+    {
+      "id": "finanzas",
+      "type": "backend",
+      "label": "Finanzas y POS",
+      "sublabel": "POS, CashRegisters, Rates",
+      "pos": [250, 310],
+      "size": [140, 60]
+    },
+    {
+      "id": "sales_leaf",
+      "type": "frontend",
+      "label": "Storefront y Despacho",
+      "sublabel": "B2B /t/[slug], Envíos",
+      "tag": "Ventas Nativo",
+      "pos": [470, 70],
+      "size": [140, 60]
+    },
+    {
+      "id": "mfg_leaf",
+      "type": "database",
+      "label": "Manufactura BOM",
+      "sublabel": "BillOfMaterials, Production",
+      "pos": [470, 190],
+      "size": [140, 60]
+    },
+    {
+      "id": "treasury_leaf",
+      "type": "database",
+      "label": "Bancos y Tesorería",
+      "sublabel": "MacroDroid, BankAccounts",
+      "tag": "Conciliación",
+      "pos": [470, 310],
+      "size": [140, 60]
+    },
+    {
+      "id": "governance",
+      "type": "security",
+      "label": "Gobernanza y RRHH",
+      "sublabel": "Employees, Approvals, Audit",
+      "tag": "Personal y Control",
+      "pos": [690, 130],
+      "size": [140, 60]
+    },
+    {
+      "id": "jobs_engine",
+      "type": "messagebus",
+      "label": "Motor de Alertas",
+      "sublabel": "Alerts, Jobs, Email",
+      "pos": [690, 250],
+      "size": [140, 60]
+    }
+  ],
+  "connections": [
+    {
+      "id": "hub-ventas",
+      "from": "cockpit",
+      "to": "ventas",
+      "label": "Comercial",
+      "fromSide": "top",
+      "toSide": "left",
+      "via": [[110, 100]]
+    },
+    {
+      "id": "hub-inventario",
+      "from": "cockpit",
+      "to": "inventario",
+      "label": "Stock",
+      "variant": "emphasis"
+    },
+    {
+      "id": "hub-finanzas",
+      "from": "cockpit",
+      "to": "finanzas",
+      "label": "Caja y POS",
+      "fromSide": "bottom",
+      "toSide": "left",
+      "via": [[110, 340]]
+    },
+    {
+      "id": "ventas-leaf",
+      "from": "ventas",
+      "to": "sales_leaf",
+      "label": "Despacho",
+      "variant": "emphasis"
+    },
+    {
+      "id": "inventario-leaf",
+      "from": "inventario",
+      "to": "mfg_leaf",
+      "label": "Receta BOM",
+      "variant": "emphasis"
+    },
+    {
+      "id": "finanzas-leaf",
+      "from": "finanzas",
+      "to": "treasury_leaf",
+      "label": "Cobranza",
+      "variant": "emphasis"
+    },
+    {
+      "id": "sales-gov",
+      "from": "sales_leaf",
+      "to": "governance",
+      "label": "Auditoría",
+      "variant": "security"
+    },
+    {
+      "id": "inv-jobs",
+      "from": "mfg_leaf",
+      "to": "jobs_engine",
+      "label": "Alertas",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Navegación y Cockpit Central",
+      "items": [
+        "Acceso unificado por tenant con barra de navegación reactiva y Storefront B2B (/t/[slug])"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Módulos Operativos Nativos",
+      "items": [
+        "Ventas, compras, manufactura BOM, tesorería (MacroDroid) y gestión de empleados (RRHH)"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Gobernanza y Monitoreo",
+      "items": [
+        "Aprobaciones multinivel, pistas de auditoría inmutables y motor de alertas automáticas"
+      ]
+    }
+  ]
+}
