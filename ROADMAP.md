@@ -756,27 +756,35 @@ el merge de #83 y se detectó en la verificación post-merge de #84 (lección: c
 
 ---
 
-# 🧭 Roadmap activo — lo que queda (post-wizard, 2026-09-11)
+# 🚀 Bloque Storefront B2B Nativo & CI (sep-2026) — EJECUTADO
 
-> **ÚNICA sección consolidada de pendientes.** El wizard de importación (#84) cerró el
-> bloque de producto Cendaro. Todo lo que sigue vive con su detalle en los docs de
-> `docs/`; aquí está el índice unificado con estado y esfuerzo. Nada de esta lista ha
-> empezado salvo donde se indica.
+| Sprint / PR | Contenido | Estado |
+|---|---|:---:|
+| **CI-1 a CI-6** ([#93](https://github.com/aikapenelope/empresarial-saas/pull/93)–[#99](https://github.com/aikapenelope/empresarial-saas/pull/99)) | Guardas de esquema, ledgers financieros, operaciones/BOM, Playwright E2E smoke, ratchet de cobertura (198 tests), health check y runbook | ✅ Fusionado |
+| **Sprint 48** ([#107](https://github.com/aikapenelope/empresarial-saas/pull/107)) | Estandarización de tokens UI y temas bimodal monocromo | ✅ Fusionado |
+| **Sprint 49** ([#116](https://github.com/aikapenelope/empresarial-saas/pull/116)) | Media Sharp WebP (800px), visibilidad pública `isPublishedOnWeb` y toggle superadmin `storefrontConfig.enabled` | ✅ Fusionado |
+| **Sprint 50** ([#117](https://github.com/aikapenelope/empresarial-saas/pull/117)) | Acción `createStorefrontQuoteAction`, vinculación CRM `Customers` y deep-link WhatsApp | ✅ Fusionado |
+| **Sprint 51** ([#118](https://github.com/aikapenelope/empresarial-saas/pull/118)) | Catálogo minimalista Server Components `/[tenant]`, Drawer de carrito y modal de checkout | ✅ Fusionado |
+| **Sprint 52** ([#119](https://github.com/aikapenelope/empresarial-saas/pull/119)) | Atribución canal `web` en Quotes, filtros de origen en ERP y botón WhatsApp para vendedores | ✅ Fusionado |
+| **Sprint 53** ([#121](https://github.com/aikapenelope/empresarial-saas/pull/121)) | Alertas operativas en tiempo real en ERP ante presupuestos web entrantes | ✅ Fusionado |
+| **Sprint 54** ([#122](https://github.com/aikapenelope/empresarial-saas/pull/122)) | Branding de Storefront (lema, anuncios destacados, políticas de entrega) en ERP con purga instantánea de caché | ✅ Fusionado |
+| **Sprint 55** ([#123](https://github.com/aikapenelope/empresarial-saas/pull/123)) | UX Comercial: ordenamiento multicriterio, paginación lotes 16, quick view modal y botón flotante de WhatsApp | ✅ Fusionado |
 
-## 1. Producto — plugins del ecosistema VE (orden acordado, `docs/ECOSISTEMA-VE-Y-PLUGINS.md` §2–§9)
+---
 
-| # | Plugin | Alcance v1 | Esfuerzo | Previo |
-|---|---|---|---|---|
-| 1 | `treasuryPlugin` | BankAccounts/BankMovements + webhook MacroDroid (pago móvil/Zelle concilia solo) + motor de matching puro que propone y el humano confirma | 2–3 sprints | — |
-| 2 | `storefrontPlugin` | Vitrina B2B de presupuesto: `/t/[slug]` con stock disponible → "Solicitar Presupuesto" cae como `Order` canal `web` (§8) | 1–1.5 sprints | ⚠️ Decisión del dueño: v1 solo-URL vs subida al bucket propio + BYO por tenant en fase 2 |
-| 3 | `hrPlugin` | Expediente de Personal (empleados, eventos, documentos) — cero cálculos de nómina | 1.5–2 sprints | — |
-| 4 | `inboxPlugin` v1 | WhatsApp vía Composio (un proyecto por tenant, conexión global de la empresa, webhook firmado → Jobs Queue) | 3 sprints | PoC Composio de 1 día |
-| 5 | `fiscalPlugin` v1 | Retenciones IVA + base fiscal (checklist validado §2, norma PA SNAT/2025/000054) | 3–4 sprints | Sprint de investigación de formatos + sesión con contador |
+# 🧭 Roadmap activo — lo que queda (sep-2026)
 
-Después, según demanda de clientes: Inbox v2 (Instagram), Fiscal v2 (ISLR + IGTF
-ampliado), Fiscal v3, `payrollPlugin`. Fuera de plugins pero del mismo origen: **Phase B
-del wizard** (alta de catálogo desde CSV con matching fuzzy `pg_trgm` — PR separado,
-sujeto a decisión).
+> **Sección consolidada de prioridades vigentes.** El canal Storefront B2B quedó 100% completado. Por directiva de arquitectura y producto (*"el sistema debe ser robusto sin dificultades añadidas, el cliente hace el pedido y el resto de la comunicación es fuera del sistema"*), el **módulo SENIAT** y la **bandeja omnicanal (inbox)** quedan formalmente descartados.
+
+## 1. Producto — Módulos Nativos del Ecosistema
+
+| # | Módulo | Alcance v1 | Esfuerzo | Estado |
+|---|---|---|---|:---:|
+| 1 | **Tesorería y Conciliación Automática** | `BankAccounts` + `BankMovements` + webhook MacroDroid (pago móvil/Zelle) + motor de matching asistido con 1 clic | 2–3 sprints | 🎯 **PRÓXIMO (Sprint 56)** |
+| 2 | **Storefront B2B Web** | Vitrina B2B de presupuestos: catálogo Server Components `/[tenant]` + stock Kardex en vivo + CRM linking + branding + quick view | 7 sprints (S49–S55) | ✅ **100% COMPLETADO** |
+| 3 | **Expediente de Personal (RRHH)** | `Employees` + `EmploymentEvents` + archivo digital de documentos (cero cálculos de nómina complejos) | 1.5–2 sprints | En cola (post-tesorería) |
+| — | ~~**Módulo Fiscal SENIAT**~~ | ~~Retenciones IVA/ISLR + TXT 99035 + XML + Libros oficiales~~ | — | ❌ **DESCARTADO (Fuera de Alcance)** |
+| — | ~~**Bandeja Omnicanal (Inbox)**~~ | ~~WhatsApp / Instagram vía Composio~~ | — | ❌ **DESCARTADO (Fuera de Alcance)** |
 
 ## 2. Pulido continuo — Fase 12, Lotes 2–4 de modales (detalle en Sprint 45, arriba)
 
@@ -788,28 +796,20 @@ sujeto a decisión).
 
 | # | Gate | Estado |
 |---|---|---|
-| 1 | Tests financieros de ledgers en CI (ampliar a cash/finance/AP) | 🟡 Parcial (108 tests) |
+| 1 | Tests financieros de ledgers en CI | 🟢 198 tests unitarios pasando en CI |
 | 2 | PITR + restore **probado** en Supabase | 🔴 |
 | 3 | Observabilidad (Sentry u equivalente) | 🔴 |
-| 4 | Runner de cron para las alertas | 🔴 (se resuelve con Render, §1.2 de FASE-13) |
+| 4 | Runner de cron para las alertas | 🔴 (se resuelve con Render / worker) |
 | 5 | Disciplina de migraciones (chequeo `payload_migrations` vs repo post-merge) | 🟡 Proceso definido |
 
 ## 4. Infraestructura de escala — Fase 13 (`docs/FASE-13-INVESTIGACION.md`, SIN EJECUTAR)
 
-1. **Migración a Render** (+ `prodMigrations` + Jobs Queue re-activable + cron de
-   alertas) — prerrequisito de escala y mata el gate 4.
+1. **Migración a Render** (+ `prodMigrations` + Jobs Queue re-activable + cron de alertas).
 2. **Sprint de escala**: typeahead server-side + `pg_trgm` + dashboard SQL (10k SKUs).
 3. **PWA de vendedores online-first** (3 pantallas + shell).
 4. **RLS de Postgres** (defensa en profundidad, opcional).
-5. **E2E + monitoreo** (cubre el gate 3).
+5. **E2E + monitoreo** (Playwright ya configurado en CI-4).
 
-## 5. Decisiones que esperan al dueño
-
-1. Storefront: imágenes v1 solo-URL vs bucket propio + BYO (ECOSISTEMA §8).
-2. ¿Dominios propios por inquilino? (FASE-13 §7 — define CORS/multi-dominio).
-3. ¿El POS de mostrador necesita "nota" impresa? (FASE-13 §7 — S41.2-residual).
-4. Plan de Render: tier de Postgres e instancias (FASE-13 §7).
-5. Wizard Phase B (alta de catálogo desde CSV): sí/no y cuándo.
 
 ---
 
