@@ -70,7 +70,7 @@ export function SupplierModal({ isOpen, onClose, tenantId, tenantSlug }: Supplie
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-destructive">
             {error}
           </div>
         )}
@@ -172,7 +172,7 @@ export function SupplierModal({ isOpen, onClose, tenantId, tenantSlug }: Supplie
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Registrar Proveedor</span>

@@ -94,7 +94,7 @@ export function CashRegisterModal({
             <button
               type="button"
               onClick={handleGenerateCode}
-              className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold"
+              className="text-[10px] text-muted-foreground hover:text-foreground font-semibold"
             >
               Generar Código
             </button>
@@ -139,7 +139,7 @@ export function CashRegisterModal({
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Registrar Caja</span>

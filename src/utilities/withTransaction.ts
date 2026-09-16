@@ -14,14 +14,14 @@ import type { User } from '@/payload-types';
  */
 export async function withTransaction<T>(
   payload: Payload,
-  user: User,
+  user: User | null | undefined,
   fn: (req: PayloadRequest) => Promise<T>,
   context?: Record<string, unknown>,
 ): Promise<T> {
   const transactionID = await payload.db.beginTransaction();
   const req = {
     payload,
-    user,
+    user: user ?? undefined,
     context: context ?? {},
     transactionID,
   } as unknown as PayloadRequest;
