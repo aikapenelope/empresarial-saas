@@ -72,7 +72,7 @@ export function TenantCreateModal({ isOpen, onClose }: TenantCreateModalProps) {
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-destructive">
             {error}
           </div>
         )}
@@ -100,7 +100,7 @@ export function TenantCreateModal({ isOpen, onClose }: TenantCreateModalProps) {
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none font-mono"
           />
           <p className="text-[10px] text-muted-foreground mt-1">
-            Se accederá al ERP en: <span className="text-indigo-400 font-mono">/{slug || 'tu-empresa'}/erp</span>
+            Se accederá al ERP en: <span className="text-primary font-mono font-medium">/{slug || 'tu-empresa'}/erp</span>
           </p>
         </div>
 
@@ -137,7 +137,7 @@ export function TenantCreateModal({ isOpen, onClose }: TenantCreateModalProps) {
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
           >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Crear Empresa & Entrar</span>
