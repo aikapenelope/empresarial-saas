@@ -1250,6 +1250,7 @@ export async function createQuoteAction(input: CreateQuoteInput) {
           validUntil: parsed.validUntil || undefined,
           status: 'draft',
           exchangeRateSnapshot: rate,
+          origin: 'manual',
           notes: parsed.notes || undefined,
         },
         req,
@@ -3760,6 +3761,12 @@ export interface UpdateTenantSettingsInput {
   autoSendInvoiceEmail?: boolean;
   alertsEmailEnabled?: boolean;
   alertsEmailRecipients?: string[];
+  storefrontWhatsappNumber?: string;
+  storefrontPortalTitle?: string;
+  storefrontPortalDescription?: string;
+  storefrontTagline?: string;
+  storefrontAnnouncementText?: string;
+  storefrontDeliveryPolicy?: string;
 }
 
 export async function updateTenantSettingsAction(input: UpdateTenantSettingsInput) {
@@ -3767,6 +3774,50 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
     const parsed = updateTenantSettingsSchema.parse(input);
     await requireErpTenantAccess(parsed.tenantId, ['super-admin', 'tenant-admin']);
     const payload = await getPayload({ config });
+
+    const currentTenant = await payload.findByID({
+      collection: 'tenants',
+      id: parsed.tenantId,
+      depth: 0,
+    });
+
+    const hasStorefrontUpdates =
+      parsed.storefrontWhatsappNumber !== undefined ||
+      parsed.storefrontPortalTitle !== undefined ||
+      parsed.storefrontPortalDescription !== undefined ||
+      parsed.storefrontTagline !== undefined ||
+      parsed.storefrontAnnouncementText !== undefined ||
+      parsed.storefrontDeliveryPolicy !== undefined;
+
+    const storefrontConfigData = hasStorefrontUpdates
+      ? {
+          enabled: currentTenant.storefrontConfig?.enabled ?? false,
+          whatsappOrdersNumber:
+            parsed.storefrontWhatsappNumber !== undefined
+              ? parsed.storefrontWhatsappNumber
+              : currentTenant.storefrontConfig?.whatsappOrdersNumber,
+          portalTitle:
+            parsed.storefrontPortalTitle !== undefined
+              ? parsed.storefrontPortalTitle
+              : currentTenant.storefrontConfig?.portalTitle,
+          portalDescription:
+            parsed.storefrontPortalDescription !== undefined
+              ? parsed.storefrontPortalDescription
+              : currentTenant.storefrontConfig?.portalDescription,
+          tagline:
+            parsed.storefrontTagline !== undefined
+              ? parsed.storefrontTagline
+              : currentTenant.storefrontConfig?.tagline,
+          announcementText:
+            parsed.storefrontAnnouncementText !== undefined
+              ? parsed.storefrontAnnouncementText
+              : currentTenant.storefrontConfig?.announcementText,
+          deliveryPolicy:
+            parsed.storefrontDeliveryPolicy !== undefined
+              ? parsed.storefrontDeliveryPolicy
+              : currentTenant.storefrontConfig?.deliveryPolicy,
+        }
+      : undefined;
 
     const doc = await payload.update({
       collection: 'tenants',
@@ -3809,11 +3860,13 @@ export async function updateTenantSettingsAction(input: UpdateTenantSettingsInpu
               },
             }
           : {}),
+        ...(storefrontConfigData ? { storefrontConfig: storefrontConfigData } : {}),
       },
     });
 
     revalidatePath(`/${parsed.tenantSlug}/erp/settings`);
     revalidatePath(`/${parsed.tenantSlug}/erp`);
+    revalidatePath(`/${parsed.tenantSlug}`);
 
     return { success: true, data: doc };
   } catch (error: unknown) {

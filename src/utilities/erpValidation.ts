@@ -477,6 +477,12 @@ export const updateTenantSettingsSchema = z.object({
     .array(z.string().trim().email('Email inválido.').max(200))
     .max(10)
     .optional(),
+  storefrontWhatsappNumber: z.string().trim().max(50).optional(),
+  storefrontPortalTitle: z.string().trim().max(200).optional(),
+  storefrontPortalDescription: z.string().trim().max(1000).optional(),
+  storefrontTagline: z.string().trim().max(200).optional(),
+  storefrontAnnouncementText: z.string().trim().max(300).optional(),
+  storefrontDeliveryPolicy: z.string().trim().max(1000).optional(),
 });
 
 export const createTenantSchema = z.object({
@@ -627,7 +633,13 @@ export const quotesListFiltersSchema = businessListFiltersSchema.extend({
     .enum(['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted'])
     .optional()
     .catch(undefined),
+  origin: z
+    .enum(['manual', 'storefront'])
+    .optional()
+    .catch(undefined),
 });
+
+export type QuotesListFilters = z.infer<typeof quotesListFiltersSchema>;
 
 /**
  * Campo sobre el que se aplica el período de negocio. Los documentos de venta

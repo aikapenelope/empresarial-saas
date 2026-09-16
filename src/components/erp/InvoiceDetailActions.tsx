@@ -3,17 +3,20 @@
 import React, { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Printer, Ban, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export function PrintButton() {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       onClick={() => window.print()}
-      className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors"
+      className="no-print"
     >
-      <Printer className="h-3.5 w-3.5" />
+      <Printer className="h-3.5 w-3.5 mr-1" />
       <span>Imprimir</span>
-    </button>
+    </Button>
   );
 }
 
@@ -59,17 +62,17 @@ export function VoidInvoiceButton({
 
   return (
     <div className="no-print">
-      <button
+      <Button
         type="button"
+        variant="destructive"
+        size="sm"
         onClick={handleVoid}
         disabled={isPending}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-600/10 text-xs font-semibold text-rose-300 hover:bg-rose-600 hover:text-white transition-colors disabled:opacity-50"
       >
-        {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-        <Ban className="h-3.5 w-3.5" />
+        {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Ban className="h-3.5 w-3.5 mr-1" />}
         <span>Anular Factura</span>
-      </button>
-      {error && <p className="mt-1.5 text-[11px] text-rose-400">{error}</p>}
+      </Button>
+      {error && <p className="mt-1.5 text-[11px] text-destructive">{error}</p>}
     </div>
   );
 }

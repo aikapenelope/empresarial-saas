@@ -43,6 +43,7 @@ export const Alerts: CollectionConfig = {
         { label: 'Factura Vencida', value: 'overdue_invoice' },
         { label: 'Canal con Cartera Vencida', value: 'vendor_overdue' },
         { label: 'Cuota Vencida', value: 'overdue_installment' },
+        { label: 'Pedido Web B2B', value: 'storefront_order' },
       ],
     },
     {

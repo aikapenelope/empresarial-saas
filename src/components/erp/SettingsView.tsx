@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { updateTenantSettingsAction } from '@/actions/erpActions';
 import { formatVES } from './format';
-import { Building2, Coins, CheckCircle2, FileText, Loader2, RefreshCw } from 'lucide-react';
+import { Building2, Coins, CheckCircle2, FileText, Loader2, RefreshCw, Globe, ExternalLink } from 'lucide-react';
 import { ErpPageHeader } from './ErpPageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,15 @@ interface SettingsViewProps {
       autoSendInvoiceEmail?: boolean | null;
       alertsEmailEnabled?: boolean | null;
       alertsEmailRecipients?: Array<{ email: string }> | null;
+    } | null;
+    storefrontConfig?: {
+      enabled?: boolean | null;
+      whatsappOrdersNumber?: string | null;
+      portalTitle?: string | null;
+      portalDescription?: string | null;
+      tagline?: string | null;
+      announcementText?: string | null;
+      deliveryPolicy?: string | null;
     } | null;
   };
   effectiveRate: number;
@@ -80,6 +89,26 @@ export function SettingsView({
     tenant.currencyConfig?.manualExchangeRate || 0,
   );
 
+  // Portal de Pedidos B2B (Catálogo Web - Sprint 54)
+  const [storefrontWhatsappNumber, setStorefrontWhatsappNumber] = useState<string>(
+    tenant.storefrontConfig?.whatsappOrdersNumber || '',
+  );
+  const [storefrontPortalTitle, setStorefrontPortalTitle] = useState<string>(
+    tenant.storefrontConfig?.portalTitle || 'Portal de Pedidos y Catálogo Mayorista',
+  );
+  const [storefrontPortalDescription, setStorefrontPortalDescription] = useState<string>(
+    tenant.storefrontConfig?.portalDescription || '',
+  );
+  const [storefrontTagline, setStorefrontTagline] = useState<string>(
+    tenant.storefrontConfig?.tagline || '',
+  );
+  const [storefrontAnnouncementText, setStorefrontAnnouncementText] = useState<string>(
+    tenant.storefrontConfig?.announcementText || '',
+  );
+  const [storefrontDeliveryPolicy, setStorefrontDeliveryPolicy] = useState<string>(
+    tenant.storefrontConfig?.deliveryPolicy || '',
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -105,6 +134,12 @@ export function SettingsView({
       autoSendInvoiceEmail,
       alertsEmailEnabled,
       alertsEmailRecipients,
+      storefrontWhatsappNumber,
+      storefrontPortalTitle,
+      storefrontPortalDescription,
+      storefrontTagline,
+      storefrontAnnouncementText,
+      storefrontDeliveryPolicy,
     });
 
     setLoading(false);
@@ -296,6 +331,133 @@ export function SettingsView({
               <p className="text-[10px] text-muted-foreground mt-1">
                 Identificador permanente del inquilino multi-tenant.
               </p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Sección: Portal de Pedidos B2B (Catálogo Web - Sprint 54) */}
+        <Card className="p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-3 gap-2">
+            <div className="flex items-center gap-2">
+              <Globe className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-foreground">Portal de Pedidos B2B (Catálogo Web)</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {tenant.storefrontConfig?.enabled ? (
+                <>
+                  <Badge variant="emerald" size="sm" dot>
+                    Activo
+                  </Badge>
+                  <Button variant="outline" size="sm" className="h-7 text-[11px] gap-1.5" asChild>
+                    <a href={`/${tenant.slug}`} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                      <span>Ver Portal Público</span>
+                    </a>
+                  </Button>
+                </>
+              ) : (
+                <Badge variant="slate" size="sm">
+                  Inactivo (Controlado por Superadmin)
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Personaliza el título, eslogan, banner superior y políticas de despacho de tu catálogo público accesible en{' '}
+            <code className="bg-muted px-1.5 py-0.5 rounded font-mono text-foreground">/{tenant.slug}</code>.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-foreground mb-1" htmlFor="storefront-title">
+                Título del Catálogo Web
+              </label>
+              <Input
+                id="storefront-title"
+                type="text"
+                value={storefrontPortalTitle}
+                onChange={(e) => setStorefrontPortalTitle(e.target.value)}
+                placeholder="Portal de Pedidos y Catálogo Mayorista"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-foreground mb-1" htmlFor="storefront-tagline">
+                Eslogan o Subtítulo de Marca
+              </label>
+              <Input
+                id="storefront-tagline"
+                type="text"
+                value={storefrontTagline}
+                onChange={(e) => setStorefrontTagline(e.target.value)}
+                placeholder="Ej. Distribuidor Mayorista Autorizado"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-foreground mb-1" htmlFor="storefront-whatsapp">
+                WhatsApp Oficial para Recepción de Pedidos
+              </label>
+              <Input
+                id="storefront-whatsapp"
+                type="tel"
+                value={storefrontWhatsappNumber}
+                onChange={(e) => setStorefrontWhatsappNumber(e.target.value)}
+                placeholder="Ej. +584121234567"
+                className="font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Número al que se redirige el cliente para enviar el mensaje con la cotización.
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-foreground mb-1" htmlFor="storefront-announcement">
+                Anuncio o Promoción Superior (Banner)
+              </label>
+              <Input
+                id="storefront-announcement"
+                type="text"
+                value={storefrontAnnouncementText}
+                onChange={(e) => setStorefrontAnnouncementText(e.target.value)}
+                placeholder="Ej. Despacho gratis en compras mayores a $300 a nivel nacional"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Barra de aviso destacada en la parte superior del catálogo. Dejar vacío para ocultar.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-foreground mb-1" htmlFor="storefront-description">
+                Condiciones Comerciales y Mensaje de Bienvenida
+              </label>
+              <textarea
+                id="storefront-description"
+                rows={2}
+                value={storefrontPortalDescription}
+                onChange={(e) => setStorefrontPortalDescription(e.target.value)}
+                placeholder="Precios sujetos a cambio sin previo aviso..."
+                className="w-full rounded-md border border-border bg-card p-2 text-xs text-foreground"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-foreground mb-1" htmlFor="storefront-delivery">
+                Políticas de Entrega y Despacho
+              </label>
+              <textarea
+                id="storefront-delivery"
+                rows={2}
+                value={storefrontDeliveryPolicy}
+                onChange={(e) => setStorefrontDeliveryPolicy(e.target.value)}
+                placeholder="Despachos en 24-48 horas hábiles..."
+                className="w-full rounded-md border border-border bg-card p-2 text-xs text-foreground"
+              />
             </div>
           </div>
         </Card>

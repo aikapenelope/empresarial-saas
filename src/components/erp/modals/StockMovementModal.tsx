@@ -108,7 +108,7 @@ export function StockMovementModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2.5 text-rose-300">
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-destructive">
             {error}
           </div>
         )}
@@ -129,7 +129,7 @@ export function StockMovementModal({
                 onClick={() => setKind(opt.value)}
                 className={`px-2 py-1.5 rounded-lg font-medium transition-colors ${
                   kind === opt.value
-                    ? 'bg-indigo-600 text-white'
+                    ? 'bg-primary text-primary-foreground'
                     : 'bg-background text-muted-foreground border border-border'
                 }`}
               >
@@ -242,7 +242,7 @@ export function StockMovementModal({
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all disabled:opacity-50"
           >
             {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Registrar Movimiento</span>
