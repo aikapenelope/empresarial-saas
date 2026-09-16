@@ -25,6 +25,9 @@ export interface StorefrontTenantInfo {
   whatsappOrdersNumber?: string | null;
   portalTitle?: string | null;
   portalDescription?: string | null;
+  tagline?: string | null;
+  announcementText?: string | null;
+  deliveryPolicy?: string | null;
   bcvRate: number;
 }
 

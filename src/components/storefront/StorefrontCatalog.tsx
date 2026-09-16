@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Search, PackageSearch } from 'lucide-react';
+import { Search, PackageSearch, Truck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { StorefrontHeader } from './StorefrontHeader';
@@ -107,9 +107,9 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
       <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Hero Banner Minimalista */}
         <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-b from-card to-background p-6 sm:p-10 shadow-xs">
-          <div className="max-w-2xl space-y-2">
+          <div className="max-w-3xl space-y-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              {tenant.name} · Catálogo Oficial
+              {tenant.name} · {tenant.tagline || 'Catálogo Oficial'}
             </span>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-foreground">
               {tenant.portalTitle || 'Portal de Pedidos y Catálogo Mayorista'}
@@ -118,6 +118,12 @@ export const StorefrontCatalog: React.FC<StorefrontCatalogProps> = ({
               {tenant.portalDescription ||
                 'Seleccione los productos deseados para generar su presupuesto formal y coordinar el despacho directamente por WhatsApp.'}
             </p>
+            {tenant.deliveryPolicy && (
+              <div className="pt-2 flex items-start gap-2 text-xs text-muted-foreground border-t border-border/40 mt-3">
+                <Truck className="h-4 w-4 shrink-0 mt-0.5 text-foreground" aria-hidden="true" />
+                <span>{tenant.deliveryPolicy}</span>
+              </div>
+            )}
           </div>
         </div>
 

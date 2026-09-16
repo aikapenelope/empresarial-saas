@@ -232,11 +232,38 @@ export const Tenants: CollectionConfig = {
           defaultValue: 'Portal de Pedidos y Catálogo Mayorista',
         },
         {
+          name: 'tagline',
+          label: 'Eslogan o Subtítulo de Marca',
+          type: 'text',
+          admin: {
+            description:
+              'Subtítulo destacado bajo el nombre de la empresa en la cabecera (ej. Distribuidor Mayorista Autorizado).',
+          },
+        },
+        {
           name: 'portalDescription',
           label: 'Descripción o Condiciones Comerciales',
           type: 'textarea',
           defaultValue:
             'Precios sujetos a cambio sin previo aviso. Despachos y condiciones acordadas con su asesor comercial.',
+        },
+        {
+          name: 'announcementText',
+          label: 'Anuncio o Promoción Superior (Banner)',
+          type: 'text',
+          admin: {
+            description:
+              'Barra superior visible en el portal público (ej. Envíos gratis a nivel nacional en compras mayores a $300). Dejar vacío para ocultar.',
+          },
+        },
+        {
+          name: 'deliveryPolicy',
+          label: 'Políticas de Entrega y Despacho',
+          type: 'textarea',
+          admin: {
+            description:
+              'Información sobre tiempos de entrega, cobertura de despachos o retiro en tienda.',
+          },
         },
       ],
     },

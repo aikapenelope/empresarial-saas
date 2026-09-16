@@ -254,7 +254,19 @@ export interface Tenant {
      */
     whatsappOrdersNumber?: string | null;
     portalTitle?: string | null;
+    /**
+     * Subtítulo destacado bajo el nombre de la empresa en la cabecera (ej. Distribuidor Mayorista Autorizado).
+     */
+    tagline?: string | null;
     portalDescription?: string | null;
+    /**
+     * Barra superior visible en el portal público (ej. Envíos gratis a nivel nacional en compras mayores a $300). Dejar vacío para ocultar.
+     */
+    announcementText?: string | null;
+    /**
+     * Información sobre tiempos de entrega, cobertura de despachos o retiro en tienda.
+     */
+    deliveryPolicy?: string | null;
   };
   updatedAt: string;
   createdAt: string;
@@ -1581,7 +1593,10 @@ export interface TenantsSelect<T extends boolean = true> {
         enabled?: T;
         whatsappOrdersNumber?: T;
         portalTitle?: T;
+        tagline?: T;
         portalDescription?: T;
+        announcementText?: T;
+        deliveryPolicy?: T;
       };
   updatedAt?: T;
   createdAt?: T;

@@ -142,6 +142,9 @@ export default async function StorefrontPage({ params }: PageProps) {
     whatsappOrdersNumber: tenant.storefrontConfig?.whatsappOrdersNumber || null,
     portalTitle: tenant.storefrontConfig?.portalTitle || null,
     portalDescription: tenant.storefrontConfig?.portalDescription || null,
+    tagline: tenant.storefrontConfig?.tagline || null,
+    announcementText: tenant.storefrontConfig?.announcementText || null,
+    deliveryPolicy: tenant.storefrontConfig?.deliveryPolicy || null,
     bcvRate,
   };
 

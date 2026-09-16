@@ -20,6 +20,11 @@ export const StorefrontHeader: React.FC<StorefrontHeaderProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      {tenant.announcementText && (
+        <div className="w-full bg-foreground text-background text-[11px] sm:text-xs py-1.5 px-4 text-center font-medium tracking-tight">
+          <p className="truncate max-w-5xl mx-auto">{tenant.announcementText}</p>
+        </div>
+      )}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand / Tenant identity */}
         <div className="flex items-center gap-3">
@@ -35,11 +40,11 @@ export const StorefrontHeader: React.FC<StorefrontHeaderProps> = ({
                 B2B
               </Badge>
             </div>
-            {tenant.rifFiscal && (
-              <p className="text-xs text-muted-foreground hidden sm:block">
-                RIF: {tenant.rifFiscal}
-              </p>
-            )}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground hidden sm:flex">
+              {tenant.tagline && <span className="font-medium text-foreground/80">{tenant.tagline}</span>}
+              {tenant.tagline && tenant.rifFiscal && <span>·</span>}
+              {tenant.rifFiscal && <span>RIF: {tenant.rifFiscal}</span>}
+            </div>
           </div>
         </div>
 

@@ -27,6 +27,7 @@ import * as migration_20260911_231251_add_share_token_expiry from './20260911_23
 import * as migration_20260911_234000_fix_jobs_queue_schema from './20260911_234000_fix_jobs_queue_schema';
 import * as migration_20260916_000000_add_quote_origin from './20260916_000000_add_quote_origin';
 import * as migration_20260916_010000_add_storefront_order_alert from './20260916_010000_add_storefront_order_alert';
+import * as migration_20260916_020000_add_storefront_branding from './20260916_020000_add_storefront_branding';
 
 export const migrations = [
   {
@@ -173,5 +174,10 @@ export const migrations = [
     up: migration_20260916_010000_add_storefront_order_alert.up,
     down: migration_20260916_010000_add_storefront_order_alert.down,
     name: '20260916_010000_add_storefront_order_alert',
+  },
+  {
+    up: migration_20260916_020000_add_storefront_branding.up,
+    down: migration_20260916_020000_add_storefront_branding.down,
+    name: '20260916_020000_add_storefront_branding',
   },
 ];
