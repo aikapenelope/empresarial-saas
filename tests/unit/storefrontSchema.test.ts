@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Media } from '@/collections/Media';
 import { Products } from '@/collections/Products';
 import { Tenants } from '@/collections/Tenants';
-import type { Field, GroupField } from 'payload';
+import type { GroupField } from 'payload';
 
 describe('Sprint 49: Configuración de Esquemas y Media de Storefront', () => {
   describe('Colección Media', () => {
@@ -30,10 +30,11 @@ describe('Sprint 49: Configuración de Esquemas y Media de Storefront', () => {
     });
 
     it('permite lectura pública de Media para alimentar la web sin sesión', () => {
-      expect(typeof Media.access?.read).toBe('function');
-      if (typeof Media.access?.read === 'function') {
-        const result = Media.access.read({
-          req: { user: undefined } as unknown as Parameters<NonNullable<typeof Media.access.read>>[0]['req'],
+      const readFn = Media.access?.read;
+      expect(typeof readFn).toBe('function');
+      if (typeof readFn === 'function') {
+        const result = readFn({
+          req: { user: undefined } as unknown as Parameters<typeof readFn>[0]['req'],
         });
         expect(result).toBe(true);
       }
@@ -44,11 +45,10 @@ describe('Sprint 49: Configuración de Esquemas y Media de Storefront', () => {
     it('incluye el campo isPublishedOnWeb como checkbox indexado con default true', () => {
       const field = Products.fields.find(
         (f) => 'name' in f && f.name === 'isPublishedOnWeb',
-      ) as Field | undefined;
+      );
 
       expect(field).toBeDefined();
-      if (field && 'type' in field) {
-        expect(field.type).toBe('checkbox');
+      if (field && 'type' in field && field.type === 'checkbox') {
         expect(field.defaultValue).toBe(true);
         expect(field.index).toBe(true);
       }
