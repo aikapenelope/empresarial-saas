@@ -3,7 +3,7 @@ import {
   createStorefrontQuoteSchema,
   buildStorefrontWhatsAppUrl,
   calculateStorefrontQuoteTotals,
-} from '@/actions/storefrontActions';
+} from '@/utilities/storefrontQuotes';
 
 describe('Sprint 50: Motor de Cotización B2B y Validación Zod', () => {
   describe('Validación Zod: createStorefrontQuoteSchema', () => {

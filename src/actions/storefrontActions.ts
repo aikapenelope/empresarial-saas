@@ -1,6 +1,5 @@
 'use server';
 
-import { z } from 'zod';
 import { getPayload } from 'payload';
 import config from '@payload-config';
 import { headers } from 'next/headers';
@@ -8,146 +7,20 @@ import { resolveEffectiveRate } from '@/utilities/exchangeRate';
 import { nextDocumentNumber } from '@/utilities/documentNumbering';
 import { withTransaction } from '@/utilities/withTransaction';
 import { ensureShareToken } from '@/utilities/shareTokens';
+import {
+  createStorefrontQuoteSchema,
+  calculateStorefrontQuoteTotals,
+  buildStorefrontWhatsAppUrl,
+  type CreateStorefrontQuoteInput,
+} from '@/utilities/storefrontQuotes';
 
 /**
- * ─── Sprint 50: Motor de Cotización B2B y Recepción de Pedidos Públicos ───────
+ * ─── Sprint 50/51: Motor de Cotización B2B y Recepción de Pedidos Públicos ────
  *
  * Server Action pública para el portal de pedidos B2B (estilo ERPNext / Vercel Commerce).
- * No requiere sesión de usuario en el ERP, pero aplica validaciones rigurosas en la frontera:
- *  1. Comprobación estricta de que el inquilino tiene el portal encendido (`storefrontConfig.enabled === true`).
- *  2. Anti-tampering: los precios nunca se aceptan del cliente; se consultan y congelan desde la BD oficial.
- *  3. Auto-asociación o creación de cliente en el CRM (`customers`) con lock transaccional.
- *  4. Generación de correlativo oficial COT-XXXXX y congelación de tasa BCV.
- *  5. Emisión de token seguro de compartición (CSPRNG) y enlace directo a WhatsApp (`wa.me`).
+ * En Next.js 15+, los módulos con 'use server' sólo pueden exportar funciones async.
+ * Los schemas Zod, interfaces y helpers puros viven en src/utilities/storefrontQuotes.ts.
  */
-
-export const storefrontQuoteItemSchema = z.object({
-  productId: z.number().int().positive('ID de producto inválido'),
-  quantity: z
-    .number()
-    .positive('La cantidad debe ser mayor a cero')
-    .max(100000, 'Cantidad excesiva'),
-});
-
-export const createStorefrontQuoteSchema = z.object({
-  tenantSlug: z
-    .string()
-    .trim()
-    .min(2, 'Slug de empresa requerido')
-    .max(100)
-    .regex(/^[a-z0-9-]+$/, 'Slug de empresa con formato inválido'),
-  companyName: z
-    .string()
-    .trim()
-    .min(2, 'La razón social o nombre debe tener al menos 2 caracteres')
-    .max(200, 'La razón social no puede exceder 200 caracteres'),
-  taxId: z
-    .string()
-    .trim()
-    .min(3, 'El RIF o identificación fiscal debe tener al menos 3 caracteres')
-    .max(30, 'El RIF no puede exceder 30 caracteres'),
-  phone: z
-    .string()
-    .trim()
-    .min(6, 'Número de teléfono o WhatsApp inválido')
-    .max(30, 'Número de teléfono demasiado largo'),
-  email: z
-    .string()
-    .trim()
-    .email('Formato de correo electrónico inválido')
-    .max(150)
-    .optional()
-    .or(z.literal('')),
-  notes: z
-    .string()
-    .trim()
-    .max(1000, 'Las observaciones no pueden superar los 1000 caracteres')
-    .optional()
-    .or(z.literal('')),
-  items: z
-    .array(storefrontQuoteItemSchema)
-    .min(1, 'El pedido debe incluir al menos un producto'),
-});
-
-export type CreateStorefrontQuoteInput = z.infer<typeof createStorefrontQuoteSchema>;
-
-export interface CalculatedStorefrontTotals {
-  lineItems: Array<{
-    product: number;
-    sku?: string;
-    description: string;
-    quantity: number;
-    unitPriceUSD: number;
-    totalUSD: number;
-  }>;
-  totalUSD: number;
-  totalVES: number;
-}
-
-/**
- * Calcula los subtotales y totales usando exclusivamente los precios del catálogo en la BD (anti-tampering).
- */
-export function calculateStorefrontQuoteTotals(
-  items: Array<{ productId: number; quantity: number }>,
-  catalogProducts: Array<{ id: number; name: string; sku?: string | null; priceUSD: number }>,
-  exchangeRate: number,
-): CalculatedStorefrontTotals {
-  const productMap = new Map(catalogProducts.map((p) => [p.id, p]));
-  let sumUSD = 0;
-
-  const lineItems = items.map((item) => {
-    const product = productMap.get(item.productId);
-    if (!product) {
-      throw new Error(`El producto con ID ${item.productId} no está disponible en este catálogo.`);
-    }
-
-    const unitPriceUSD = Number(product.priceUSD) || 0;
-    const lineTotalUSD = Number((unitPriceUSD * item.quantity).toFixed(2));
-    sumUSD += lineTotalUSD;
-
-    return {
-      product: product.id,
-      sku: product.sku || undefined,
-      description: product.name,
-      quantity: item.quantity,
-      unitPriceUSD,
-      totalUSD: lineTotalUSD,
-    };
-  });
-
-  const totalUSD = Number(sumUSD.toFixed(2));
-  const totalVES = Number((totalUSD * exchangeRate).toFixed(2));
-
-  return {
-    lineItems,
-    totalUSD,
-    totalVES,
-  };
-}
-
-export interface BuildWhatsAppUrlParams {
-  targetPhone?: string | null;
-  quoteNumber: string;
-  companyName: string;
-  taxId: string;
-  totalUSD: number;
-  totalVES: number;
-  shareUrl: string;
-}
-
-/**
- * Formatea el enlace directo a WhatsApp (wa.me) con el mensaje de confirmación del pedido.
- */
-export function buildStorefrontWhatsAppUrl(params: BuildWhatsAppUrlParams): string {
-  const cleanPhone = (params.targetPhone || '').replace(/[^0-9]/g, '');
-  if (!cleanPhone) return '';
-
-  const message = `Hola, he generado la solicitud de cotización *${params.quoteNumber}* por un total de *$${params.totalUSD.toFixed(
-    2,
-  )} USD* (aprox. *Bs. ${params.totalVES.toFixed(2)}*) a nombre de *${params.companyName}* (RIF: ${params.taxId}).\n\nPuedes revisar el desglose oficial del pedido aquí:\n${params.shareUrl}`;
-
-  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-}
 
 export interface CreateStorefrontQuoteResult {
   ok: true;
